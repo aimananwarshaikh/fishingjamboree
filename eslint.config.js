@@ -8,6 +8,10 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettier,
   {
+    files: ["scripts/**/*.{js,mjs}"],
+    languageOptions: { globals: { console: "readonly", process: "readonly" } },
+  },
+  {
     files: ["packages/engine/src/**/*.ts"],
     rules: {
       // Engine must stay pure and deterministic.
