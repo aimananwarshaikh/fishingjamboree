@@ -183,16 +183,16 @@ The game ends after round 20. Each player counts their cash and subtracts $100 f
 - [ ] **Playtest:** players 3–4 entering from the starting docks. Do too many turns get missed?
 - [ ] **Playtest:** Sinking Boat when both starting docks are taken (should be rare)
 - [ ] **Board art:** relabel the three "Safe zone 3" signs as Zones 1, 2 and 3 (with the names below), rename "Shark bay" to Shipwreck Bay, "Davey Jones" to Davy Jones' Locker, and mark the 5–6 player dock square
-- [ ] **Zone geometry:** buoy lines split the board into three safe zones. Confirm exactly which tiles belong to each zone before tracing the board (Session 2a)
+- [ ] **Fishing spot vs zone:** see the question in the decisions log (spots 1–3 vs zones 1–3)
 
-## Zone names (proposed, not final)
+## Zones (from `assets/board/board-zones.jpg`)
 
-The buoy lines divide the sea into three safe zones, plus the two risk areas. Working names, each zone matching its fishing spot:
+The simplified zone board is the reference for the grid and zones (colours below). Names are proposed, not final.
 
-| Zone | Working name      | Area                                                    |
-| ---- | ----------------- | ------------------------------------------------------- |
-| 1    | Windward Shallows | upper left, above Shipwreck Bay                         |
-| 2    | Kelp Reach        | left side, between Shipwreck Bay and the starting docks |
-| 3    | Harbour Drift     | right side and the waters around the docks              |
+| Zone | Colour     | Area                                                                    | Working name   |
+| ---- | ---------- | ----------------------------------------------------------------------- | -------------- |
+| 1    | Teal       | Shallows by the beach and the starting docks (bottom)                   | Pearl Shallows |
+| 2    | Light blue | Middle: around the island and Shipwreck Bay, and the right-hand channel | Kelp Reach     |
+| 3    | Dark blue  | Deep water: top and top-left, around the cruise ship dock               | Windward Deep  |
 
-Alternatives if these don't suit: Gull Banks, Mistral Run, Pearl Flats, Coral Narrows, Saltmarsh Sound.
+Shipwreck Bay and Davy Jones' Locker are the two risk areas (grey). Alternate names: Gull Banks, Mistral Run, Coral Narrows, Saltmarsh Sound, Open Fathoms.
