@@ -1,10 +1,12 @@
 # Fishing Jamboree — Rulebook
 
-Source of truth for the game rules. Living version: https://claude.ai/artifact/5QLudbwBmnwjgoa1AQVbdg (if the two differ, the living doc wins; re-sync this file).
+This file is the single source of truth for the game rules. Rule decisions are logged in `docs/rulebook-engine-notes.md`. The claude.ai doc (https://claude.ai/artifact/5QLudbwBmnwjgoa1AQVbdg) is a copy; if the two differ, this file wins.
 
 ## Intro
 
 Fishing Jamboree is a race for cash for 2–4 players (up to 6 with the variant), played over 20 rounds. Sail out, catch fish, and get them back to a dock before the sea takes them. The richest fisher at the end wins.
+
+Welcome to the fishing town for this year's season. Grab your gear, get your best bait and raise anchor to sail its rich seas. Compete against your fellow fishers to catch the best fish, and don't forget to cash in.
 
 ## Contents
 
@@ -47,9 +49,9 @@ Everyone starts with $0, a basic ship (speed = the die roll, capacity = 5 fish) 
 2. Put the Counter token on space 1 of the round track.
 3. Put the fish tokens, fine tokens, upgrade tokens and money beside the board as the bank.
 4. Each player picks a ship.
-5. Everyone rolls the die. Highest roll goes first, then the next highest, and so on. Re-roll ties.
+5. Everyone rolls the die. Highest roll goes first, then the next highest, and so on. Tied players re-roll among themselves.
 6. Player 1 places their ship on one starting dock. Player 2 places theirs on the other.
-7. Players 3 and 4 wait off the board. Ships can only enter from a starting dock, never the cruise ship dock. At the start of your turn, if a starting dock is free, place your ship there, then roll and move out as normal. If neither dock is free, or every way out of the free dock is blocked, you miss that turn and try again next round.
+7. Players 3 and 4 wait off the board. Ships can only enter from a starting dock, never the cruise ship dock. At the start of your turn, if a starting dock is free, place your ship there (your choice if both are free), then roll and move out as normal. If neither dock is free, or every way out of the free dock is blocked, you miss that turn and try again next round.
 
 ## How to play
 
@@ -62,16 +64,18 @@ The game lasts 20 rounds. In a round, each player takes one turn in play order. 
 3. **Resolve where you land:**
    - Open sea: draw a Safe card.
    - Inside Shipwreck Bay or Davy Jones' Locker: draw a Risk card.
-   - A fishing spot with a Golden Fish on it: take the $1000 fish token instead of drawing.
+   - A fishing spot with a Golden Fish on it: take the $1000 fish token instead of drawing. If your ship is full, the Golden Fish is lost: you don't get it and neither does anyone else.
    - A free dock: dock (see Docks).
 4. **Resolve the card**, then put it face up on that deck's discard pile. Your turn ends.
 
 ### Movement
 
 - Move tile by tile, up, down, left or right. No diagonals.
-- You must use your whole roll, plus or minus any bonuses.
-- You can't move through another ship, through the island, or onto a dock someone is already using.
-- You can't step back onto the tile you just left.
+- You must use your whole roll, plus or minus any bonuses. Bonuses are not optional. A total of 0 or less means you don't move and your turn ends.
+- You can't move through another ship or end your move on one. You can't move through the island.
+- A dock can only be the last tile of your move: you can't sail through a dock, and you can't end on one someone is already using.
+- You can't move straight from one dock to another. Go out to sea first (from the left starting dock to the right one is up, right, down: a roll of 3).
+- You can't step back onto the tile you just left. You may loop round and cross a tile you passed earlier in the same move.
 - You can't end your turn on the tile you started on.
 - If you can't make a legal move, you stay where you are and miss the rest of your turn.
 
@@ -89,13 +93,13 @@ Your ship holds 5 fish (8 with the Capacity upgrade). If a catch would take you 
 
 ### Docks
 
-To cash in you must land exactly on a free dock. Docking takes your turn: you draw no card. While docked:
+To cash in you must land exactly on a free dock. You don't need to be carrying fish. Docking takes your turn: you draw no card. While docked:
 
 1. **Pay off fine tokens first** ($100 each) from what you earn.
 2. **Sell your fish.** Return every fish token to the bank and take its value in cash.
 3. **Buy upgrades** if you want them.
 
-On your next turn, sail out as normal. You can't stay docked turn after turn. While you sit on a dock, no one else can land there.
+On your next turn, sail out as normal. You can't stay docked turn after turn; if every way out is blocked, you miss that turn and nothing more happens at the dock. While you sit on a dock, no one else can land there.
 
 ### Upgrades
 
@@ -126,49 +130,51 @@ The Safe deck is mostly small catches. The Risk deck mixes big fish with the wor
 
 ### Risk deck (red back)
 
-| Card              | Effect                                                         | Copies |
-| ----------------- | -------------------------------------------------------------- | ------ |
-| Swordfish         | Take one $300 fish token                                       | TBC    |
-| Yellowfin Tuna    | Take one $500 fish token                                       | TBC    |
-| Red Dragon        | Take one $700 fish token                                       | TBC    |
-| +1 / +2 / +3 Fish | As in the Safe deck                                            | TBC    |
-| Sadder Dolphin    | $200 fine                                                      | TBC    |
-| Shark             | Lose 3 fish, cheapest first. With fewer than 3, lose them all. | TBC    |
-| Sinking Boat      | Lose all your fish and move your ship to a free starting dock  | TBC    |
+| Card              | Effect                                                                                                                              | Copies |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Swordfish         | Take one $300 fish token                                                                                                            | TBC    |
+| Yellowfin Tuna    | Take one $500 fish token                                                                                                            | TBC    |
+| Red Dragon        | Take one $700 fish token                                                                                                            | TBC    |
+| +1 / +2 / +3 Fish | As in the Safe deck                                                                                                                 | TBC    |
+| Sadder Dolphin    | $200 fine                                                                                                                           | TBC    |
+| Shark             | Lose 3 fish, cheapest first. With fewer than 3, lose them all.                                                                      | TBC    |
+| Sinking Boat      | Lose all your fish and move your ship to a free starting dock (your choice if both are free). You may buy upgrades when you arrive. | TBC    |
 
 ### Event deck (yellow back)
 
 An event's effect lasts until the next event is drawn. The round 15 event lasts until the end of the game.
 
-| Card                                                  | Effect                                                                                                                                                                                                            |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Golden Fish – Spot 1, 2 or 3 (one card each)          | Put a $1000 fish token on that numbered fishing spot. The first player to land there takes it. It counts as one fish. If no one claims it, it's removed when the next event is drawn (or at the end of the game). |
-| +1 Fish to All Catch – Zone 1, 2 or 3 (one card each) | Every fish card or Boot drawn in that zone gives one extra $100 fish. Fines and other cards get no bonus.                                                                                                         |
-| +1 Movement                                           | Every player adds 1 to their roll                                                                                                                                                                                 |
-| −1 Movement                                           | Every player subtracts 1 from their roll. A roll of 1 becomes 0: you don't move, and your turn ends.                                                                                                              |
-| Helicopter                                            | Each player may pay a $200 fee first, then sell all their fish now without docking                                                                                                                                |
-| Shark Repellent                                       | Shark cards have no effect in Shipwreck Bay                                                                                                                                                                       |
-| Tsunami                                               | Shuffle the Risk discard pile back into the Risk deck                                                                                                                                                             |
+| Card                                                  | Effect                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Golden Fish – Spot 1, 2 or 3 (one card each)          | Put a $1000 fish token on that numbered fishing spot. The first player to land there takes it. It counts as one fish; a full ship that lands there loses it for everyone. If no one claims it, it's removed when the next event is drawn (or at the end of the game).       |
+| +1 Fish to All Catch – Zone 1, 2 or 3 (one card each) | Every fish card or Boot drawn in that zone gives one extra $100 fish (a Boot gives one fish). Capacity still applies. Fines and other cards get no bonus, and Risk cards never do: Shipwreck Bay and Davy Jones' Locker are not part of any zone.                           |
+| +1 Movement                                           | Every player adds 1 to their roll                                                                                                                                                                                                                                           |
+| −1 Movement                                           | Every player subtracts 1 from their roll. A roll of 1 becomes 0: you don't move, and your turn ends.                                                                                                                                                                        |
+| Helicopter                                            | Lasts until the next event (or the end of the game). Once on each of your turns, either before you roll or at the end of the turn, you may pay a $200 fee and then sell all your fish without docking. You must have the $200 in cash first; it can't come out of the sale. |
+| Shark Repellent                                       | Shark cards have no effect in Shipwreck Bay (they still bite in Davy Jones' Locker)                                                                                                                                                                                         |
+| Tsunami                                               | Shuffle the Risk discard pile back into the Risk deck. It happens once, when drawn, and still ends the previous event                                                                                                                                                       |
 
 ## End of the game
 
-The game ends after round 20. Each player counts their cash and subtracts $100 for every fine token they still hold. Fish still on your ship are worth nothing. Most cash wins. If tied, the player with fewer fine tokens wins. If still tied, share the win.
+The game ends after round 20. Each player counts their cash and subtracts $100 for every fine token they still hold. Fish still on your ship are worth nothing. Most cash wins. If tied, it's a tie.
 
 ## Special cases
 
 - **Blocked:** If no legal move uses your full roll, you stay put and your turn ends without a card.
 - **Taken dock:** You can't end your move on a dock another ship is using. Plan your roll around it.
 - **Golden Fish under a ship:** If a ship is sitting on the fishing spot when the Golden Fish appears, that player doesn't get it. They must leave and land on it again.
-- **Sinking Boat with both starting docks taken:** Go to the cruise ship dock. If that is taken too, stay where you are. You still lose your fish. (To be playtested; should be rare.)
+- **Sinking Boat with both starting docks taken:** Go to the cruise ship dock. If that is taken too, stay where you are. You still lose your fish. You may buy upgrades at whichever dock you reach, on arrival only. Fine tokens stay with you. (To be playtested; should be rare.)
 - **Shark with fewer than 3 fish:** Lose everything you're carrying.
 - **Empty deck:** Shuffle that deck's discard pile to make a new deck.
-- **Helicopter with fine tokens:** Pay off your fine tokens from the sale first.
+- **Helicopter with no fish or no cash:** You can't use it. A player holding fine tokens has no cash, so can't use it either.
+- **Golden Fish and a full ship:** Land on it with a full ship and it is removed. Nobody gets it.
+- **Capacity:** Fish over your limit are lost, even a big one. Bonus fish from events count towards the limit.
 
 ## Example turns
 
 **A catch.** Sam has no upgrades and carries 4 fish. He rolls a 3 and ends in open sea in Zone 1, so he draws a Safe card: +2 Fish. His ship holds 5, so he takes one $100 token and the second fish is lost.
 
-**Docking.** Next turn Sam rolls a 5, exactly enough to reach the free starting dock. He docks and draws no card. He holds one fine token, so he pays $100 from his fish sale. His fish were worth $1,200, so he banks $1,100, then buys the Speed upgrade for $300 and finishes with $800. From now on he moves his roll +2.
+**Docking.** Next turn Sam rolls a 5, exactly enough to reach the free starting dock. He docks and draws no card. He holds one fine token, so he pays $100 from his fish sale. His fish were worth $1,200, so he banks $1,100, then buys the Speed upgrade for $200 and finishes with $900. From now on he moves his roll +2.
 
 ## Player variants
 

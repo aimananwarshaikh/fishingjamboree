@@ -14,3 +14,29 @@ plays also goes back into `docs/rulebook.md`.
 | 2026-11-11 | Art leftovers | Keep one Swordfish card and one $700 token; alternates deleted. Shipwreck Bay / Davy Jones' Locker have no art. | Game designer |
 | 2026-11-11 | Fishing spots vs zones | Independent. Golden Fish cards are per **spot** (1/2/3, as numbered on the board); the +1 Catch cards are per **zone** (colour). Zone board image is used only to separate zones; all other tiles come from the original board. | Game designer |
 | 2026-11-11 | Event deck counts | One copy of each of the 11 event cards. Three are drawn per game (after rounds 5, 10, 15). | Game designer |
+| 2026-11-11 | Helicopter | A lasting event (until the next event or game end), not instant. Once per own turn, at the start or the end of the turn, a player may pay $200 and sell all their fish. The fee must be paid from cash on hand first; it cannot come out of the sale. | Game designer |
+| 2026-11-11 | Sinking Boat | Lose all fish and move to a starting dock. The player may buy upgrades there before sailing out. | Game designer |
+| 2026-11-11 | Docking | Exact landing, no fish needed. A ship cannot move straight from one dock to another; it must go out to sea first (left starting dock to right starting dock is up, right, down: 3 steps). | Game designer |
+| 2026-11-11 | End of game | Only money decides the winner. A tie is a tie; fine tokens are not a tie-break. Rulebook needs updating. | Game designer |
+| 2026-11-11 | Empty deck | Shuffle the discard pile back in. Deck and discard cannot both be empty. | Game designer |
+| 2026-11-11 | Golden Fish, full ship | A full ship that lands on the Golden Fish picks it up and loses it; nobody gets it. | Game designer |
+| 2026-11-11 | Ending on another ship | A move cannot end on a tile with another ship. | Game designer |
+| 2026-11-11 | Zone of risk tiles | Shipwreck Bay and Davy Jones' Locker tiles have no zone. "+1 Fish to All Catch" never applies to Risk draws. | Game designer |
+| 2026-11-11 | No step back | Per step: no immediate reversal. A path may loop over tiles visited earlier in the same move. Only the end tile may not be the start tile. | Game designer |
+| 2026-11-11 | Passing docks | A dock can only be the last step of a move. No passing through any dock, free or taken. | Game designer |
+| 2026-11-11 | Leaving a dock | The dock is the start tile. If blocked, the ship stays, misses the turn and does not dock again. | Game designer |
+| 2026-11-11 | Roll modifiers | Steps = max(0, die + Speed + movement event). Bonuses are mandatory. Zero steps ends the turn with no card. | Game designer |
+| 2026-11-11 | Event expiry | Tsunami is instant but still replaces the previous event. An unclaimed Golden Fish is removed at the next event draw or game end. | Game designer |
+| 2026-11-11 | Shark | Shark Repellent protects Shipwreck Bay only. No tie-break among equal-value fish. | Game designer |
+| 2026-11-11 | Capacity overflow | New fish beyond capacity are lost; no swapping. A single big fish on a full ship is lost. Bonus fish obey capacity. | Game designer |
+| 2026-11-11 | Fines | Cash first, then $100 tokens, no cap. On docking, tokens are paid from the sale before anything is bought. | Game designer |
+| 2026-11-11 | Late entry | Placed on a free starting dock at turn start (player's choice if both are free), then roll. If blocked, stays on the dock. | Game designer |
+| 2026-11-11 | Roll-off | Ties re-rolled among tied players only; order then fixed. | Game designer |
+| 2026-11-11 | Boot with +1 Catch | Gives one $100 fish. | Game designer |
+| 2026-11-11 | Hidden information | Hidden: deck order (and the engine's RNG). Public: discards, deck sizes, every player's cash, fish, fine tokens, upgrades. | Game designer |
+| 2026-11-11 | Player count | Engine supports 2–4; playtests use 3–4. | Game designer |
+| 2026-11-11 | Choosing a dock | Player 1 chooses in setup, player 2 takes the other. A Sinking Boat victim chooses when both starting docks are free. | Game designer |
+| 2026-11-11 | Tsunami, empty discard | The Risk draw pile is still reshuffled. | Game designer |
+| 2026-11-11 | Helicopter limits | Not offered to a player with no fish. A player with fine tokens has $0 cash and so cannot use it; the "Helicopter with fine tokens" special case is removed. At the end of a turn it applies after the card resolves, and not if already used at the start of that turn. | Game designer |
+| 2026-11-11 | Sinking Boat shop | Upgrades may be bought on arrival only. | Game designer |
+| 2026-11-11 | Source of truth | `docs/rulebook.md` in the repo is the single source of truth. The claude.ai doc is a copy; the repo wins. Rulebook updated with all decisions above. | Game designer |
