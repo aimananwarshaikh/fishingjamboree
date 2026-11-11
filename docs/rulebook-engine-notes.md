@@ -12,4 +12,4 @@ plays also goes back into `docs/rulebook.md`.
 
 | 2026-11-11 | Zone structure | Three safe zones by colour on `assets/board/board-zones.jpg`: Teal = Zone 1, Light blue = Zone 2, Dark blue = Zone 3. Two risk zones: Shipwreck Bay and Davy Jones' Locker. Docks and fishing spots are tiles on this board. Names are proposals. | Game designer |
 | 2026-11-11 | Art leftovers | Keep one Swordfish card and one $700 token; alternates deleted. Shipwreck Bay / Davy Jones' Locker have no art. | Game designer |
-| 2026-11-11 | **OPEN** Fishing spots vs zones | On the zone board, spot 1 is in dark blue (Zone 3), spots 2 and 3 are both light blue (Zone 2), and teal (Zone 1) has none. Golden Fish and +1 Catch events are per zone. Which spot belongs to which zone? | Pending |
+| 2026-11-11 | Fishing spots vs zones | Independent. Golden Fish cards are per **spot** (1/2/3, as numbered on the board); the +1 Catch cards are per **zone** (colour). Zone board image is used only to separate zones; all other tiles come from the original board. | Game designer |

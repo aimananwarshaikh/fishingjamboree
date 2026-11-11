@@ -26,16 +26,16 @@ Fishing Jamboree is a race for cash for 2–4 players (up to 6 with the variant)
 
 The board is a grid of square tiles. Most of it is open sea where you draw from the Safe deck; two outlined danger areas make you draw from the Risk deck instead.
 
-| Area                         | What happens there                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Safe Zones 1, 2 and 3        | Open sea. End your move here and draw a Safe card. Buoy lines mark where one zone ends and the next begins; you can sail across them. |
-| Fishing spots 1, 2 and 3     | The yellow-outlined tile in each zone. A Golden $1000 Fish appears here when its event is drawn.                                      |
-| Shipwreck Bay                | The 2×4 area with the dark outline (labelled "Shark bay" on the current board art). End your move inside it and draw a Risk card.     |
-| Davy Jones' Locker           | The 5×5 area with the dark outline. End your move inside it and draw a Risk card.                                                     |
-| Island                       | Impassable. Sail around it.                                                                                                           |
-| Starting docks (bottom pier) | Two docks. Ships start here. You can sell fish and buy upgrades here.                                                                 |
-| Cruise ship dock (top right) | One dock. You can sell fish and buy upgrades here.                                                                                    |
-| Round track (left edge)      | 20 spaces. The orange spaces (5, 10, 15) are event rounds.                                                                            |
+| Area                         | What happens there                                                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Safe Zones 1, 2 and 3        | Open sea. End your move here and draw a Safe card. Buoy lines mark where one zone ends and the next begins; you can sail across them.                             |
+| Fishing spots 1, 2 and 3     | Three yellow-outlined tiles, numbered 1–3. They are independent of the zones. A Golden $1000 Fish appears on spot N when the Golden Fish – Spot N event is drawn. |
+| Shipwreck Bay                | The 2×4 area with the dark outline (labelled "Shark bay" on the current board art). End your move inside it and draw a Risk card.                                 |
+| Davy Jones' Locker           | The 5×5 area with the dark outline. End your move inside it and draw a Risk card.                                                                                 |
+| Island                       | Impassable. Sail around it.                                                                                                                                       |
+| Starting docks (bottom pier) | Two docks. Ships start here. You can sell fish and buy upgrades here.                                                                                             |
+| Cruise ship dock (top right) | One dock. You can sell fish and buy upgrades here.                                                                                                                |
+| Round track (left edge)      | 20 spaces. The orange spaces (5, 10, 15) are event rounds.                                                                                                        |
 
 A dock holds one ship. If a dock is taken, you can't end your move on it.
 
@@ -140,15 +140,15 @@ The Safe deck is mostly small catches. The Risk deck mixes big fish with the wor
 
 An event's effect lasts until the next event is drawn. The round 15 event lasts until the end of the game.
 
-| Card                                                  | Effect                                                                                                                                                                                                          |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Golden Fish – Zone 1, 2 or 3 (one card each)          | Put a $1000 fish token on that zone's fishing spot. The first player to land there takes it. It counts as one fish. If no one claims it, it's removed when the next event is drawn (or at the end of the game). |
-| +1 Fish to All Catch – Zone 1, 2 or 3 (one card each) | Every fish card or Boot drawn in that zone gives one extra $100 fish. Fines and other cards get no bonus.                                                                                                       |
-| +1 Movement                                           | Every player adds 1 to their roll                                                                                                                                                                               |
-| −1 Movement                                           | Every player subtracts 1 from their roll. A roll of 1 becomes 0: you don't move, and your turn ends.                                                                                                            |
-| Helicopter                                            | Each player may pay a $200 fee first, then sell all their fish now without docking                                                                                                                              |
-| Shark Repellent                                       | Shark cards have no effect in Shipwreck Bay                                                                                                                                                                     |
-| Tsunami                                               | Shuffle the Risk discard pile back into the Risk deck                                                                                                                                                           |
+| Card                                                  | Effect                                                                                                                                                                                                            |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Golden Fish – Spot 1, 2 or 3 (one card each)          | Put a $1000 fish token on that numbered fishing spot. The first player to land there takes it. It counts as one fish. If no one claims it, it's removed when the next event is drawn (or at the end of the game). |
+| +1 Fish to All Catch – Zone 1, 2 or 3 (one card each) | Every fish card or Boot drawn in that zone gives one extra $100 fish. Fines and other cards get no bonus.                                                                                                         |
+| +1 Movement                                           | Every player adds 1 to their roll                                                                                                                                                                                 |
+| −1 Movement                                           | Every player subtracts 1 from their roll. A roll of 1 becomes 0: you don't move, and your turn ends.                                                                                                              |
+| Helicopter                                            | Each player may pay a $200 fee first, then sell all their fish now without docking                                                                                                                                |
+| Shark Repellent                                       | Shark cards have no effect in Shipwreck Bay                                                                                                                                                                       |
+| Tsunami                                               | Shuffle the Risk discard pile back into the Risk deck                                                                                                                                                             |
 
 ## End of the game
 
@@ -183,11 +183,10 @@ The game ends after round 20. Each player counts their cash and subtracts $100 f
 - [ ] **Playtest:** players 3–4 entering from the starting docks. Do too many turns get missed?
 - [ ] **Playtest:** Sinking Boat when both starting docks are taken (should be rare)
 - [ ] **Board art:** relabel the three "Safe zone 3" signs as Zones 1, 2 and 3 (with the names below), rename "Shark bay" to Shipwreck Bay, "Davey Jones" to Davy Jones' Locker, and mark the 5–6 player dock square
-- [ ] **Fishing spot vs zone:** see the question in the decisions log (spots 1–3 vs zones 1–3)
 
 ## Zones (from `assets/board/board-zones.jpg`)
 
-The simplified zone board is the reference for the grid and zones (colours below). Names are proposed, not final.
+`assets/board/board-zones.jpg` is used only to tell the three zones apart (colours below). Everything else (tiles, island, docks, fishing spots, risk areas) is traced from the original board art. Zones apply to the +1 Fish to All Catch events. Names are proposed, not final.
 
 | Zone | Colour     | Area                                                                    | Working name   |
 | ---- | ---------- | ----------------------------------------------------------------------- | -------------- |

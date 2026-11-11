@@ -45,6 +45,6 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 - Next stage: Session 1, stage 1b [FABLE, plan mode]
 - Known issues: none yet
 - Card counts confirmed (`content/card-counts.json`). Upgrade price $200 default, test $300 in simulation.
-- Zone grid reference: `assets/board/board-zones.jpg` (teal=1, light blue=2, dark blue=3). Open: final zone names; fishing spot vs zone mapping (see engine notes).
+- `assets/board/board-zones.jpg` only defines the zones (teal=1, light blue=2, dark blue=3); all other tiles come from the original `board.webp`. Golden Fish cards are per fishing spot (independent of zones). Open: final zone names.
 - Art is in `assets/art/` (see its README); board image in `assets/board/`.
 - Rulebook living version is a claude.ai artifact; if it differs from `docs/rulebook.md`, the living doc wins.
