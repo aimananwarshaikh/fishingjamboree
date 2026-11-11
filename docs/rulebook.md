@@ -116,7 +116,7 @@ Pay a fine at once from your cash. If you can't pay all of it, pay what you can 
 
 ## Card reference
 
-The Safe deck is mostly small catches. The Risk deck mixes big fish with the worst losses in the game. Copy counts are in `content/card-counts.json`.
+The Safe deck is mostly small catches. The Risk deck mixes big fish with the worst losses in the game. Copy counts are in `content/cards.json` (`decks`).
 
 ### Safe deck (blue back)
 

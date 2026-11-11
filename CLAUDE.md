@@ -42,12 +42,13 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 ## Status
 
 - Current milestone: A (due 17 Nov 2026, 7pm AEDT)
-- Last completed stage: Session 1, stage 1c [SONNET]: stubs for every `Engine` function (`content.ts`, `setup.ts`, `legal.ts`, `apply.ts`, `view.ts`, `replay.ts` in `packages/engine/src`), each throwing "not implemented" via `notImplemented.ts`, exported from `index.ts`. `pnpm check` passes.
-- Next stage: Session 2 [OPUS] (board and content: 2a `board.json`, 2b `cards.json` + `rules.json`; then `compileContent`). Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
+- Last completed stage: Session 2, stages 2a and 2b [OPUS].
+  - 2a: `content/board.json` (8×20) traced from `assets/board/board.webp`, zones from `board-zones.jpg`. `pnpm board:render` (needs Playwright; `NODE_PATH="$(npm root -g)"` if it is installed globally) draws it over the art as `assets/board/board-overlay.jpg`. Check that image and correct `board.json` if needed.
+  - 2b: `content/cards.json` and `content/rules.json` replace `card-counts.json`. Implemented `compileContent` (`content.ts`), seeded RNG (`rng.ts`: cyrb128 + sfc32, rejection-sampled die, Fisher–Yates), content hash (`hash.ts`), decks (`decks.ts`: build, draw, discard, reshuffle when empty), `createGame` with the roll-off (`setup.ts`). Tests use the real content via `src/testContent.ts`. The engine tsconfig's `rootDir` is now the repo root so tests can import `content/*.json`.
+- Next stage: 2c [SONNET] (lint/type cleanup, Status), then Session 3 [FABLE] (movement). Still stubs: `getActors`, `getLegalActions`, `applyAction`, `redactForClient`, `replay`. Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
 - All rule questions in `docs/architecture.md` section 12 are decided (2026-11-11), logged in `docs/rulebook-engine-notes.md` and written into `docs/rulebook.md`.
-- Session 2b: convert `content/card-counts.json` into `content/cards.json` and `content/rules.json` (schemas in `types.ts`, examples in `docs/architecture.md` section 7).
-- Known issues: none yet
-- Card counts confirmed (`content/card-counts.json`). Upgrade price $200 default, test $300 in simulation.
+- Known issues: the rulebook card tables still say "TBC" for copies, and the Risk table lists "+1 / +2 / +3 Fish" but no Boot (the deck has Boot and +3 Fish only). Fix in a docs pass.
+- Card counts confirmed (now in `content/cards.json`). Open: the per-card risk counts add up to 16, but the decisions log says 15; the engine uses 16 until the designer confirms. Upgrade price $200 default, test $300 in simulation.
 - `assets/board/board-zones.jpg` only defines the zones (teal=1, light blue=2, dark blue=3); all other tiles come from the original `board.webp`. Golden Fish cards are per fishing spot (independent of zones). Open: final zone names.
 - Art is in `assets/art/` (see its README); board image in `assets/board/`.
 - `docs/rulebook.md` is the single source of truth for the rules. The claude.ai rulebook doc is a copy and may be out of date; the repo wins.
