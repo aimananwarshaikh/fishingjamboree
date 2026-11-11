@@ -36,7 +36,7 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 - `packages/sim`: bots and balancing simulator (Milestone B)
 - `apps/web`: React + Vite client
 - `content/`: board, cards, counts, prices (JSON)
-- `assets/`: board image (`assets/board/board.webp`) and art
+- `assets/`: board image (`assets/board/board.webp`) and art (`assets/art/`)
 
 ## Status
 
@@ -44,6 +44,7 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 - Last completed stage: Session 1, stage 1a [SONNET]
 - Next stage: Session 1, stage 1b [FABLE, plan mode]
 - Known issues: none yet
-- Open rule questions: card counts (placeholders in content/), upgrade price ($300 default; rulebook says may change to $200)
-- Art folder zip is >30MB and not in the repo yet. Only the board image is in `assets/board/`.
+- Card counts confirmed (`content/card-counts.json`). Upgrade price $200 default, test $300 in simulation.
+- Open: final zone names, and exact tile ownership of each zone (confirm before Session 2a).
+- Art is in `assets/art/` (see its README); board image in `assets/board/`.
 - Rulebook living version is a claude.ai artifact; if it differs from `docs/rulebook.md`, the living doc wins.

@@ -8,19 +8,19 @@ Fishing Jamboree is a race for cash for 2–4 players (up to 6 with the variant)
 
 ## Contents
 
-| Component                | What it is                                                                                     |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
-| Board                    | The sea, split into Safe Zones 1–3, with Shipwreck Bay, Davy Jones, the island and three docks |
-| Safe deck (blue back)    | Everyday catches and small fines                                                               |
-| Risk deck (red back)     | Big fish and big dangers, drawn only in Shipwreck Bay and Davy Jones                           |
-| Event deck (yellow back) | Drawn after rounds 5, 10 and 15                                                                |
-| Player ships             | One per player                                                                                 |
-| Fish tokens              | $100, $300, $500, $700 and $1000                                                               |
-| Fine tokens              | $100 each, for fines you can't pay yet                                                         |
-| Upgrade tokens           | Speed and Capacity                                                                             |
-| Counter token            | Marks the current round on the round track                                                     |
-| Money                    | $100 and $500 bills                                                                            |
-| Die                      | One six-sided die                                                                              |
+| Component                | What it is                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Board                    | The sea, split into Safe Zones 1–3, with Shipwreck Bay, Davy Jones' Locker, the island and three docks |
+| Safe deck (blue back)    | Everyday catches and small fines                                                                       |
+| Risk deck (red back)     | Big fish and big dangers, drawn only in Shipwreck Bay and Davy Jones' Locker                           |
+| Event deck (yellow back) | Drawn after rounds 5, 10 and 15                                                                        |
+| Player ships             | One per player                                                                                         |
+| Fish tokens              | $100, $300, $500, $700 and $1000                                                                       |
+| Fine tokens              | $100 each, for fines you can't pay yet                                                                 |
+| Upgrade tokens           | Speed and Capacity                                                                                     |
+| Counter token            | Marks the current round on the round track                                                             |
+| Money                    | $100 and $500 bills                                                                                    |
+| Die                      | One six-sided die                                                                                      |
 
 ## The board
 
@@ -31,7 +31,7 @@ The board is a grid of square tiles. Most of it is open sea where you draw from 
 | Safe Zones 1, 2 and 3        | Open sea. End your move here and draw a Safe card. Buoy lines mark where one zone ends and the next begins; you can sail across them. |
 | Fishing spots 1, 2 and 3     | The yellow-outlined tile in each zone. A Golden $1000 Fish appears here when its event is drawn.                                      |
 | Shipwreck Bay                | The 2×4 area with the dark outline (labelled "Shark bay" on the current board art). End your move inside it and draw a Risk card.     |
-| Davy Jones                   | The 5×5 area with the dark outline. End your move inside it and draw a Risk card.                                                     |
+| Davy Jones' Locker           | The 5×5 area with the dark outline. End your move inside it and draw a Risk card.                                                     |
 | Island                       | Impassable. Sail around it.                                                                                                           |
 | Starting docks (bottom pier) | Two docks. Ships start here. You can sell fish and buy upgrades here.                                                                 |
 | Cruise ship dock (top right) | One dock. You can sell fish and buy upgrades here.                                                                                    |
@@ -61,7 +61,7 @@ The game lasts 20 rounds. In a round, each player takes one turn in play order. 
 2. **Move** exactly that many tiles.
 3. **Resolve where you land:**
    - Open sea: draw a Safe card.
-   - Inside Shipwreck Bay or Davy Jones: draw a Risk card.
+   - Inside Shipwreck Bay or Davy Jones' Locker: draw a Risk card.
    - A fishing spot with a Golden Fish on it: take the $1000 fish token instead of drawing.
    - A free dock: dock (see Docks).
 4. **Resolve the card**, then put it face up on that deck's discard pile. Your turn ends.
@@ -99,7 +99,7 @@ On your next turn, sail out as normal. You can't stay docked turn after turn. Wh
 
 ### Upgrades
 
-Buy upgrades while docked. Each costs $300 (may change to $200). You can own one of each; they don't stack.
+Buy upgrades while docked. Each costs $200 (may change to $300 after simulation; it is a config value). You can own one of each; they don't stack.
 
 | Upgrade  | Effect                    |
 | -------- | ------------------------- |
@@ -112,7 +112,7 @@ Pay a fine at once from your cash. If you can't pay all of it, pay what you can 
 
 ## Card reference
 
-The Safe deck is mostly small catches. The Risk deck mixes big fish with the worst losses in the game. Copy counts are still to be confirmed.
+The Safe deck is mostly small catches. The Risk deck mixes big fish with the worst losses in the game. Copy counts are in `content/card-counts.json`.
 
 ### Safe deck (blue back)
 
@@ -178,8 +178,21 @@ The game ends after round 20. Each player counts their cash and subtracts $100 f
 
 ## Open questions
 
-- [ ] **Card counts:** copies of each card, including which +1/+2/+3 cards go in the Risk deck
-- [ ] **Upgrade price:** $300 or $200
+- [x] **Card counts:** confirmed 2026-11-11 (see tables)
+- [ ] **Upgrade price:** $200 for now; test $300 in simulation
 - [ ] **Playtest:** players 3–4 entering from the starting docks. Do too many turns get missed?
 - [ ] **Playtest:** Sinking Boat when both starting docks are taken (should be rare)
-- [ ] **Board art:** relabel the three "Safe zone 3" signs as Zones 1, 2 and 3, rename Shark Bay to Shipwreck Bay, and mark the 5–6 player dock square
+- [ ] **Board art:** relabel the three "Safe zone 3" signs as Zones 1, 2 and 3 (with the names below), rename "Shark bay" to Shipwreck Bay, "Davey Jones" to Davy Jones' Locker, and mark the 5–6 player dock square
+- [ ] **Zone geometry:** buoy lines split the board into three safe zones. Confirm exactly which tiles belong to each zone before tracing the board (Session 2a)
+
+## Zone names (proposed, not final)
+
+The buoy lines divide the sea into three safe zones, plus the two risk areas. Working names, each zone matching its fishing spot:
+
+| Zone | Working name      | Area                                                    |
+| ---- | ----------------- | ------------------------------------------------------- |
+| 1    | Windward Shallows | upper left, above Shipwreck Bay                         |
+| 2    | Kelp Reach        | left side, between Shipwreck Bay and the starting docks |
+| 3    | Harbour Drift     | right side and the waters around the docks              |
+
+Alternatives if these don't suit: Gull Banks, Mistral Run, Pearl Flats, Coral Narrows, Saltmarsh Sound.
