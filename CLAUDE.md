@@ -6,7 +6,7 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 
 ## Read first
 
-- `docs/rulebook.md`: the rules. Source of truth.
+- `docs/rulebook.md`: the rules. Single source of truth (the repo wins over any other copy).
 - `docs/rulebook-engine-notes.md`: rule clarifications made during the build.
 - `docs/build-plan.md`: sessions, stages and which model does what.
 - `docs/architecture.md`: engine contract and structure (from Session 1).
@@ -44,10 +44,10 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 - Current milestone: A (due 17 Nov 2026, 7pm AEDT)
 - Last completed stage: Session 1, stage 1b [FABLE]: `docs/architecture.md` and `packages/engine/src/types.ts` (types only)
 - Next stage: Session 1, stage 1c [SONNET]: stub the `Engine` interface functions so everything compiles. Then Session 2 [OPUS].
-- Waiting on the designer: confirm the "Proposed" rows in `docs/architecture.md` section 12; update the rulebook text listed there; re-sync the living rulebook doc (it is older than `docs/rulebook.md`).
+- All rule questions in `docs/architecture.md` section 12 are decided (2026-11-11), logged in `docs/rulebook-engine-notes.md` and written into `docs/rulebook.md`.
 - Session 2b: convert `content/card-counts.json` into `content/cards.json` and `content/rules.json` (schemas in `types.ts`, examples in `docs/architecture.md` section 7).
 - Known issues: none yet
 - Card counts confirmed (`content/card-counts.json`). Upgrade price $200 default, test $300 in simulation.
 - `assets/board/board-zones.jpg` only defines the zones (teal=1, light blue=2, dark blue=3); all other tiles come from the original `board.webp`. Golden Fish cards are per fishing spot (independent of zones). Open: final zone names.
 - Art is in `assets/art/` (see its README); board image in `assets/board/`.
-- Rulebook living version is a claude.ai artifact; if it differs from `docs/rulebook.md`, the living doc wins.
+- `docs/rulebook.md` is the single source of truth for the rules. The claude.ai rulebook doc is a copy and may be out of date; the repo wins.

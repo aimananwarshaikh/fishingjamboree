@@ -1,6 +1,6 @@
 # Architecture
 
-Written in Session 1, stage 1b (2026-11-11). The types are in `packages/engine/src/types.ts`; this file explains them. Rule decisions are logged in `docs/rulebook-engine-notes.md`; open ones are in [section 12](#12-rule-ambiguities).
+Written in Session 1, stage 1b (2026-11-11). The types are in `packages/engine/src/types.ts`; this file explains them. Rule decisions are logged in `docs/rulebook-engine-notes.md`; the full list is in [section 12](#12-rule-ambiguities).
 
 ## 1. Decisions
 
@@ -304,67 +304,39 @@ No engine output depends on object key order, wall-clock time or the host.
 
 ## 12. Rule ambiguities
 
-**Decided** items were answered by the designer on 2026-11-11 and are logged in `docs/rulebook-engine-notes.md`. **Proposed** items are the engine's recommended answer and still need confirming. The types support either answer for every proposed item.
+All items were decided by the designer on 2026-11-11 and are logged in `docs/rulebook-engine-notes.md`. `docs/rulebook.md` has been updated to match.
 
-| #   | Question                           | Answer                                                                                                                                                               | Status                                |
-| --- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| 1   | Zone of risk-area tiles            | Risk tiles have no zone. "+1 Fish to All Catch" never applies to Risk draws.                                                                                         | Proposed                              |
-| 2   | No-step-back rule                  | Per step: no immediate reversal. A path may loop back over tiles visited earlier in the same move. Only the end tile may not be the start tile.                      | Proposed                              |
-| 3   | Passing over docks                 | A dock can only be the last step of a move. No passing through any dock, free or taken.                                                                              | Proposed                              |
-| 4   | Leaving a dock                     | The dock is the start tile. If every legal move is blocked, the ship stays, misses the turn and does not dock again.                                                 | Proposed                              |
-| 5   | Roll modifiers                     | Steps = max(0, die + Speed + movement event). All bonuses are mandatory. Zero steps ends the turn with no card.                                                      | Proposed                              |
-| 6   | Helicopter timing                  | A lasting event, active until the next event or the end of the game. Once per own turn, at the start or at the end, a player may pay $200 and sell all their fish.   | Decided                               |
-| 7   | Event expiry                       | Helicopter is not instant (see 6). Tsunami is instant but still replaces the previous event. An unclaimed Golden Fish is removed at the next event draw or game end. | Decided (Helicopter); Proposed (rest) |
-| 8   | Golden Fish and capacity           | It counts as one fish. See 22 for a full ship.                                                                                                                       | Decided                               |
-| 9   | Shark                              | Shark Repellent protects Shipwreck Bay only. No tie-break is needed: equal-value tokens are identical.                                                               | Proposed                              |
-| 10  | Capacity overflow                  | New fish beyond capacity are lost; no swapping. A single big fish drawn on a full ship is lost.                                                                      | Proposed                              |
-| 11  | Fines                              | Cash first, then $100 tokens for the rest, with no cap. On docking, tokens are paid from the sale before anything is bought.                                         | Proposed                              |
-| 12  | Sinking Boat                       | Lose all fish and move to a starting dock; the player may buy upgrades there before sailing out. The engine opens the shop on arrival. Fine tokens stay.             | Decided                               |
-| 13  | Late entry                         | The ship is placed on the free starting dock at the start of the turn, then rolls. If blocked it stays on the dock.                                                  | Proposed                              |
-| 14  | Turn-order roll-off                | Ties are re-rolled among the tied players only. The order is then fixed for the game.                                                                                | Proposed                              |
-| 15  | Docking                            | Exact landing; no fish needed; upgrades only on arrival. A ship cannot step straight from one dock to another: it must go out to sea first.                          | Decided                               |
-| 16  | End of game                        | Most money (cash minus fine tokens) wins. A tie is a tie; fine tokens are not a tie-break.                                                                           | Decided                               |
-| 17  | Empty deck                         | Shuffle the discard pile to make a new deck. Both being empty cannot happen.                                                                                         | Decided                               |
-| 18  | Boot with "+1 Catch"               | Gives one $100 fish. Bonus fish obey capacity like any other.                                                                                                        | Proposed                              |
-| 19  | Hidden information                 | As in section 9.                                                                                                                                                     | Proposed                              |
-| 20  | Player count                       | The engine supports 2–4; playtests use 3–4.                                                                                                                          | Proposed                              |
-| 21  | Helicopter fee                     | Must be paid from cash on hand before the sale. It cannot come out of the sale.                                                                                      | Decided                               |
-| 22  | Golden Fish with a full ship       | The player picks it up and it is lost. Nobody gets it, and no card is drawn.                                                                                         | Decided                               |
-| 23  | Choosing a dock                    | Player 1 chooses in setup and player 2 takes the other. A late entrant or Sinking Boat victim chooses when both starting docks are free.                             | Proposed                              |
-| 24  | Ending on another ship             | Not allowed.                                                                                                                                                         | Decided                               |
-| 25  | Tsunami with an empty Risk discard | The Risk draw pile is still reshuffled.                                                                                                                              | Proposed                              |
-| 26  | Helicopter with no fish            | Not offered.                                                                                                                                                         | Proposed                              |
-| 27  | Living rulebook out of sync        | See below.                                                                                                                                                           | Open                                  |
-| 28  | Helicopter with fine tokens        | Unreachable under 21: a player holding fine tokens always has $0 cash, so can never pay the fee. Recommend removing the special case from the rulebook.              | Proposed                              |
-| 29  | Helicopter at the end of the turn  | Applies after the card resolves, so a fresh catch can be sold. Not available if it was already used at the start of the same turn.                                   | Proposed                              |
-| 30  | Sinking Boat shop timing           | On arrival only. The alternative is to also allow buying at the start of the next turn, before rolling.                                                              | Proposed                              |
+| #   | Question                           | Answer                                                                                                                                                               | Status  |
+| --- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1   | Zone of risk-area tiles            | Risk tiles have no zone. "+1 Fish to All Catch" never applies to Risk draws.                                                                                         | Decided |
+| 2   | No-step-back rule                  | Per step: no immediate reversal. A path may loop back over tiles visited earlier in the same move. Only the end tile may not be the start tile.                      | Decided |
+| 3   | Passing over docks                 | A dock can only be the last step of a move. No passing through any dock, free or taken.                                                                              | Decided |
+| 4   | Leaving a dock                     | The dock is the start tile. If every legal move is blocked, the ship stays, misses the turn and does not dock again.                                                 | Decided |
+| 5   | Roll modifiers                     | Steps = max(0, die + Speed + movement event). All bonuses are mandatory. Zero steps ends the turn with no card.                                                      | Decided |
+| 6   | Helicopter timing                  | A lasting event, active until the next event or the end of the game. Once per own turn, at the start or at the end, a player may pay $200 and sell all their fish.   | Decided |
+| 7   | Event expiry                       | Helicopter is not instant (see 6). Tsunami is instant but still replaces the previous event. An unclaimed Golden Fish is removed at the next event draw or game end. | Decided |
+| 8   | Golden Fish and capacity           | It counts as one fish. See 22 for a full ship.                                                                                                                       | Decided |
+| 9   | Shark                              | Shark Repellent protects Shipwreck Bay only. No tie-break is needed: equal-value tokens are identical.                                                               | Decided |
+| 10  | Capacity overflow                  | New fish beyond capacity are lost; no swapping. A single big fish drawn on a full ship is lost.                                                                      | Decided |
+| 11  | Fines                              | Cash first, then $100 tokens for the rest, with no cap. On docking, tokens are paid from the sale before anything is bought.                                         | Decided |
+| 12  | Sinking Boat                       | Lose all fish and move to a starting dock; the player may buy upgrades there before sailing out. The engine opens the shop on arrival. Fine tokens stay.             | Decided |
+| 13  | Late entry                         | The ship is placed on the free starting dock at the start of the turn, then rolls. If blocked it stays on the dock.                                                  | Decided |
+| 14  | Turn-order roll-off                | Ties are re-rolled among the tied players only. The order is then fixed for the game.                                                                                | Decided |
+| 15  | Docking                            | Exact landing; no fish needed; upgrades only on arrival. A ship cannot step straight from one dock to another: it must go out to sea first.                          | Decided |
+| 16  | End of game                        | Most money (cash minus fine tokens) wins. A tie is a tie; fine tokens are not a tie-break.                                                                           | Decided |
+| 17  | Empty deck                         | Shuffle the discard pile to make a new deck. Both being empty cannot happen.                                                                                         | Decided |
+| 18  | Boot with "+1 Catch"               | Gives one $100 fish. Bonus fish obey capacity like any other.                                                                                                        | Decided |
+| 19  | Hidden information                 | As in section 9.                                                                                                                                                     | Decided |
+| 20  | Player count                       | The engine supports 2–4; playtests use 3–4.                                                                                                                          | Decided |
+| 21  | Helicopter fee                     | Must be paid from cash on hand before the sale. It cannot come out of the sale.                                                                                      | Decided |
+| 22  | Golden Fish with a full ship       | The player picks it up and it is lost. Nobody gets it, and no card is drawn.                                                                                         | Decided |
+| 23  | Choosing a dock                    | Player 1 chooses in setup and player 2 takes the other. A late entrant or Sinking Boat victim chooses when both starting docks are free.                             | Decided |
+| 24  | Ending on another ship             | Not allowed.                                                                                                                                                         | Decided |
+| 25  | Tsunami with an empty Risk discard | The Risk draw pile is still reshuffled.                                                                                                                              | Decided |
+| 26  | Helicopter with no fish            | Not offered.                                                                                                                                                         | Decided |
+| 27  | Living rulebook out of sync        | `docs/rulebook.md` in the repo is the single source of truth.                                                                                                        | Decided |
+| 28  | Helicopter with fine tokens        | Unreachable under 21: a player holding fine tokens always has $0 cash, so can never pay the fee. The special case is removed from the rulebook.                      | Decided |
+| 29  | Helicopter at the end of the turn  | Applies after the card resolves, so a fresh catch can be sold. Not available if it was already used at the start of the same turn.                                   | Decided |
+| 30  | Sinking Boat shop timing           | On arrival only.                                                                                                                                                     | Decided |
 
 Dropped from the kickoff seed list: "a fine when docked" (docking draws no card) and "fish on a docked ship during Helicopter" (docking already sold them).
-
-### Rulebook text to update (designer)
-
-The engine does not edit the rulebook. These sentences in `docs/rulebook.md` and the living doc no longer match the decisions:
-
-- **Helicopter row:** say it lasts until the next event, is used once per own turn at the start or end, and the $200 must be paid from cash before selling.
-- **Special cases, "Helicopter with fine tokens":** remove or reword (see 28).
-- **Sinking Boat row and special case:** add that the player may buy upgrades at the dock.
-- **Movement or Docks:** add "You can't move straight from one dock to another" and "You can't end your move on another ship".
-- **End of the game:** replace "If tied, the player with fewer fine tokens wins. If still tied, share the win." with "If tied, it's a tie."
-- **Golden Fish row:** add that a full ship landing on it removes it and gets nothing.
-
-### Living doc vs `docs/rulebook.md` (item 27)
-
-The living doc is older than the repo copy. To bring it up to date:
-
-| Where                      | Living doc says                                           | Repo says                                                                   |
-| -------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Board table, fishing spots | "The yellow-outlined tile in each zone"                   | Three numbered tiles, independent of zones                                  |
-| Event table, Golden Fish   | "Golden Fish – Zone 1, 2 or 3 … that zone's fishing spot" | "Golden Fish – Spot 1, 2 or 3 … that numbered fishing spot"                 |
-| Upgrades                   | "Each costs $300"                                         | $200, a config value, may be tested at $300                                 |
-| Docks                      | (missing)                                                 | "You can't stay docked turn after turn."                                    |
-| Names                      | "Davy Jones"                                              | "Davy Jones' Locker"; the Shipwreck Bay row notes the old "Shark bay" label |
-| Card reference intro       | "Copy counts are still to be confirmed"                   | Counts are in `content/card-counts.json`                                    |
-| Open questions             | Card counts open; price "$300 or $200"                    | Card counts ticked; "$200 for now; test $300 in simulation"                 |
-| Sinking Boat special case  | No note                                                   | "(To be playtested; should be rare.)"                                       |
-| Zones section              | (missing)                                                 | Colour table and working names                                              |
-| Intro                      | Extra "Welcome to the fishing town…" paragraph            | (missing in the repo)                                                       |
