@@ -42,8 +42,10 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 ## Status
 
 - Current milestone: A (due 17 Nov 2026, 7pm AEDT)
-- Last completed stage: Session 1, stage 1a [SONNET]
-- Next stage: Session 1, stage 1b [FABLE, plan mode]. Brief: `docs/session-1b-kickoff.md`
+- Last completed stage: Session 1, stage 1b [FABLE]: `docs/architecture.md` and `packages/engine/src/types.ts` (types only)
+- Next stage: Session 1, stage 1c [SONNET]: stub the `Engine` interface functions so everything compiles. Then Session 2 [OPUS].
+- Waiting on the designer: confirm the "Proposed" rows in `docs/architecture.md` section 12; update the rulebook text listed there; re-sync the living rulebook doc (it is older than `docs/rulebook.md`).
+- Session 2b: convert `content/card-counts.json` into `content/cards.json` and `content/rules.json` (schemas in `types.ts`, examples in `docs/architecture.md` section 7).
 - Known issues: none yet
 - Card counts confirmed (`content/card-counts.json`). Upgrade price $200 default, test $300 in simulation.
 - `assets/board/board-zones.jpg` only defines the zones (teal=1, light blue=2, dark blue=3); all other tiles come from the original `board.webp`. Golden Fish cards are per fishing spot (independent of zones). Open: final zone names.
