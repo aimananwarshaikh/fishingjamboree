@@ -82,17 +82,25 @@ About 16 hours in total, of which roughly 5.5 are Fable.
 
 > Read CLAUDE.md, docs/build-plan.md (sections 2 and 4 / Session 1) and docs/rulebook.md. Do stage 1b. Confirm or improve the architecture defaults, explaining any change in one line each. Design the engine contract, state, actions, phases, events and content schemas so they support online play, replays and bots without a redesign. Write docs/architecture.md and packages/engine/src/types.ts. Finish with a numbered list of rule ambiguities the engine needs decided, each with your recommended answer. Don't write implementations.
 
+**1c prompt (Sonnet):**
+
+> Read CLAUDE.md and docs/architecture.md (sections 3 and 4). Do Session 1, stage 1c. Add stub implementations of every function in the `Engine` interface in packages/engine/src/types.ts, one file per area, each throwing a "not implemented" error, and export them from the engine's index. Don't implement any rules. Run pnpm check, commit, push, and update Status in CLAUDE.md.
+
+**2b prompt (Opus):**
+
+> Read CLAUDE.md and docs/architecture.md (sections 3, 4, 7 and 8). Do Session 2, stage 2b with tests. Don't change types.ts without telling me why.
+
 ### Session 2: Thu 12 Nov, 2h — Board map and game setup
 
-| Stage | Model        | Time | Output                                                                                                                            | Done when                                                   |
-| ----- | ------------ | ---- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 2a    | **[OPUS]**   | 60m  | `content/board.json` traced from the board image, following the schema; a debug script that draws tile types over the board image | You've compared the overlay with the board and corrected it |
-| 2b    | **[OPUS]**   | 45m  | `createGame`, turn-order roll-off, seeded dice, decks (build, shuffle, draw, discard, reshuffle when empty), with tests           | Tests pass                                                  |
-| 2c    | **[SONNET]** | 15m  | Lint/type cleanup; update Status                                                                                                  | Commit                                                      |
+| Stage | Model        | Time | Output                                                                                                                                                                                                         | Done when                                                   |
+| ----- | ------------ | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 2a    | **[OPUS]**   | 60m  | `content/board.json` traced from the board image, following the schema; a debug script that draws tile types over the board image                                                                              | You've compared the overlay with the board and corrected it |
+| 2b    | **[OPUS]**   | 45m  | Convert `content/card-counts.json` into `content/cards.json` and `content/rules.json`; `createGame`, turn-order roll-off, seeded dice, decks (build, shuffle, draw, discard, reshuffle when empty), with tests | Tests pass                                                  |
+| 2c    | **[SONNET]** | 15m  | Lint/type cleanup; update Status                                                                                                                                                                               | Commit                                                      |
 
 **2a prompt (Opus):**
 
-> Read CLAUDE.md and docs/architecture.md. Do Session 2, stage 2a. Trace assets/board image into content/board.json using the board schema in types.ts. Every tile needs a type (sea, island, dock, shipwreck-bay, davy-jones, fishing-spot, off-board), a zone (1, 2 or 3) and a dock id where relevant. Then write a script that renders the map over the board image as a PNG, so I can check it. List any tiles you weren't sure about.
+> Read CLAUDE.md and docs/architecture.md. Do Session 2, stage 2a. Trace assets/board image into content/board.json using the board schema in types.ts. Follow `BoardContent` and the example in docs/architecture.md section 7: a terrain grid and a zone grid (one character per tile) plus the dock and fishing-spot lists. Then write a script that renders the map over the board image as a PNG, so I can check it. List any tiles you weren't sure about.
 
 ### Session 3: Fri 13 Nov, 2h — Movement (the hardest single piece)
 
@@ -107,11 +115,11 @@ About 16 hours in total, of which roughly 5.5 are Fable.
 
 ### Session 4: Sat 14 Nov, 3–4h — Cards, events and economy
 
-| Stage | Model        | Time    | Output                                                                                                                                                                                                                                                                                                                                                                       | Done when                         |
-| ----- | ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| 4a    | **[FABLE]**  | 60m     | The effect and modifier system: card resolution pipeline; event modifiers that expire at the next event (±1 movement, zone +1 catch, Shark Repellent, Golden Fish); capacity overflow; fines → tokens; Helicopter (an optional choice for every player, so it needs its own decision phase); Sinking Boat relocation; the dock/shop phase. Build these hard ones with tests. | Tests pass for each listed rule   |
-| 4b    | **[OPUS]**   | 90–120m | Remaining cards; selling at the dock; buying upgrades; round and event flow; end of game and tie-break                                                                                                                                                                                                                                                                       | A full 20-round game runs in code |
-| 4c    | **[SONNET]** | 30m     | A fuzz test where a random-move bot plays 1,000 seeded games and checks invariants: cash never negative, fish ≤ capacity, no two ships on one tile, every game ends after round 20. Update Status                                                                                                                                                                            | Fuzz test passes; commit          |
+| Stage | Model        | Time    | Output                                                                                                                                                                                                                                                                                                                                                                            | Done when                         |
+| ----- | ------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| 4a    | **[FABLE]**  | 60m     | The effect and modifier system: card resolution pipeline; event modifiers that expire at the next event (±1 movement, zone +1 catch, Shark Repellent, Golden Fish); capacity overflow; fines → tokens; Helicopter (a lasting event: once per own turn, before rolling or at the end of the turn); Sinking Boat relocation; the dock/shop phase. Build these hard ones with tests. | Tests pass for each listed rule   |
+| 4b    | **[OPUS]**   | 90–120m | Remaining cards; selling at the dock; buying upgrades; round and event flow; end of game (a tie is a tie)                                                                                                                                                                                                                                                                         | A full 20-round game runs in code |
+| 4c    | **[SONNET]** | 30m     | A fuzz test where a random-move bot plays 1,000 seeded games and checks invariants: cash never negative, fish ≤ capacity, no two ships on one tile, every game ends after round 20. Update Status                                                                                                                                                                                 | Fuzz test passes; commit          |
 
 **4a prompt (Fable):**
 
@@ -123,11 +131,11 @@ About 16 hours in total, of which roughly 5.5 are Fable.
 
 ### Session 5: Sun 15 Nov, 3–4h — Online server core
 
-| Stage | Model        | Time | Output                                                                                                                                                                                                                                                                                               | Done when               |
-| ----- | ------------ | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 5a    | **[FABLE]**  | 75m  | `docs/protocol.md` plus the server core: room lifecycle (create, join by code, 2–4 seats, start); validating actions with the engine; redacted broadcasts; sequence numbers; reconnecting with a seat token; handling the Helicopter decision when several players choose at once; disconnect policy | Core tests pass         |
-| 5b    | **[OPUS]**   | 90m  | WebSocket server built around the core; an integration test where fake clients play a full game                                                                                                                                                                                                      | Integration test passes |
-| 5c    | **[SONNET]** | 30m  | Dev scripts, README run instructions; update Status                                                                                                                                                                                                                                                  | Commit                  |
+| Stage | Model        | Time | Output                                                                                                                                                                                                                         | Done when               |
+| ----- | ------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| 5a    | **[FABLE]**  | 75m  | `docs/protocol.md` plus the server core: room lifecycle (create, join by code, 2–4 seats, start); validating actions with the engine; redacted broadcasts; sequence numbers; reconnecting with a seat token; disconnect policy | Core tests pass         |
+| 5b    | **[OPUS]**   | 90m  | WebSocket server built around the core; an integration test where fake clients play a full game                                                                                                                                | Integration test passes |
+| 5c    | **[SONNET]** | 30m  | Dev scripts, README run instructions; update Status                                                                                                                                                                            | Commit                  |
 
 **5a prompt (Fable):**
 
