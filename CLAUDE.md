@@ -11,6 +11,7 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 - `docs/build-plan.md`: sessions, stages and which model does what.
 - `docs/architecture.md`: engine contract and structure (from Session 1).
 - `docs/protocol.md`: online protocol (from Session 5).
+- `docs/session-1b-kickoff.md`: decisions so far and the brief for stage 1b (read this at the start of Session 1b).
 
 ## Non-negotiables
 
@@ -42,7 +43,7 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 
 - Current milestone: A (due 17 Nov 2026, 7pm AEDT)
 - Last completed stage: Session 1, stage 1a [SONNET]
-- Next stage: Session 1, stage 1b [FABLE, plan mode]
+- Next stage: Session 1, stage 1b [FABLE, plan mode]. Brief: `docs/session-1b-kickoff.md`
 - Known issues: none yet
 - Card counts confirmed (`content/card-counts.json`). Upgrade price $200 default, test $300 in simulation.
 - `assets/board/board-zones.jpg` only defines the zones (teal=1, light blue=2, dark blue=3); all other tiles come from the original `board.webp`. Golden Fish cards are per fishing spot (independent of zones). Open: final zone names.
