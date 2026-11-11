@@ -40,7 +40,7 @@ Read `docs/rulebook.md`. Short version: 2–4 players (3–4 for playtests; the 
 
 Also in `docs/rulebook-engine-notes.md`.
 
-1. **Card counts.** Safe deck (18): Boot 4, +1 Fish 4, +2 Fish 4, +3 Fish 4, $100 fine 2. Risk deck (15): Boot 2, +3 Fish 2, $200 fine 2, $300 fish 3, $500 fish 2, $700 fish 1, Shark 3, Sinking Boat 1. The Risk deck has no +1 or +2 Fish. Event deck: one copy each of 11 cards (Golden Fish × 3, +1 Catch × 3, +1 Movement, −1 Movement, Helicopter, Shark Repellent, Tsunami), of which only three are drawn per game (after rounds 5, 10, 15). The event deck count is an assumption; confirm it in the ambiguity list.
+1. **Card counts.** Safe deck (18): Boot 4, +1 Fish 4, +2 Fish 4, +3 Fish 4, $100 fine 2. Risk deck (15): Boot 2, +3 Fish 2, $200 fine 2, $300 fish 3, $500 fish 2, $700 fish 1, Shark 3, Sinking Boat 1. The Risk deck has no +1 or +2 Fish. Event deck: one copy each of 11 cards (Golden Fish × 3, +1 Catch × 3, +1 Movement, −1 Movement, Helicopter, Shark Repellent, Tsunami), of which only three are drawn per game (after rounds 5, 10, 15). Event deck counts confirmed by the designer: one copy of each.
 2. **Upgrade price** is $200 by default, a config value; simulation may move it to $300. Upgrades are Speed (roll +2) and Capacity (8 fish instead of 5).
 3. **Names.** "Shipwreck Bay" (not Shark Bay), "Davy Jones' Locker" (not Davy Jones). The board art still has the old labels.
 4. **Zones.** Three safe zones, defined by colour on `board-zones.jpg`: teal = 1, light blue = 2, dark blue = 3. Plus two risk areas: Shipwreck Bay (2×4) and Davy Jones' Locker (5×5). Zones only matter for the "+1 Fish to All Catch" events. Proposed names (not final): Pearl Shallows, Kelp Reach, Windward Deep.
