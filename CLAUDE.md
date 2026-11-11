@@ -42,8 +42,8 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 ## Status
 
 - Current milestone: A (due 17 Nov 2026, 7pm AEDT)
-- Last completed stage: Session 1, stage 1b [FABLE]: `docs/architecture.md` and `packages/engine/src/types.ts` (types only)
-- Next stage: Session 1, stage 1c [SONNET]: stub the `Engine` interface functions so everything compiles. Then Session 2 [OPUS].
+- Last completed stage: Session 1, stage 1c [SONNET]: stubs for every `Engine` function (`content.ts`, `setup.ts`, `legal.ts`, `apply.ts`, `view.ts`, `replay.ts` in `packages/engine/src`), each throwing "not implemented" via `notImplemented.ts`, exported from `index.ts`. `pnpm check` passes.
+- Next stage: Session 2 [OPUS] (board and content: 2a `board.json`, 2b `cards.json` + `rules.json`; then `compileContent`). Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
 - All rule questions in `docs/architecture.md` section 12 are decided (2026-11-11), logged in `docs/rulebook-engine-notes.md` and written into `docs/rulebook.md`.
 - Session 2b: convert `content/card-counts.json` into `content/cards.json` and `content/rules.json` (schemas in `types.ts`, examples in `docs/architecture.md` section 7).
 - Known issues: none yet
