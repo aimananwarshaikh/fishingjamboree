@@ -24,6 +24,7 @@ import {
   withDie,
   withEvent,
   withShips,
+  withTopCard,
 } from "./testHelpers";
 import type { Action, GameEvent, GameState, MovementEffect, PlayerView, TileId } from "./types";
 
@@ -148,7 +149,7 @@ describe("roll to move", () => {
   });
 
   it("a legal move moves the ship, reports a path and passes the turn", () => {
-    const before = roll(started(2), 2).state;
+    const before = withTopCard(roll(started(2), 2).state, "safe", "boot");
     const to = tile(3, 17);
     const { state, events } = act(before, { type: "move", player: id(before, 0), to });
     expect(state.players[0]!.position).toBe(to);
@@ -159,7 +160,13 @@ describe("roll to move", () => {
       to,
       path: [START_LEFT, tile(3, 18), to],
     });
-    expect(types(events)).toEqual(["moved", "turnEnded", "turnStarted"]);
+    expect(types(events)).toEqual([
+      "moved",
+      "cardDrawn",
+      "cardDiscarded",
+      "turnEnded",
+      "turnStarted",
+    ]);
     expect(state.phase).toEqual({ kind: "roll", actors: [id(before, 1)] });
     expect(state.turn).toEqual({ playerIndex: 1, helicopterUsed: false });
   });
@@ -274,19 +281,6 @@ describe("roll to move", () => {
     const before = withShips(started(2), { 0: tile(5, 19), 1: START_LEFT });
     expect(moveTargets(roll(before, 1).state)).toContain(START_RIGHT);
   });
-
-  it("landing resolves nothing yet (Session 4): no card, no sale", () => {
-    const base = withShips(started(2), { 0: tile(7, 0), 1: tile(0, 7) });
-    base.players[0]!.fish = [100];
-    for (const to of [tile(6, 0), CRUISE]) {
-      const rolled = roll(base, 1).state;
-      const { state, events } = act(rolled, { type: "move", player: id(base, 0), to });
-      expect(types(events)).toEqual(["moved", "turnEnded", "turnStarted"]);
-      expect(state.decks).toEqual(base.decks);
-      expect(state.players[0]!.fish).toEqual([100]);
-      expect(state.players[0]!.cash).toBe(0);
-    }
-  });
 });
 
 describe("setup placement", () => {
@@ -373,11 +367,11 @@ describe("late entry (players 3 and 4)", () => {
   it("one starting dock free: the entrant is placed there and rolls", () => {
     // Player 0 is back on (or never left) the left dock; player 1 sails out of the right one.
     const before = beforeEntry({ 0: START_LEFT });
-    const rolled = roll(before, 2).state;
+    const rolled = withTopCard(roll(before, 2).state, "safe", "boot");
     const { state, events } = act(rolled, { type: "move", player: id(before, 1), to: tile(4, 17) });
     const third = id(before, 2);
-    expect(types(events)).toEqual(["moved", "turnEnded", "turnStarted", "shipPlaced"]);
-    expect(events[3]).toEqual({
+    expect(types(events).slice(-3)).toEqual(["turnEnded", "turnStarted", "shipPlaced"]);
+    expect(events.at(-1)).toEqual({
       type: "shipPlaced",
       player: third,
       dock: "start-right",
@@ -558,7 +552,7 @@ describe("turn and round plumbing", () => {
     const moving = roll(state, 2).state;
     expect(reject(moving, { type: "roll", player: a })).toBe("wrong-phase");
     expect(reject(moving, { type: "move", player: a, to: 0 })).toBe("illegal-action");
-    // The Helicopter belongs to the roll phase but is never legal before Session 4.
+    // The Helicopter belongs to the roll phase but is not legal without its event.
     expect(reject(state, { type: "useHelicopter", player: a })).toBe("illegal-action");
   });
 

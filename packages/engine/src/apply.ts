@@ -2,12 +2,17 @@
  * applyAction: validates one action, applies it, then runs every automatic
  * step up to the next decision (docs/architecture.md sections 3 and 4).
  *
- * Stage 3a covers ship placement (setup and late entry), the roll, the move
- * and the turn/round advance. Session 4 adds what a landing does (cards,
- * docking, shop), the Helicopter, event cards and the final scores.
+ * This file owns the turn flow: placement, the roll, the move, the shop and
+ * Helicopter decisions, and the turn/round advance. What a landing does is in
+ * `landing.ts`; event cards are in `eventCards.ts`.
  */
+import type { Ctx } from "./ctx";
+import { relocateTo } from "./dock";
+import { sellFish } from "./economy";
+import { nextEvent } from "./eventCards";
 import { resolveLanding } from "./landing";
 import { getLegalActions } from "./legal";
+import { affordableUpgrades, helicopterFee, helicopterUsable } from "./modifiers";
 import { computeRoll, destinationsFor, freeStartingDocks } from "./movement";
 import { rollDie } from "./rng";
 import type {
@@ -15,10 +20,8 @@ import type {
   ActionErrorCode,
   ActionType,
   ApplyResult,
-  Content,
   DockId,
   Engine,
-  GameEvent,
   GameState,
   PhaseKind,
   PlaceShipReason,
@@ -36,13 +39,6 @@ const PHASE_ACTIONS: Record<PhaseKind, readonly ActionType[]> = {
   turnEnd: ["useHelicopter", "endTurn"],
   gameOver: [],
 };
-
-interface Ctx {
-  content: Content;
-  /** A private copy of the state; handlers mutate it freely. */
-  state: GameState;
-  events: GameEvent[];
-}
 
 const fail = (code: ActionErrorCode, message: string): ApplyResult => ({
   ok: false,
@@ -96,11 +92,13 @@ function advance(ctx: Ctx, index: number): number | null {
   if (index + 1 < state.players.length) return index + 1;
   ctx.events.push({ type: "roundEnded", round: state.round });
   if (state.round >= content.rules.rounds) {
-    // TODO(Session 4): remove an unclaimed Golden Fish, compute `result`, emit `gameEnded`.
+    // TODO(4b): end of game. Remove an unclaimed Golden Fish (`goldenFishRemoved`, reason
+    // "game-end"), compute `state.result` (total = cash - fineTokens * fineTokenValue; every
+    // player with the highest total is a winner: a tie is a tie) and emit `gameEnded`.
     state.phase = { kind: "gameOver", actors: [] };
     return null;
   }
-  // TODO(Session 4): after `rules.eventAfterRounds`, expire the event and draw the next.
+  if (content.rules.eventAfterRounds.includes(state.round)) nextEvent(ctx, state.round);
   state.round += 1;
   ctx.events.push({ type: "roundStarted", round: state.round });
   return 0;
@@ -142,12 +140,26 @@ function startTurn(ctx: Ctx, index: number): void {
   }
 }
 
-function endTurn(ctx: Ctx): void {
+/** Ends the current player's turn for good and moves play on. */
+function closeTurn(ctx: Ctx): void {
   const index = ctx.state.turn.playerIndex;
-  // TODO(Session 4): the `turnEnd` phase when the Helicopter is still usable.
   ctx.events.push({ type: "turnEnded", player: (ctx.state.players[index] as PlayerState).id });
   const next = advance(ctx, index);
   if (next !== null) startTurn(ctx, next);
+}
+
+/**
+ * Every turn comes through here once its tile, card and shop are done. The
+ * turn waits in `turnEnd` only if the player could still use the Helicopter.
+ */
+function finishTurn(ctx: Ctx): void {
+  const { state, content } = ctx;
+  const player = state.players[state.turn.playerIndex] as PlayerState;
+  if (helicopterUsable(content, state, player)) {
+    state.phase = { kind: "turnEnd", actors: [player.id] };
+    return;
+  }
+  closeTurn(ctx);
 }
 
 function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
@@ -156,9 +168,15 @@ function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
   switch (action.type) {
     case "placeShip": {
       if (phase.kind !== "placeShip") return;
+      if (phase.reason === "sinking-boat") {
+        // The victim chose between the free starting docks.
+        const dock = content.board.docks.find((d) => d.id === action.dock);
+        if (!dock) return;
+        if (!relocateTo(ctx, player, dock)) finishTurn(ctx);
+        return;
+      }
       placeOnDock(ctx, player, action.dock, phase.reason);
       if (phase.reason === "setup") continueSetup(ctx);
-      // "sinking-boat" placement comes with Session 4; it continues like an entry until then.
       else state.phase = { kind: "roll", actors: [player.id] };
       return;
     }
@@ -169,11 +187,11 @@ function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
       ctx.events.push({ type: "rolled", player: player.id, roll });
       if (roll.steps === 0) {
         ctx.events.push({ type: "blocked", player: player.id, reason: "zero-steps" });
-        endTurn(ctx);
+        finishTurn(ctx);
       } else if (destinationsFor(content, state, player, roll.steps).length === 0) {
         // The ship stays where it is. On a dock it stays docked and does not dock again.
         ctx.events.push({ type: "blocked", player: player.id, reason: "no-legal-move" });
-        endTurn(ctx);
+        finishTurn(ctx);
       } else {
         state.phase = { kind: "move", roll, actors: [player.id] };
       }
@@ -188,20 +206,40 @@ function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
       if (!dest) return;
       player.position = dest.to;
       ctx.events.push({ type: "moved", player: player.id, from, to: dest.to, path: dest.path });
-      const open = resolveLanding({
-        content,
-        state,
-        events: ctx.events,
-        playerIndex: state.turn.playerIndex,
-      });
-      if (!open) endTurn(ctx);
+      if (!resolveLanding(ctx)) finishTurn(ctx);
       return;
     }
-    case "buyUpgrade":
-    case "useHelicopter":
-    case "endTurn":
-      // TODO(Session 4). Never legal before then, so never reached.
+    case "buyUpgrade": {
+      const { price } = content.rules.upgrades[action.upgrade];
+      player.cash -= price;
+      player.upgrades[action.upgrade] = true;
+      ctx.events.push({
+        type: "upgradeBought",
+        player: player.id,
+        upgrade: action.upgrade,
+        price,
+      });
+      // The shop stays open only while there is still something to buy.
+      if (affordableUpgrades(content, player).length === 0) finishTurn(ctx);
       return;
+    }
+    case "useHelicopter": {
+      const fee = helicopterFee(content, state);
+      if (fee === null) return;
+      // The fee comes out of cash on hand before anything is sold.
+      player.cash -= fee;
+      state.turn.helicopterUsed = true;
+      ctx.events.push({ type: "helicopterUsed", player: player.id, fee });
+      sellFish(ctx, player, "helicopter");
+      // Before the roll the turn carries on; at the end of the turn it is over.
+      if (phase.kind === "turnEnd") closeTurn(ctx);
+      return;
+    }
+    case "endTurn": {
+      if (phase.kind === "turnEnd") closeTurn(ctx);
+      else finishTurn(ctx);
+      return;
+    }
   }
 }
 
