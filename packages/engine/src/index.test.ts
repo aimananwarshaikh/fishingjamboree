@@ -10,13 +10,7 @@ describe("engine", () => {
 
 // Stage 1c stubs. Delete each entry as the real implementation lands.
 describe("engine stubs", () => {
-  const names = [
-    "getActors",
-    "getLegalActions",
-    "applyAction",
-    "redactForClient",
-    "replay",
-  ] as const satisfies readonly (keyof Engine)[];
+  const names = ["redactForClient", "replay"] as const satisfies readonly (keyof Engine)[];
 
   it.each(names)("%s throws not implemented", (name) => {
     const fn = engine[name] as (...args: unknown[]) => unknown;

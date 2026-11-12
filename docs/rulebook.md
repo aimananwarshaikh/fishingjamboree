@@ -62,7 +62,7 @@ The game lasts 20 rounds. In a round, each player takes one turn in play order. 
 ### Your turn
 
 1. **Roll** the die and add any bonuses (Speed upgrade, movement events).
-2. **Move** exactly that many tiles.
+2. **Move** exactly that many tiles. The one exception is docking: you may stop on a free dock early (see Movement).
 3. **Resolve where you land:**
    - Open sea: draw a Safe card.
    - Inside Shipwreck Bay or Davy Jones' Locker: draw a Risk card.
@@ -76,8 +76,9 @@ The game lasts 20 rounds. In a round, each player takes one turn in play order. 
 - You must use your whole roll, plus or minus any bonuses. Bonuses are not optional. A total of 0 or less means you don't move and your turn ends.
 - You can't move through another ship or end your move on one. You can't move through the island.
 - A dock can only be the last tile of your move: you can't sail through a dock, and you can't end on one someone is already using.
-- You can't move straight from one dock to another. Go out to sea first (from the left starting dock to the right one is up, right, down: a roll of 3).
-- You can't step back onto the tile you just left. You may loop round and cross a tile you passed earlier in the same move.
+- You don't need the exact roll to dock. If your roll is at least the number of tiles to a free dock, you may stop there and the rest of the roll is lost. Everywhere else you must use the whole roll.
+- You can't move straight from one dock to another. Go out to sea first (from the left starting dock to the right one is up, right, down: a roll of 3 or more).
+- You can't step back onto the tile you just left. You may loop round and cross a tile you passed earlier in the same move, including the tile you started on.
 - You can't end your turn on the tile you started on.
 - If you can't make a legal move, you stay where you are and miss the rest of your turn.
 
@@ -95,7 +96,7 @@ Your ship holds 5 fish (8 with the Capacity upgrade). If a catch would take you 
 
 ### Docks
 
-To cash in you must land exactly on a free dock. You don't need to be carrying fish. Docking takes your turn: you draw no card. While docked:
+To cash in you must end your move on a free dock. You need a roll that is enough to reach it, not the exact number. You don't need to be carrying fish. Docking takes your turn: you draw no card. While docked:
 
 1. **Pay off fine tokens first** ($100 each) from what you earn.
 2. **Sell your fish.** Return every fish token to the bank and take its value in cash.
@@ -169,7 +170,7 @@ The game ends after round 20. Each player counts their cash and subtracts $100 f
 
 ## Special cases
 
-- **Blocked:** If no legal move uses your full roll, you stay put and your turn ends without a card.
+- **Blocked:** If no legal move uses your full roll and you can't reach a free dock, you stay put and your turn ends without a card.
 - **Taken dock:** You can't end your move on a dock another ship is using. Plan your roll around it.
 - **Golden Fish under a ship:** If a ship is sitting on the fishing spot when the Golden Fish appears, that player doesn't get it. They must leave and land on it again.
 - **Sinking Boat with both starting docks taken:** Go to the cruise ship dock. If that is taken too, stay where you are. You still lose your fish. You may buy upgrades at whichever dock you reach, on arrival only. Fine tokens stay with you. (To be playtested; should be rare.)
@@ -183,7 +184,7 @@ The game ends after round 20. Each player counts their cash and subtracts $100 f
 
 **A catch.** Sam has no upgrades and carries 4 fish. He rolls a 3 and ends in open sea in Zone 1, so he draws a Safe card: +2 Fish. His ship holds 5, so he takes one $100 token and the second fish is lost.
 
-**Docking.** Next turn Sam rolls a 5, exactly enough to reach the free starting dock. He docks and draws no card. He holds one fine token, so he pays $100 from his fish sale. His fish were worth $1,200, so he banks $1,100, then buys the Speed upgrade for $200 and finishes with $900. From now on he moves his roll +2.
+**Docking.** Next turn the free starting dock is 3 tiles away and Sam rolls a 5, more than enough to reach it. He docks and draws no card. He holds one fine token, so he pays $100 from his fish sale. His fish were worth $1,200, so he banks $1,100, then buys the Speed upgrade for $200 and finishes with $900. From now on he moves his roll +2.
 
 ## Player variants
 

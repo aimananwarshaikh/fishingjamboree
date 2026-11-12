@@ -103,14 +103,19 @@ stateDiagram-v2
 
 ### Movement (for Session 3)
 
-Reachable destinations are found by a search over `(tile, previous tile)` for exactly `roll.steps` steps on `board.neighbours`, with these filters:
+Reachable destinations are found by a search over `(tile, previous tile)` for `roll.steps` steps on `board.neighbours` (`reachableDestinations` in `movement.ts`), with these filters:
 
 - no step back onto the tile just left;
 - no step onto a tile holding another ship (so no passing through and no ending there);
 - a dock may only be the final step, and never directly from another dock;
-- the final tile is not the start tile and is not an occupied dock.
+- the final tile is not the start tile and is not an occupied dock;
+- a sea or risk tile counts only at exactly `roll.steps`; a free dock counts when it is reached in `roll.steps` or fewer (docking does not need the exact roll).
 
-`MoveAction` names only the destination. The `moved` event carries one legal path, chosen deterministically, for animation.
+The mover's own ship is not an obstacle, so a loop may cross the start tile.
+
+`MoveAction` names only the destination. The `moved` event carries one legal path, chosen deterministically, for animation (the first found trying up, right, down, left; the shortest one for a dock).
+
+Until Session 4, `resolveLanding` in `landing.ts` does nothing: a move ends the turn with no card, sale or shop.
 
 ## 5. Actions
 
@@ -322,7 +327,7 @@ All items were decided by the designer on 2026-11-11 and are logged in `docs/rul
 | 12  | Sinking Boat                       | Lose all fish and move to a starting dock; the player may buy upgrades there before sailing out. The engine opens the shop on arrival. Fine tokens stay.             | Decided |
 | 13  | Late entry                         | The ship is placed on the free starting dock at the start of the turn, then rolls. If blocked it stays on the dock.                                                  | Decided |
 | 14  | Turn-order roll-off                | Ties are re-rolled among the tied players only. The order is then fixed for the game.                                                                                | Decided |
-| 15  | Docking                            | Exact landing; no fish needed; upgrades only on arrival. A ship cannot step straight from one dock to another: it must go out to sea first.                          | Decided |
+| 15  | Docking                            | No exact roll needed: a roll of at least the distance reaches a free dock (changed 2026-11-12). No fish needed; upgrades only on arrival. No dock-to-dock step.      | Decided |
 | 16  | End of game                        | Most money (cash minus fine tokens) wins. A tie is a tie; fine tokens are not a tie-break.                                                                           | Decided |
 | 17  | Empty deck                         | Shuffle the discard pile to make a new deck. Both being empty cannot happen.                                                                                         | Decided |
 | 18  | Boot with "+1 Catch"               | Gives one $100 fish. Bonus fish obey capacity like any other.                                                                                                        | Decided |
