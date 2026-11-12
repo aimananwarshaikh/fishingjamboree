@@ -295,6 +295,8 @@ No engine output depends on object key order, wall-clock time or the host.
 
 ## 10. Protocol sketch (designed fully in Session 5)
 
+> Superseded by `docs/protocol.md` (Session 5a). Kept as the original sketch. Two things changed: joining and reconnecting are separate messages (`join`, `rejoin`), and an intent must name the current `seq` as well as being legal.
+
 | Direction       | Message                                    | Notes                                                                    |
 | --------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
 | client → server | `join { roomCode, name, seatToken? }`      | A seat token reclaims a seat after a disconnect.                         |
