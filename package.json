@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "dev:web": "pnpm --filter @fishingjamboree/web dev",
     "dev:server": "pnpm --filter @fishingjamboree/server dev",
+    "start:server": "pnpm --filter @fishingjamboree/server start",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "board:render": "node scripts/render-board.mjs"
   },
