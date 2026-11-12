@@ -42,10 +42,10 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 ## Status
 
 - Current milestone: A (due 17 Nov 2026, 7pm AEDT)
-- Last completed stage: Session 2, stages 2a and 2b [OPUS].
+- Last completed stage: Session 2 (2a, 2b [OPUS]; 2c folded in: `pnpm check` clean, CI added in `.github/workflows/ci.yml`). Merged in PR #3.
   - 2a: `content/board.json` (8×20) traced from `assets/board/board.webp`, zones from `board-zones.jpg`. `pnpm board:render` (needs Playwright; `NODE_PATH="$(npm root -g)"` if it is installed globally) draws it over the art as `assets/board/board-overlay.jpg`. Check that image and correct `board.json` if needed.
   - 2b: `content/cards.json` and `content/rules.json` replace `card-counts.json`. Implemented `compileContent` (`content.ts`), seeded RNG (`rng.ts`: cyrb128 + sfc32, rejection-sampled die, Fisher–Yates), content hash (`hash.ts`), decks (`decks.ts`: build, draw, discard, reshuffle when empty), `createGame` with the roll-off (`setup.ts`). Tests use the real content via `src/testContent.ts`. The engine tsconfig's `rootDir` is now the repo root so tests can import `content/*.json`.
-- Next stage: 2c [SONNET] (lint/type cleanup, Status), then Session 3 [FABLE] (movement). Still stubs: `getActors`, `getLegalActions`, `applyAction`, `redactForClient`, `replay`. Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
+- Next stage: Session 3 [FABLE] (movement), in plan mode with the 3a prompt from `docs/build-plan.md`. Before it, the designer checks `assets/board/board-overlay.jpg` (starting-dock columns, island edges (2,12), (3,11), (5,11), and tiles (1,15), (7,0)). Still stubs: `getActors`, `getLegalActions`, `applyAction`, `redactForClient`, `replay`. Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
 - All rule questions in `docs/architecture.md` section 12 are decided (2026-11-11), logged in `docs/rulebook-engine-notes.md` and written into `docs/rulebook.md`.
 - Known issues: none.
 - Card counts confirmed (now in `content/cards.json`). Risk deck is 16 cards including 2 Boots (confirmed 2026-11-12); rulebook card tables show the counts. Upgrade price $200 default, test $300 in simulation.
