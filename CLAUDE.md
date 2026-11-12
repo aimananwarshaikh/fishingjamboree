@@ -42,10 +42,12 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 ## Status
 
 - Current milestone: A (due 17 Nov 2026, 7pm AEDT)
-- Last completed stage: Session 2 (2a, 2b [OPUS]; 2c folded in: `pnpm check` clean, CI added in `.github/workflows/ci.yml`). Merged in PR #3.
+- Last completed stage: Session 3, stage 3a [FABLE] (movement). Before it: Session 2, merged in PR #3.
+  - 3a: `movement.ts` (`reachableDestinations`: layered search over tile + previous tile), real `getActors`, `getLegalActions` and `applyAction` for `placeShip` (setup, late entry), `roll`, `move`, and the turn/round advance. Tests in `movement.test.ts` and `apply.test.ts` on the real board, helpers in `testHelpers.ts`. `landing.ts` (`resolveLanding`) is the Session 4 seam and does nothing yet.
+  - Rule change (designer, 2026-11-12): docking does not need the exact roll; a roll of at least the distance reaches a free dock. Rulebook, architecture §4 and §12 item 15, and the notes log are updated.
   - 2a: `content/board.json` (8×20) traced from `assets/board/board.webp`, zones from `board-zones.jpg`. `pnpm board:render` (needs Playwright; `NODE_PATH="$(npm root -g)"` if it is installed globally) draws it over the art as `assets/board/board-overlay.jpg`.
   - 2b: `content/cards.json` and `content/rules.json` replace `card-counts.json`. Implemented `compileContent` (`content.ts`), seeded RNG (`rng.ts`: cyrb128 + sfc32, rejection-sampled die, Fisher–Yates), content hash (`hash.ts`), decks (`decks.ts`: build, draw, discard, reshuffle when empty), `createGame` with the roll-off (`setup.ts`). Tests use the real content via `src/testContent.ts`. The engine tsconfig's `rootDir` is now the repo root so tests can import `content/*.json`.
-- Next stage: Session 3 [FABLE] (movement), in plan mode with the 3a prompt from `docs/build-plan.md`. Board overlay checked and approved by the designer (2026-11-12). Still stubs: `getActors`, `getLegalActions`, `applyAction`, `redactForClient`, `replay`. Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
+- Next stage: Session 3, stage 3b [SONNET] (table-driven movement tests from the real map, performance check at 9 steps). Then Session 4 [FABLE]: search for `TODO(Session 4)` in `landing.ts`, `apply.ts` and `legal.ts` (cards, docking and shop, Helicopter, event draws, scores at `gameOver`). Still stubs: `redactForClient`, `replay`. Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
 - All rule questions in `docs/architecture.md` section 12 are decided (2026-11-11), logged in `docs/rulebook-engine-notes.md` and written into `docs/rulebook.md`.
 - Known issues: none.
 - Card counts confirmed (now in `content/cards.json`). Risk deck is 16 cards including 2 Boots (confirmed 2026-11-12); rulebook card tables show the counts. Upgrade price $200 default, test $300 in simulation.
