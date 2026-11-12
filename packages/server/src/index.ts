@@ -7,3 +7,5 @@ export type { IdSource } from "./ids";
 export { loadContent } from "./content";
 export { DEFAULT_CONFIG, ServerCore } from "./core";
 export type { ConnId, CoreConfig, CoreDeps, Outbound } from "./core";
+export { CLOSE_CODES, createGameServer, DEFAULT_TRANSPORT_CONFIG } from "./transport";
+export type { GameServer, GameServerOptions, TransportConfig } from "./transport";
