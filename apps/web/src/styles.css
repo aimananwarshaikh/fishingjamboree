@@ -1,0 +1,196 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f7fa;
+  --fg: #14232f;
+  --card: #fff;
+  --line: #c8d3dc;
+  --accent: #1d6fa5;
+  font-family: system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101a22;
+    --fg: #e6eef4;
+    --card: #1a2833;
+    --line: #34485a;
+    --accent: #5aa6cf;
+  }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px 16px 32px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+h1 {
+  font-size: 1.3rem;
+  margin: 0;
+}
+.conn {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--line);
+}
+.conn.open {
+  background: #3fa34d;
+  color: #fff;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.card label {
+  display: block;
+  margin-bottom: 8px;
+}
+input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 1rem;
+  padding: 8px;
+  margin-top: 4px;
+}
+button {
+  font-size: 1rem;
+  padding: 10px 14px;
+  margin: 4px 6px 4px 0;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--line);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.notice.error {
+  background: #fde2e2;
+  color: #7a1212;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+.code {
+  font-family: monospace;
+  letter-spacing: 0.2em;
+}
+.seats {
+  list-style: none;
+  padding: 0;
+}
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+@media (min-width: 800px) {
+  .table {
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.board {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+  background: #0b1f2d;
+}
+.board .tile-label {
+  font-size: 13px;
+  font-weight: 700;
+  fill: #fff;
+  pointer-events: none;
+}
+.board .tile-label.dim {
+  fill: #6b5a2d;
+}
+.board .ship-label {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #000;
+}
+.board .target {
+  fill: rgba(255, 235, 59, 0.45);
+  stroke: #ffeb3b;
+  stroke-width: 2;
+  cursor: pointer;
+}
+.round .bar {
+  position: relative;
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  margin: 6px 0 10px;
+}
+.round .fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.round i {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--fg);
+}
+.turn.mine {
+  font-weight: 700;
+}
+.players {
+  width: 100%;
+  border-collapse: collapse;
+}
+.players th,
+.players td {
+  text-align: left;
+  padding: 4px;
+}
+.players tr.active {
+  background: rgba(255, 235, 59, 0.2);
+}
+.log ol {
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+.log li {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--line);
+}
+.log li.info {
+  opacity: 0.7;
+}
+.log li.error {
+  color: #c33;
+}
