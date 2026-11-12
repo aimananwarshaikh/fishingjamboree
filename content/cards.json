@@ -1,0 +1,227 @@
+{
+  "cards": {
+    "boot": {
+      "id": "boot",
+      "name": "Boot",
+      "effect": {
+        "kind": "fish",
+        "count": 0,
+        "value": 100
+      }
+    },
+    "fish+1": {
+      "id": "fish+1",
+      "name": "Goldfish",
+      "effect": {
+        "kind": "fish",
+        "count": 1,
+        "value": 100
+      }
+    },
+    "fish+2": {
+      "id": "fish+2",
+      "name": "Headache fish",
+      "effect": {
+        "kind": "fish",
+        "count": 2,
+        "value": 100
+      }
+    },
+    "fish+3": {
+      "id": "fish+3",
+      "name": "Circus fish",
+      "effect": {
+        "kind": "fish",
+        "count": 3,
+        "value": 100
+      }
+    },
+    "fine-100": {
+      "id": "fine-100",
+      "name": "Sad Dolphin",
+      "effect": {
+        "kind": "fine",
+        "amount": 100
+      }
+    },
+    "fish-300": {
+      "id": "fish-300",
+      "name": "Swordfish",
+      "effect": {
+        "kind": "fish",
+        "count": 1,
+        "value": 300
+      }
+    },
+    "fish-500": {
+      "id": "fish-500",
+      "name": "Yellowfin Tuna",
+      "effect": {
+        "kind": "fish",
+        "count": 1,
+        "value": 500
+      }
+    },
+    "fish-700": {
+      "id": "fish-700",
+      "name": "Red Dragon",
+      "effect": {
+        "kind": "fish",
+        "count": 1,
+        "value": 700
+      }
+    },
+    "fine-200": {
+      "id": "fine-200",
+      "name": "Sadder Dolphin",
+      "effect": {
+        "kind": "fine",
+        "amount": 200
+      }
+    },
+    "shark": {
+      "id": "shark",
+      "name": "Shark",
+      "effect": {
+        "kind": "shark",
+        "count": 3
+      }
+    },
+    "sinking-boat": {
+      "id": "sinking-boat",
+      "name": "Sinking Boat",
+      "effect": {
+        "kind": "sinkingBoat"
+      }
+    },
+    "golden-fish-1": {
+      "id": "golden-fish-1",
+      "name": "Golden Fish – Spot 1",
+      "effect": {
+        "kind": "goldenFish",
+        "spot": 1,
+        "value": 1000
+      }
+    },
+    "golden-fish-2": {
+      "id": "golden-fish-2",
+      "name": "Golden Fish – Spot 2",
+      "effect": {
+        "kind": "goldenFish",
+        "spot": 2,
+        "value": 1000
+      }
+    },
+    "golden-fish-3": {
+      "id": "golden-fish-3",
+      "name": "Golden Fish – Spot 3",
+      "effect": {
+        "kind": "goldenFish",
+        "spot": 3,
+        "value": 1000
+      }
+    },
+    "catch-bonus-1": {
+      "id": "catch-bonus-1",
+      "name": "+1 Fish to All Catch – Zone 1",
+      "effect": {
+        "kind": "catchBonus",
+        "zone": 1,
+        "count": 1,
+        "value": 100
+      }
+    },
+    "catch-bonus-2": {
+      "id": "catch-bonus-2",
+      "name": "+1 Fish to All Catch – Zone 2",
+      "effect": {
+        "kind": "catchBonus",
+        "zone": 2,
+        "count": 1,
+        "value": 100
+      }
+    },
+    "catch-bonus-3": {
+      "id": "catch-bonus-3",
+      "name": "+1 Fish to All Catch – Zone 3",
+      "effect": {
+        "kind": "catchBonus",
+        "zone": 3,
+        "count": 1,
+        "value": 100
+      }
+    },
+    "movement+1": {
+      "id": "movement+1",
+      "name": "+1 Movement",
+      "effect": {
+        "kind": "movement",
+        "delta": 1
+      }
+    },
+    "movement-1": {
+      "id": "movement-1",
+      "name": "−1 Movement",
+      "effect": {
+        "kind": "movement",
+        "delta": -1
+      }
+    },
+    "helicopter": {
+      "id": "helicopter",
+      "name": "Helicopter",
+      "effect": {
+        "kind": "helicopter",
+        "fee": 200
+      }
+    },
+    "shark-repellent": {
+      "id": "shark-repellent",
+      "name": "Shark Repellent",
+      "effect": {
+        "kind": "sharkRepellent",
+        "area": "shipwreck-bay"
+      }
+    },
+    "tsunami": {
+      "id": "tsunami",
+      "name": "Tsunami",
+      "effect": {
+        "kind": "reshuffleDiscard",
+        "deck": "risk"
+      }
+    }
+  },
+  "decks": {
+    "safe": {
+      "boot": 4,
+      "fish+1": 4,
+      "fish+2": 4,
+      "fish+3": 4,
+      "fine-100": 2
+    },
+    "risk": {
+      "boot": 2,
+      "fish+3": 2,
+      "fine-200": 2,
+      "fish-300": 3,
+      "fish-500": 2,
+      "fish-700": 1,
+      "shark": 3,
+      "sinking-boat": 1
+    },
+    "event": {
+      "golden-fish-1": 1,
+      "golden-fish-2": 1,
+      "golden-fish-3": 1,
+      "catch-bonus-1": 1,
+      "catch-bonus-2": 1,
+      "catch-bonus-3": 1,
+      "movement+1": 1,
+      "movement-1": 1,
+      "helicopter": 1,
+      "shark-repellent": 1,
+      "tsunami": 1
+    }
+  }
+}

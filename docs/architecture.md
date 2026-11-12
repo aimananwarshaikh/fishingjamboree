@@ -146,7 +146,7 @@ Three files in `content/`, typed as `BoardContent`, `CardsContent` and `RulesCon
 
 Terrain characters: `.` off-board, `~` sea, `#` island, `D` dock, `S` Shipwreck Bay, `J` Davy Jones' Locker. Zone characters: `1`, `2`, `3`, or `-` for any tile that is not open sea. A fishing spot is an overlay: the tile keeps its terrain and zone, and draws a card as normal when no Golden Fish is on it. `compileContent` checks grid sizes, that every sea tile has a zone and no other tile does, that every `D` has exactly one dock entry, and that spots sit on sea or risk tiles.
 
-### `cards.json` (Session 2b converts `card-counts.json`)
+### `cards.json` (converted from the old `card-counts.json` in Session 2b)
 
 ```json
 {
@@ -232,7 +232,7 @@ Terrain characters: `.` off-board, `~` sea, `#` island, `D` dock, `S` Shipwreck 
 }
 ```
 
-(The example lists a subset of cards; the real file has all of them.) The `safe` and `risk` objects of `card-counts.json` become `decks.safe` and `decks.risk` unchanged, and its card ids are kept. `upgradePrice` moves to `rules.json`. Every number a balancer may want to change (fish values, fine amounts, shark bite, bonus size, Helicopter fee, Golden Fish value) is in the card's effect.
+(The example lists a subset of cards; the real file has all of them.) The `safe` and `risk` objects of the old `card-counts.json` became `decks.safe` and `decks.risk` unchanged, and its card ids were kept. Its `upgradePrice` moved to `rules.json`. Every number a balancer may want to change (fish values, fine amounts, shark bite, bonus size, Helicopter fee, Golden Fish value) is in the card's effect.
 
 ### `rules.json`
 

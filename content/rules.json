@@ -1,0 +1,20 @@
+{
+  "minPlayers": 2,
+  "maxPlayers": 4,
+  "rounds": 20,
+  "eventAfterRounds": [5, 10, 15],
+  "dieSides": 6,
+  "startingCash": 0,
+  "baseCapacity": 5,
+  "fineTokenValue": 100,
+  "upgrades": {
+    "speed": {
+      "price": 200,
+      "rollBonus": 2
+    },
+    "capacity": {
+      "price": 200,
+      "capacity": 8
+    }
+  }
+}

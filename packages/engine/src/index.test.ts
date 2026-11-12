@@ -11,8 +11,6 @@ describe("engine", () => {
 // Stage 1c stubs. Delete each entry as the real implementation lands.
 describe("engine stubs", () => {
   const names = [
-    "compileContent",
-    "createGame",
     "getActors",
     "getLegalActions",
     "applyAction",
