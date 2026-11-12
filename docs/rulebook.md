@@ -28,16 +28,16 @@ Welcome to the fishing town for this year's season. Grab your gear, get your bes
 
 The board is a grid of square tiles. Most of it is open sea where you draw from the Safe deck; two outlined danger areas make you draw from the Risk deck instead.
 
-| Area                         | What happens there                                                                                                                                                |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Safe Zones 1, 2 and 3        | Open sea. End your move here and draw a Safe card. Buoy lines mark where one zone ends and the next begins; you can sail across them.                             |
-| Fishing spots 1, 2 and 3     | Three yellow-outlined tiles, numbered 1–3. They are independent of the zones. A Golden $1000 Fish appears on spot N when the Golden Fish – Spot N event is drawn. |
-| Shipwreck Bay                | The 2×4 area with the dark outline (labelled "Shark bay" on the current board art). End your move inside it and draw a Risk card.                                 |
-| Davy Jones' Locker           | The 5×5 area with the dark outline. End your move inside it and draw a Risk card.                                                                                 |
-| Island                       | Impassable. Sail around it.                                                                                                                                       |
-| Starting docks (bottom pier) | Two docks. Ships start here. You can sell fish and buy upgrades here.                                                                                             |
-| Cruise ship dock (top right) | One dock. You can sell fish and buy upgrades here.                                                                                                                |
-| Round track (left edge)      | 20 spaces. The orange spaces (5, 10, 15) are event rounds.                                                                                                        |
+| Area                         | What happens there                                                                                                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Safe Zones 1, 2 and 3        | Open sea. End your move here and draw a Safe card. Buoy lines mark where one zone ends and the next begins; you can sail across them.                                                                                           |
+| Fishing spots 1, 2 and 3     | Three yellow-outlined tiles, numbered 1–3. They are independent of the zones. A Golden $1000 Fish appears on spot N when the Golden Fish – Spot N event is drawn.                                                               |
+| Shipwreck Bay                | The 2×4 area with the dark outline (labelled "Shark bay" on the current board art). End your move inside it and draw a Risk card.                                                                                               |
+| Davy Jones' Locker           | The 5×5 area with the dark outline. End your move inside it and draw a Risk card.                                                                                                                                               |
+| Island                       | Impassable. Sail around it.                                                                                                                                                                                                     |
+| Starting docks (bottom pier) | Two docks. Ships start here. You can sell fish and buy upgrades here.                                                                                                                                                           |
+| Cruise ship dock (top right) | One dock. You can sell fish and buy upgrades here.                                                                                                                                                                              |
+| Round track (left edge)      | 20 spaces, from "First Round" at the bottom to "Final Round" at the top. The EVENT spaces are 6, 11 and 16: when the Counter moves onto one (at the end of rounds 5, 10 and 15), draw an Event card. Each event lasts 5 rounds. |
 
 A dock holds one ship. If a dock is taken, you can't end your move on it.
 

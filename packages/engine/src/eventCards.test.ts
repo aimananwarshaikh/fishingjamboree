@@ -115,8 +115,47 @@ describe("event rounds", () => {
     expect(state.activeEvent).toEqual({ card: "tsunami", drawnAfterRound: 10 });
   });
 
-  it.todo("Tsunami shuffles the Risk discard pile back into the Risk deck (4b)");
-  it.todo("Tsunami reshuffles the Risk draw pile even when the discard pile is empty (4b)");
+  it("Tsunami shuffles the Risk discard pile back into the Risk deck", () => {
+    const before = withTopCard(lastTurnOf(10), "event", "tsunami");
+    const { draw } = before.decks.risk;
+    before.decks.risk = { draw: draw.slice(5), discard: draw.slice(0, 5) };
+    const { state, events } = endRound(before);
+    expect(types(events).slice(3, 7)).toEqual([
+      "roundEnded",
+      "eventDrawn",
+      "deckReshuffled",
+      "roundStarted",
+    ]);
+    expect(of(events, "deckReshuffled")).toEqual([
+      { type: "deckReshuffled", deck: "risk", reason: "tsunami", drawCount: 16 },
+    ]);
+    expect(state.decks.risk.discard).toEqual([]);
+    expect(state.decks.risk.draw).toHaveLength(16);
+    expect(deckCards(state, "risk")).toEqual(fullDeck("risk"));
+    // A real shuffle on the game's RNG, and nothing else changes.
+    const lasting = withTopCard(before, "event", "movement+1");
+    expect(state.rng).not.toEqual(endRound(lasting).state.rng);
+    expect(state.decks.safe).toEqual(before.decks.safe);
+    expect(state.activeEvent).toEqual({ card: "tsunami", drawnAfterRound: 10 });
+  });
+
+  it("Tsunami reshuffles the Risk draw pile even when the discard pile is empty", () => {
+    const before = withTopCard(lastTurnOf(5), "event", "tsunami");
+    expect(before.decks.risk.discard).toEqual([]);
+    const { state, events } = endRound(before);
+    expect(of(events, "deckReshuffled")).toEqual([
+      { type: "deckReshuffled", deck: "risk", reason: "tsunami", drawCount: 16 },
+    ]);
+    expect(state.decks.risk.draw).not.toEqual(before.decks.risk.draw);
+    expect([...state.decks.risk.draw].sort()).toEqual(fullDeck("risk"));
+  });
+
+  it("Tsunami has no lasting effect while it is the active card", () => {
+    const before = withTopCard(lastTurnOf(5), "event", "tsunami");
+    const after = endRound(before).state;
+    const rolled = of(roll(after, 4).events, "rolled")[0]!;
+    expect(rolled.roll).toMatchObject({ eventModifier: 0, steps: 4 });
+  });
 
   it("no event is drawn after the last round", () => {
     const { state, events } = endRound(lastTurnOf(content.rules.rounds));
@@ -124,7 +163,42 @@ describe("event rounds", () => {
     expect(state.phase).toEqual({ kind: "gameOver", actors: [] });
   });
 
-  it.todo("game end removes an unclaimed Golden Fish, scores and emits gameEnded (4b)");
+  it("game end removes an unclaimed Golden Fish, scores and emits gameEnded", () => {
+    let before = withActiveEvent(lastTurnOf(content.rules.rounds), "golden-fish-1", 15);
+    before.goldenFish = { spot: 1, tile: SPOT1, value: 1000 };
+    before = withPlayer(before, 0, { cash: 700, fish: [500, 500] });
+    before = withPlayer(before, 1, { cash: 0, fineTokens: 2 });
+    const { state, events } = endRound(before);
+    const [a, b] = [id(before, 0), id(before, 1)];
+    const result = {
+      scores: [
+        { player: a, cash: 700, fineTokens: 0, total: 700 },
+        { player: b, cash: 0, fineTokens: 2, total: -200 },
+      ],
+      winners: [a],
+    };
+    expect(types(events)).toEqual([
+      "rolled",
+      "blocked",
+      "turnEnded",
+      "roundEnded",
+      "goldenFishRemoved",
+      "gameEnded",
+    ]);
+    expect(of(events, "goldenFishRemoved")).toEqual([
+      { type: "goldenFishRemoved", spot: 1, reason: "game-end" },
+    ]);
+    expect(of(events, "gameEnded")).toEqual([{ type: "gameEnded", result }]);
+    expect(state.goldenFish).toBeNull();
+    expect(state.result).toEqual(result);
+    expect(state.phase).toEqual({ kind: "gameOver", actors: [] });
+    expect(state.round).toBe(content.rules.rounds);
+    // The round 15 event lasts to the end: it is not expired or discarded.
+    expect(of(events, "eventExpired")).toEqual([]);
+    expect(state.activeEvent).toEqual(before.activeEvent);
+    // Fish still on the ship are worth nothing.
+    expect(state.players[0]!.fish).toEqual([500, 500]);
+  });
 });
 
 describe("Golden Fish", () => {

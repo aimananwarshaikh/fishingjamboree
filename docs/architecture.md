@@ -126,6 +126,8 @@ The mover's own ship is not an obstacle, so a loop may cross the start tile.
 - **`landing.ts`** (`resolveLanding`) picks what a move's last tile does: dock (`dock.ts`), Golden Fish, Safe card or Risk card. Handlers work on one mutable `Ctx` (`ctx.ts`); one that opens a phase sets `state.phase` and returns `true`.
 - **Turn end.** Every turn passes through `finishTurn` in `apply.ts`, which opens `turnEnd` only when the Helicopter is usable. The shop closes by itself when a purchase leaves nothing affordable.
 - **Event cards.** The active card is in neither pile; it joins the event discard pile when it expires.
+- **End of game (Session 4b).** `advance` in `apply.ts` calls `endGame` after round 20: an unclaimed Golden Fish is removed, `scoreGame` (`economy.ts`) fills `state.result`, the phase becomes `gameOver` and `gameEnded` is emitted. The last event card stays active.
+- **Views and replays (Session 4b).** `redactForClient` (`view.ts`) builds the view field by field, so a new `GameState` field stays out of the view until it is added there on purpose. `replay` (`replay.ts`) re-runs `createGame` and `applyAction` and throws on a content hash mismatch or a rejected action, naming the action's index.
 
 ## 5. Actions
 
