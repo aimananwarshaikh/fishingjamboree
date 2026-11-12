@@ -165,15 +165,15 @@ About 16 hours in total, of which roughly 5.5 are Fable.
 
 Estimate: 3–5 weeks at 7–10 hours a week.
 
-| Phase | Work                                                                    | Model                                                                 |
-| ----- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| B1    | Fix the review's P1 and P2 issues                                       | Opus (Sonnet for small fixes)                                         |
-| B2    | Real UI with your art: board, ships, cards, tokens, dice, turn feedback | Sonnet for components; Opus for board interaction and animation state |
-| B3    | Lobby: create/join room, names, ready-up, rematch                       | Sonnet                                                                |
-| B4    | Responsive mobile layout (the tall board suits phones in portrait)      | Sonnet                                                                |
-| B5    | Deploy web and server, environment config, basic logging                | Sonnet (Opus if networking issues come up)                            |
-| B6    | Bots and balancing simulator → set card counts and upgrade price        | Opus builds, Sonnet runs and reports                                  |
-| B7    | 3–4 person online playtests and fixes                                   | Opus                                                                  |
+| Phase | Work                                                                                                                                                                                                                                                            | Model                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| B1    | Fix the review's P1 and P2 issues                                                                                                                                                                                                                               | Opus (Sonnet for small fixes)                                         |
+| B2    | Real UI with your art: board, ships, cards, tokens, dice, turn feedback. Round display instead of the printed track: a "Round N of 20" banner at each round start and a small round counter with a progress bar marking the event points (see CLAUDE.md Status) | Sonnet for components; Opus for board interaction and animation state |
+| B3    | Lobby: create/join room, names, ready-up, rematch                                                                                                                                                                                                               | Sonnet                                                                |
+| B4    | Responsive mobile layout (the tall board suits phones in portrait)                                                                                                                                                                                              | Sonnet                                                                |
+| B5    | Deploy web and server, environment config, basic logging                                                                                                                                                                                                        | Sonnet (Opus if networking issues come up)                            |
+| B6    | Bots and balancing simulator → set card counts and upgrade price                                                                                                                                                                                                | Opus builds, Sonnet runs and reports                                  |
+| B7    | 3–4 person online playtests and fixes                                                                                                                                                                                                                           | Opus                                                                  |
 
 Fable is optional here. Save it for a bug Opus can't crack, or for designing AI opponents later.
 
