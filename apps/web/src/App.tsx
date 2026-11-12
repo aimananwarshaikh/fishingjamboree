@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getLegalActions } from "@fishingjamboree/engine";
-import type { Action, Content, PlayerView } from "@fishingjamboree/engine";
-import type { RoomInfo } from "../../../packages/server/src/protocol";
+import type { Action, Content, PlayerView, UpgradeId } from "@fishingjamboree/engine";
+import type { RoomInfo, SeatInfo } from "../../../packages/server/src/protocol";
 import { Board, playerColor } from "./Board";
-import { describeAction } from "./describe";
+import { describeAction, phaseTask, seatStatus, upgradeText } from "./describe";
 import { loadBundledContent } from "./content";
 import { useGame } from "./useGame";
-import type { ClientState } from "./store";
+import type { Banner, ClientState } from "./store";
 
 const content = loadBundledContent();
 
@@ -17,8 +17,11 @@ export function App() {
     <main>
       <header>
         <h1>Fishing Jamboree</h1>
-        <span className={`conn ${state.connection}`}>{state.connection}</span>
+        <span className={`conn ${state.connection}`}>
+          {state.connection === "closed" && state.session ? "reconnecting…" : state.connection}
+        </span>
       </header>
+      <BannerView banner={state.banner} />
       {state.contentMismatch && (
         <p className="notice error">
           This page and the server have different game content. Reload after updating, or the board
@@ -38,6 +41,24 @@ export function App() {
         <Table state={state} room={state.room} act={game.act} onLeave={game.leave} />
       )}
     </main>
+  );
+}
+
+/** Shows each new banner for a moment. It never blocks clicks. */
+function BannerView({ banner }: { banner: Banner | null }) {
+  const [shown, setShown] = useState<number | null>(null);
+  useEffect(() => {
+    if (!banner) return;
+    setShown(banner.id);
+    const timer = window.setTimeout(() => setShown(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [banner]);
+  if (!banner || shown !== banner.id) return null;
+  return (
+    <div className="banner" role="status" aria-live="polite">
+      <strong>{banner.title}</strong>
+      {banner.detail && <span>{banner.detail}</span>}
+    </div>
   );
 }
 
@@ -86,6 +107,7 @@ function Lobby(props: {
 }) {
   const { room, state } = props;
   const isHost = state.session?.seat === room.host;
+  const missing = room.seats.filter((s) => !s.connected).map((s) => s.name);
   return (
     <section className="card">
       <h2>
@@ -106,9 +128,18 @@ function Lobby(props: {
         ))}
       </ul>
       {isHost ? (
-        <button disabled={room.seats.length < room.minPlayers} onClick={props.onStart}>
-          Start game
-        </button>
+        <>
+          <button
+            disabled={room.seats.length < room.minPlayers || missing.length > 0}
+            onClick={props.onStart}
+          >
+            Start game
+          </button>
+          {room.seats.length < room.minPlayers && (
+            <p>Waiting for at least {room.minPlayers} players…</p>
+          )}
+          {missing.length > 0 && <p>Waiting for {missing.join(", ")} to reconnect…</p>}
+        </>
       ) : (
         <p>Waiting for the host to start…</p>
       )}
@@ -119,23 +150,36 @@ function Lobby(props: {
   );
 }
 
-function phaseText(view: PlayerView, name: (p: string) => string, me: string): string {
+function TurnStatus(props: {
+  view: PlayerView;
+  me: string;
+  name: (p: string) => string;
+  seats: SeatInfo[];
+}) {
+  const { view, me, name } = props;
+  if (view.phase.kind === "gameOver") return <p className="turn">Game over.</p>;
   const actor = view.phase.actors[0];
-  const who = actor === me ? "You" : actor ? name(actor) : "Nobody";
-  switch (view.phase.kind) {
-    case "placeShip":
-      return `${who}: choose a starting dock.`;
-    case "roll":
-      return `${who}: roll the die.`;
-    case "move":
-      return `${who}: move ${view.phase.roll.steps} step(s) or fewer to a highlighted tile.`;
-    case "dockShop":
-      return `${who}: at the dock, buy upgrades or end the turn.`;
-    case "turnEnd":
-      return `${who}: end the turn (or use the helicopter).`;
-    case "gameOver":
-      return "Game over.";
+  if (!actor) return <p className="turn">…</p>;
+  if (actor === me) {
+    const hint =
+      view.phase.kind === "move"
+        ? " Tap a highlighted tile."
+        : view.phase.kind === "placeShip"
+          ? " Tap a button or a highlighted dock."
+          : "";
+    return (
+      <p className="turn mine">
+        Your turn: {phaseTask(view)}.{hint}
+      </p>
+    );
   }
+  const status = seatStatus(props.seats.find((s) => s.seat === actor));
+  return (
+    <p className="turn waiting">
+      Waiting for <b>{name(actor)}</b> to {phaseTask(view)}
+      {status ? ` (${status})` : ""}…
+    </p>
+  );
 }
 
 function Table(props: {
@@ -153,48 +197,92 @@ function Table(props: {
   );
   const name = (p: string) => names[p] ?? p;
   const legal = useMemo(() => getLegalActions(content as Content, view, me), [view, me]);
-  const buttons = legal.filter((a) => a.type !== "move" && a.type !== "placeShip");
   const dockChoices = legal.filter((a) => a.type === "placeShip");
+  const upgrades = legal.filter(
+    (a): a is Action & { type: "buyUpgrade"; upgrade: UpgradeId } => a.type === "buyUpgrade",
+  );
+  const helicopter = legal.find((a) => a.type === "useHelicopter");
+  const others = legal.filter((a) => a.type === "roll" || a.type === "endTurn");
   const disabled = state.pending !== null;
   const rounds = content.rules.rounds;
   const event = view.activeEvent ? content.cards.cards[view.activeEvent.card] : null;
+  const fee = event?.effect.kind === "helicopter" ? event.effect.fee : null;
+  const mine = view.players.find((p) => p.id === me);
+  const shopping = view.phase.kind === "dockShop" && view.phase.actors[0] === me;
 
   return (
-    <div className="table">
+    <div className="table" data-seq={state.game!.seq} data-me={me}>
       <section className="board-wrap">
         <Board content={content} view={view} legal={legal} names={names} onAction={props.act} />
       </section>
-      <aside>
-        <div className="card">
-          <div className="round">
-            Round {view.round}/{rounds}
-            <div className="bar">
-              <div className="fill" style={{ width: `${(view.round / rounds) * 100}%` }} />
-              {content.rules.eventAfterRounds.map((r) => (
-                <i
-                  key={r}
-                  style={{ left: `${(r / rounds) * 100}%` }}
-                  title={`Event after round ${r}`}
-                />
-              ))}
-            </div>
-          </div>
-          <p className={legal.length ? "turn mine" : "turn"}>{phaseText(view, name, me)}</p>
-          {event && <p className="event">Event: {event.name}</p>}
-          <div className="actions">
-            {dockChoices.map((a, i) => (
-              <button key={`d${i}`} disabled={disabled} onClick={() => props.act(a)}>
-                {describeAction(a, content)}
-              </button>
-            ))}
-            {buttons.map((a, i) => (
-              <button key={i} disabled={disabled} onClick={() => props.act(a)}>
-                {describeAction(a, content)}
-              </button>
+      <div className="card status">
+        <div className="round">
+          Round {view.round}/{rounds}
+          <div className="bar">
+            <div className="fill" style={{ width: `${(view.round / rounds) * 100}%` }} />
+            {content.rules.eventAfterRounds.map((r) => (
+              <i
+                key={r}
+                style={{ left: `${(r / rounds) * 100}%` }}
+                title={`Event after round ${r}`}
+              />
             ))}
           </div>
         </div>
-
+        <TurnStatus view={view} me={me} name={name} seats={room.seats} />
+        {event && (
+          <p className="event">
+            Event: <b>{event.name}</b>
+            {fee !== null && ` (sell your fish from anywhere for $${fee}, once per turn)`}
+          </p>
+        )}
+        <div className="actions">
+          {dockChoices.map((a, i) => (
+            <button key={`d${i}`} disabled={disabled} onClick={() => props.act(a)}>
+              {describeAction(a, content)}
+            </button>
+          ))}
+          {shopping && (
+            <div className="shop">
+              <h3>Dock shop</h3>
+              <p>
+                You have ${mine?.cash ?? 0}.
+                {upgrades.length === 0 && " There is no upgrade you can buy right now."}
+              </p>
+              {upgrades.map((a) => (
+                <button key={a.upgrade} disabled={disabled} onClick={() => props.act(a)}>
+                  {describeAction(a, content)}
+                  <small>{upgradeText(content, a.upgrade)}</small>
+                </button>
+              ))}
+            </div>
+          )}
+          {helicopter && (
+            <button
+              className="helicopter"
+              disabled={disabled}
+              onClick={() => props.act(helicopter)}
+            >
+              {describeAction(helicopter, content)}
+              <small>
+                sell your {mine?.fish.length ?? 0} fish now
+                {fee !== null ? ` for a $${fee} fee` : ""}
+              </small>
+            </button>
+          )}
+          {others.map((a) => (
+            <button
+              key={a.type}
+              className={a.type === "endTurn" && shopping ? "secondary" : undefined}
+              disabled={disabled}
+              onClick={() => props.act(a)}
+            >
+              {a.type === "endTurn" && shopping ? "Done: end turn" : describeAction(a, content)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <aside>
         <div className="card">
           <table className="players">
             <thead>
@@ -218,7 +306,14 @@ function Table(props: {
                       <span className="dot" style={{ background: playerColor(p.id) }} />
                       {name(p.id)}
                       {p.id === me && " (you)"}
-                      {seat && !seat.connected && " ⚠"}
+                      {seat && !seat.connected && (
+                        <small
+                          className={seat.away ? "away" : "disconnected"}
+                          title={seatStatus(seat) ?? ""}
+                        >
+                          {seat.away ? "away" : "offline"}
+                        </small>
+                      )}
                     </td>
                     <td>${p.cash}</td>
                     <td>

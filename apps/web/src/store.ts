@@ -24,6 +24,13 @@ export interface LogLine {
 
 export type Connection = "idle" | "connecting" | "open" | "closed";
 
+/** A short message shown over the table, e.g. when a round starts. `id` changes each time. */
+export interface Banner {
+  id: number;
+  title: string;
+  detail: string | null;
+}
+
 export interface ClientState {
   connection: Connection;
   session: Session | null;
@@ -39,6 +46,8 @@ export interface ClientState {
   needsSync: boolean;
   /** `clientActionId` of an intent that has had no answer yet. */
   pending: string | null;
+  /** The latest banner (round start, event card, game over); the UI hides it after a moment. */
+  banner: Banner | null;
 }
 
 export const initialState: ClientState = {
@@ -51,6 +60,7 @@ export const initialState: ClientState = {
   contentMismatch: false,
   needsSync: false,
   pending: null,
+  banner: null,
 };
 
 export interface Context {
@@ -58,6 +68,29 @@ export interface Context {
   contentHash: string;
   /** Turns events into log text (needs names and content). */
   describe: (events: GameEvent[], room: RoomInfo | null) => string[];
+  /** Name of a card, for the event banner. Defaults to the card id. */
+  cardName?: (card: string) => string;
+  /** Rounds in a game, for "Round 6 of 20". */
+  rounds?: number;
+}
+
+/** The banner for an update's events, or `null` if none of them deserve one. */
+export function bannerFor(events: GameEvent[], ctx: Context, lastId: number): Banner | null {
+  const cardName = ctx.cardName ?? ((c: string) => c);
+  let title: string | null = null;
+  let detail: string | null = null;
+  for (const e of events) {
+    if (e.type === "roundStarted") {
+      title = `Round ${e.round}${ctx.rounds ? ` of ${ctx.rounds}` : ""}`;
+    } else if (e.type === "eventDrawn") {
+      detail = `Event: ${cardName(e.card)}`;
+      title ??= `After round ${e.afterRound}`;
+    } else if (e.type === "gameEnded") {
+      title = "Game over";
+      detail = null;
+    }
+  }
+  return title === null ? null : { id: lastId + 1, title, detail };
 }
 
 const MAX_LOG = 300;
@@ -116,13 +149,21 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       const have = state.game?.seq ?? -1;
       if (msg.seq <= have) return state; // old or repeated
       if (msg.seq !== have + 1) return { ...state, needsSync: true };
-      const texts = ctx.describe(msg.events, state.room);
+      // What the server did for an away player is marked in the log. Only that
+      // player's events: the same update can also hold a round start or another
+      // player's forced move.
+      const texts = msg.events.flatMap((e) => {
+        const lines = ctx.describe([e], state.room);
+        const theirs = msg.auto && "player" in e && e.player === msg.by;
+        return theirs ? lines.map((t) => `${t} (auto)`) : lines;
+      });
       return {
         ...state,
         game: { seq: msg.seq, view: msg.view },
         log: addLog(state, texts, "event"),
         pending: null,
         notice: null,
+        banner: bannerFor(msg.events, ctx, state.banner?.id ?? 0) ?? state.banner,
       };
     }
     case "snapshot": {

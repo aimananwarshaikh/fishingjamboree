@@ -236,8 +236,10 @@ describe("disconnect policy: in a game", () => {
     const actor = h.actor("c1")!;
     const idle = ["p1", "p2", "p3"].find((s) => s !== actor)!;
     h.drop(connOf(idle));
-    expect(h.core.nextDeadline()).toBeNull();
+    // The only thing due is marking the seat away when its grace ends.
+    expect(h.core.nextDeadline()).toBe(h.now() + GRACE);
     h.advance(GRACE * 5);
+    expect(h.core.nextDeadline()).toBeNull();
     expect(h.core.replayLog(code)?.actions).toEqual([]);
   });
 
@@ -337,6 +339,52 @@ describe("disconnect policy: in a game", () => {
     expect(h.core.replayLog(code)?.actions).toEqual([]);
     h.advance(1);
     expect(h.last("back", "update")).toMatchObject({ seq: 1, by: seat, auto: true });
+  });
+
+  it("tells everyone when a dropped player becomes away, and when they are back", () => {
+    const h = harness();
+    const { code, tokens } = h.started(3);
+    h.drop("c2");
+    expect(h.last("c1", "room").room.seats[1]).toMatchObject({ connected: false, away: false });
+    h.clear();
+    h.advance(GRACE - 1);
+    expect(h.got("c1", "room")).toHaveLength(0);
+    h.advance(1);
+    const rev = h.room(code).rev;
+    expect(h.last("c1", "room").room).toMatchObject({ rev });
+    expect(h.last("c3", "room").room.seats[1]).toMatchObject({ connected: false, away: true });
+    h.send("n2", { type: "rejoin", v: V, code, seatToken: tokens[1] });
+    expect(h.last("c1", "room").room.seats[1]).toMatchObject({ connected: true, away: false });
+    expect(h.last("n2", "welcome").room.seats[1]).toMatchObject({ away: false });
+  });
+
+  it("marks a player who leaves a game away at once, but never in the lobby", () => {
+    const h = harness();
+    const { code } = h.started(3);
+    h.send("c3", { type: "leave" });
+    expect(h.last("c1", "room").room.seats[2]).toMatchObject({ connected: false, away: true });
+    expect(h.room(code).seats[2]).toMatchObject({ away: true });
+
+    const lobby = harness();
+    const { code: lobbyCode } = lobby.lobby(2);
+    lobby.drop("c2");
+    lobby.advance(LOBBY_GRACE - 1);
+    expect(lobby.room(lobbyCode).seats[1]).toMatchObject({ connected: false, away: false });
+  });
+
+  it("clears away for every disconnected player when an empty room is joined again", () => {
+    const h = harness();
+    const { code, tokens } = h.started(3);
+    h.drop("c2");
+    h.advance(GRACE);
+    expect(h.room(code).seats[1]).toMatchObject({ away: true });
+    h.drop("c1");
+    h.drop("c3");
+    h.send("back", { type: "rejoin", v: V, code, seatToken: tokens[0] });
+    // p2's grace starts again (docs/protocol.md §7), so p2 is not away for now.
+    expect(h.last("back", "welcome").room.seats[1]).toMatchObject({ away: false });
+    h.advance(GRACE);
+    expect(h.last("back", "room").room.seats[1]).toMatchObject({ away: true });
   });
 
   it("deletes a room nobody has been connected to for the idle time", () => {

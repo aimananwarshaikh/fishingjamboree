@@ -72,6 +72,8 @@ interface Seat {
   disconnectedAt: number | null;
   /** The player sent `leave` during a game: no grace period. */
   left: boolean;
+  /** In a game: the reconnect grace is over (or the player left), so the server plays for them. */
+  away: boolean;
 }
 
 interface Game {
@@ -270,6 +272,7 @@ export class ServerCore {
     seat.conn = conn;
     seat.disconnectedAt = null;
     seat.left = false;
+    seat.away = false;
     this.conns.set(conn, { room, seat });
     room.rev += 1;
     this.welcome(out, room, seat);
@@ -410,19 +413,30 @@ export class ServerCore {
     const game = room.game;
     // Nobody is played for while nobody is watching.
     if (room.status === "playing" && game && room.emptySince === null) {
+      // A disconnected player becomes away when the grace ends; everyone is told.
+      for (const seat of room.seats) {
+        if (seat.disconnectedAt === null || seat.away) continue;
+        steps.push({
+          at: Math.max(seat.disconnectedAt, room.resumedAt) + this.config.reconnectGraceMs,
+          run: (out) => this.markAway(out, room, seat),
+        });
+      }
       for (const actor of game.state.phase.actors) {
         const seat = room.seats.find((s) => s.id === actor);
-        if (!seat || seat.disconnectedAt === null) continue;
-        const graceEnds = seat.left
-          ? seat.disconnectedAt
-          : Math.max(seat.disconnectedAt, room.resumedAt) + this.config.reconnectGraceMs;
+        if (!seat || seat.disconnectedAt === null || !seat.away) continue;
         steps.push({
-          at: Math.max(graceEnds, game.lastActionAt + this.config.autoActionDelayMs),
+          at: game.lastActionAt + this.config.autoActionDelayMs,
           run: (out) => this.autoAct(out, room, game, seat),
         });
       }
     }
     return steps.reduce<Step | null>((a, b) => (a === null || b.at < a.at ? b : a), null);
+  }
+
+  private markAway(out: Outbound[], room: Room, seat: Seat) {
+    seat.away = true;
+    room.rev += 1;
+    this.broadcastRoom(out, room);
   }
 
   private autoAct(out: Outbound[], room: Room, game: Game, seat: Seat) {
@@ -495,6 +509,7 @@ export class ServerCore {
       conn,
       disconnectedAt: null,
       left: false,
+      away: false,
     };
     room.seats.push(seat);
     room.seats.sort((a, b) => a.id.localeCompare(b.id));
@@ -507,6 +522,8 @@ export class ServerCore {
     if (room.emptySince === null) return;
     room.emptySince = null;
     room.resumedAt = this.now();
+    // Every other disconnected player's grace starts again (docs/protocol.md §7).
+    for (const seat of room.seats) if (!seat.left) seat.away = false;
   }
 
   /** The seat loses its connection but stays in the room. */
@@ -514,6 +531,7 @@ export class ServerCore {
     seat.conn = null;
     seat.disconnectedAt = this.now();
     seat.left = left;
+    seat.away = left && room.status === "playing";
     room.rev += 1;
     if (room.seats.every((s) => s.conn === null)) room.emptySince = this.now();
   }
@@ -541,7 +559,12 @@ export class ServerCore {
       code: room.code,
       status: room.status,
       host: room.host,
-      seats: room.seats.map((s) => ({ seat: s.id, name: s.name, connected: s.conn !== null })),
+      seats: room.seats.map((s) => ({
+        seat: s.id,
+        name: s.name,
+        connected: s.conn !== null,
+        away: s.away,
+      })),
       minPlayers: this.content.rules.minPlayers,
       maxPlayers: this.content.rules.maxPlayers,
       rev: room.rev,
