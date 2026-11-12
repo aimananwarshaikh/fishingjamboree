@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { occupiedTiles, reachableDestinations } from "./movement";
-import { board, CRUISE, START_LEFT, START_RIGHT, tile } from "./testHelpers";
+import {
+  board,
+  CRUISE,
+  isDock,
+  oracle,
+  START_LEFT,
+  START_RIGHT,
+  tile,
+} from "./testHelpers";
 import type { PlayerState, TileId } from "./types";
 
 const set = (...tiles: TileId[]): Set<TileId> => new Set(tiles);
 const sorted = (tiles: Iterable<TileId>): TileId[] => [...tiles].sort((a, b) => a - b);
-const isDock = (t: TileId): boolean => board.tiles[t]?.terrain === "dock";
 const distance = (a: TileId, b: TileId): number => {
   const ta = board.tiles[a]!;
   const tb = board.tiles[b]!;
@@ -43,25 +50,6 @@ function pathProblem(
     if (b.terrain === "dock" && a.terrain === "dock") return "dock to dock";
   }
   return null;
-}
-
-/** Brute force: walk every legal route and collect where it may end. */
-function oracle(from: TileId, steps: number, occupied: Set<TileId>): TileId[] {
-  const out = new Set<TileId>();
-  const walk = (at: TileId, prev: TileId, left: number): void => {
-    for (const nb of board.neighbours[at]!) {
-      if (nb === prev || occupied.has(nb)) continue;
-      if (isDock(nb)) {
-        if (!isDock(at) && nb !== from) out.add(nb);
-      } else if (left === 1) {
-        if (nb !== from) out.add(nb);
-      } else {
-        walk(nb, at, left - 1);
-      }
-    }
-  };
-  if (steps > 0) walk(from, -1, steps);
-  return sorted(out);
 }
 
 describe("reachableDestinations: exact count, no diagonals", () => {

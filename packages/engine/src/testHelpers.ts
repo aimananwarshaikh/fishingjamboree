@@ -24,6 +24,31 @@ export const { board } = content;
 
 export const tile = (x: number, y: number): TileId => y * board.width + x;
 
+export const isDock = (t: TileId): boolean => board.tiles[t]?.terrain === "dock";
+
+/**
+ * Brute force: walk every legal route (no step back, no ships, a dock ends
+ * the move and is never entered from a dock) and collect where it may end.
+ * Sea and risk tiles count at exactly `steps`; a free dock counts at any depth.
+ */
+export function oracle(from: TileId, steps: number, occupied: ReadonlySet<TileId>): TileId[] {
+  const out = new Set<TileId>();
+  const walk = (at: TileId, prev: TileId, left: number): void => {
+    for (const nb of board.neighbours[at]!) {
+      if (nb === prev || occupied.has(nb)) continue;
+      if (isDock(nb)) {
+        if (!isDock(at) && nb !== from) out.add(nb);
+      } else if (left === 1) {
+        if (nb !== from) out.add(nb);
+      } else {
+        walk(nb, at, left - 1);
+      }
+    }
+  };
+  if (steps > 0) walk(from, -1, steps);
+  return [...out].sort((a, b) => a - b);
+}
+
 export const START_LEFT = tile(3, 19);
 export const START_RIGHT = tile(4, 19);
 export const CRUISE = tile(7, 1);
