@@ -4,7 +4,7 @@
  */
 import type { Ctx } from "./ctx";
 import { capacityOf } from "./modifiers";
-import type { FishLossReason, Money, PlayerState, SaleVia } from "./types";
+import type { Content, FishLossReason, GameResult, Money, PlayerState, SaleVia } from "./types";
 
 const sum = (values: readonly Money[]): Money => values.reduce((a, b) => a + b, 0);
 
@@ -81,4 +81,20 @@ export function sellFish(ctx: Ctx, player: PlayerState, via: SaleVia): void {
       amount: tokens * value,
     });
   }
+}
+
+/**
+ * Final scores (rulebook "End of the game"): cash minus the fine tokens still
+ * held; fish on the ship are worth nothing. Every player on the highest
+ * total wins (a tie is a tie; fine tokens are not a tie-break).
+ */
+export function scoreGame(content: Content, players: readonly PlayerState[]): GameResult {
+  const scores = players.map((p) => ({
+    player: p.id,
+    cash: p.cash,
+    fineTokens: p.fineTokens,
+    total: p.cash - p.fineTokens * content.rules.fineTokenValue,
+  }));
+  const best = Math.max(...scores.map((s) => s.total));
+  return { scores, winners: scores.filter((s) => s.total === best).map((s) => s.player) };
 }

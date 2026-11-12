@@ -8,7 +8,7 @@
  */
 import type { Ctx } from "./ctx";
 import { relocateTo } from "./dock";
-import { sellFish } from "./economy";
+import { scoreGame, sellFish } from "./economy";
 import { nextEvent } from "./eventCards";
 import { resolveLanding } from "./landing";
 import { getLegalActions } from "./legal";
@@ -84,6 +84,22 @@ function continueSetup(ctx: Ctx): void {
 }
 
 /**
+ * After the last turn of the last round: an unclaimed Golden Fish is removed,
+ * the scores are counted and the game is over. The last event card stays
+ * active (it lasts until the end of the game) and is not discarded.
+ */
+function endGame(ctx: Ctx): void {
+  const { state, content } = ctx;
+  if (state.goldenFish) {
+    ctx.events.push({ type: "goldenFishRemoved", spot: state.goldenFish.spot, reason: "game-end" });
+    state.goldenFish = null;
+  }
+  state.result = scoreGame(content, state.players);
+  state.phase = { kind: "gameOver", actors: [] };
+  ctx.events.push({ type: "gameEnded", result: state.result });
+}
+
+/**
  * Moves on from `index`'s finished turn. Ends the round after the last
  * player. Returns the next player's index, or `null` when the game is over.
  */
@@ -92,10 +108,7 @@ function advance(ctx: Ctx, index: number): number | null {
   if (index + 1 < state.players.length) return index + 1;
   ctx.events.push({ type: "roundEnded", round: state.round });
   if (state.round >= content.rules.rounds) {
-    // TODO(4b): end of game. Remove an unclaimed Golden Fish (`goldenFishRemoved`, reason
-    // "game-end"), compute `state.result` (total = cash - fineTokens * fineTokenValue; every
-    // player with the highest total is a winner: a tie is a tie) and emit `gameEnded`.
-    state.phase = { kind: "gameOver", actors: [] };
+    endGame(ctx);
     return null;
   }
   if (content.rules.eventAfterRounds.includes(state.round)) nextEvent(ctx, state.round);

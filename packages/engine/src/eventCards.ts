@@ -9,6 +9,7 @@
  */
 import type { Ctx } from "./ctx";
 import { discardCard, drawCard } from "./decks";
+import { shuffle } from "./rng";
 import type { EventEffect } from "./types";
 
 type OnDraw<E extends EventEffect> = (ctx: Ctx, effect: E) => void;
@@ -33,13 +34,23 @@ const ON_DRAW: { [K in EventEffect["kind"]]: OnDraw<Extract<EventEffect, { kind:
   movement: lasting,
   helicopter: lasting,
   sharkRepellent: lasting,
+  /**
+   * Tsunami: the deck's discard pile goes back into its draw pile and the
+   * whole pile is shuffled, even when the discard pile is empty. The card
+   * still becomes the active event (done by `nextEvent`), with no lasting effect.
+   */
   reshuffleDiscard(ctx, effect) {
-    // TODO(4b): Tsunami. Shuffle `effect.deck`'s discard pile into its draw pile (the draw
-    // pile is reshuffled even when the discard pile is empty) with `shuffle` from rng.ts,
-    // store the new RNG state, and emit `deckReshuffled` with reason "tsunami". The card
-    // still becomes `activeEvent` (already done by `nextEvent`), with no lasting effect.
-    void ctx;
-    void effect;
+    const { state } = ctx;
+    const deck = state.decks[effect.deck];
+    const [draw, rng] = shuffle([...deck.draw, ...deck.discard], state.rng);
+    state.rng = rng;
+    state.decks[effect.deck] = { draw, discard: [] };
+    ctx.events.push({
+      type: "deckReshuffled",
+      deck: effect.deck,
+      reason: "tsunami",
+      drawCount: draw.length,
+    });
   },
 };
 
