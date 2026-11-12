@@ -217,6 +217,20 @@ core.nextDeadline(); // → number | null  when tick() next has work
 - `core.replayLog(code)` returns the room's `ReplayLog`. It contains the seed, so it must not reach a client while the game is being played.
 - Left to the transport: heartbeats (to notice dead sockets), a maximum message size, rate limits, and a cap on the number of rooms.
 
+### The WebSocket transport (stage 5b)
+
+`createGameServer` in `packages/server/src/transport.ts` wraps the core; `main.ts` serves it with `GET /health` on one port (`PORT`, default 8787). What a client can see of it (settings in `TransportConfig`, decisions in `docs/rulebook-engine-notes.md`):
+
+| Situation                                       | What happens                                        |
+| ----------------------------------------------- | --------------------------------------------------- |
+| Text that is not JSON, or a binary frame        | `error` `bad-message`; the socket stays open        |
+| A frame over 4 KiB                              | Closed with 1009                                    |
+| More than 30 messages at once, or 10 a second   | Closed with 1008 `rate limit`                       |
+| No pong to the previous ping (pings every 15 s) | Socket dropped (the client sees 1006)               |
+| The core closes it (`replaced`)                 | `error` first, then closed with 4000 and the reason |
+| 500 rooms exist                                 | `create` is answered `error` `server-busy`          |
+| The server shuts down                           | Socket dropped                                      |
+
 The web client can import the message types from `packages/server/src/protocol.ts`, which has no Node imports.
 
 ## 10. Open items
