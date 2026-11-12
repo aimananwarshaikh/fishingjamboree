@@ -47,8 +47,8 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
   - 2b: `content/cards.json` and `content/rules.json` replace `card-counts.json`. Implemented `compileContent` (`content.ts`), seeded RNG (`rng.ts`: cyrb128 + sfc32, rejection-sampled die, Fisher–Yates), content hash (`hash.ts`), decks (`decks.ts`: build, draw, discard, reshuffle when empty), `createGame` with the roll-off (`setup.ts`). Tests use the real content via `src/testContent.ts`. The engine tsconfig's `rootDir` is now the repo root so tests can import `content/*.json`.
 - Next stage: 2c [SONNET] (lint/type cleanup, Status), then Session 3 [FABLE] (movement). Still stubs: `getActors`, `getLegalActions`, `applyAction`, `redactForClient`, `replay`. Delete each stub's test entry in `index.test.ts` as it gets a real implementation.
 - All rule questions in `docs/architecture.md` section 12 are decided (2026-11-11), logged in `docs/rulebook-engine-notes.md` and written into `docs/rulebook.md`.
-- Known issues: the rulebook card tables still say "TBC" for copies, and the Risk table lists "+1 / +2 / +3 Fish" but no Boot (the deck has Boot and +3 Fish only). Fix in a docs pass.
-- Card counts confirmed (now in `content/cards.json`). Open: the per-card risk counts add up to 16, but the decisions log says 15; the engine uses 16 until the designer confirms. Upgrade price $200 default, test $300 in simulation.
+- Known issues: none.
+- Card counts confirmed (now in `content/cards.json`). Risk deck is 16 cards including 2 Boots (confirmed 2026-11-12); rulebook card tables show the counts. Upgrade price $200 default, test $300 in simulation.
 - `assets/board/board-zones.jpg` only defines the zones (teal=1, light blue=2, dark blue=3); all other tiles come from the original `board.webp`. Golden Fish cards are per fishing spot (independent of zones). Open: final zone names.
 - Art is in `assets/art/` (see its README); board image in `assets/board/`.
 - `docs/rulebook.md` is the single source of truth for the rules. The claude.ai rulebook doc is a copy and may be out of date; the repo wins.

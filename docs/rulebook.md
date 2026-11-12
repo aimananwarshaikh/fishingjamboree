@@ -51,7 +51,9 @@ Everyone starts with $0, a basic ship (speed = the die roll, capacity = 5 fish) 
 4. Each player picks a ship.
 5. Everyone rolls the die. Highest roll goes first, then the next highest, and so on. Tied players re-roll among themselves.
 6. Player 1 places their ship on one starting dock. Player 2 places theirs on the other.
-7. Players 3 and 4 wait off the board. Ships can only enter from a starting dock, never the cruise ship dock. At the start of your turn, if a starting dock is free, place your ship there (your choice if both are free), then roll and move out as normal. If neither dock is free, or every way out of the free dock is blocked, you miss that turn and try again next round.
+7. Players 3 and 4 wait off the board. Ships can only enter from a starting dock, never the cruise ship dock. At the start of your turn, if a starting dock is free, place your ship there (your choice if both are free), then roll and move out as normal. If neither dock is free, you miss that turn and try again next round. If you were placed but every way out of the dock is blocked, your ship stays on the dock and you miss the rest of that turn.
+
+   Only two ships are placed before the game starts. With 4 players, round 1 goes: player 1 sails out from their dock, then player 2 sails out from theirs. Player 3 then places on a free starting dock (their choice if both are free), rolls and sails out. Then player 4 does the same. If player 1 or 2 couldn't leave their dock, there is one fewer free dock, and player 3 or 4 may have to wait.
 
 ## How to play
 
@@ -116,31 +118,38 @@ Pay a fine at once from your cash. If you can't pay all of it, pay what you can 
 
 ## Card reference
 
-The Safe deck is mostly small catches. The Risk deck mixes big fish with the worst losses in the game. Copy counts are in `content/cards.json` (`decks`).
+The Safe deck is mostly small catches. The Risk deck mixes big fish with the worst losses in the game. Copy counts below match `content/cards.json` (`decks`).
 
 ### Safe deck (blue back)
 
+18 cards. These copy counts are the designer's (confirmed 2026-11-11) and match `content/cards.json`.
+
 | Card          | Effect                               | Copies |
 | ------------- | ------------------------------------ | ------ |
-| Boot          | 0 fish. Nothing happens.             | TBC    |
-| Goldfish      | +1 Fish: take one $100 fish token    | TBC    |
-| Headache fish | +2 Fish: take two $100 fish tokens   | TBC    |
-| Circus fish   | +3 Fish: take three $100 fish tokens | TBC    |
-| Sad Dolphin   | $100 fine                            | TBC    |
+| Boot          | 0 fish. Nothing happens.             | 4      |
+| Goldfish      | +1 Fish: take one $100 fish token    | 4      |
+| Headache fish | +2 Fish: take two $100 fish tokens   | 4      |
+| Circus fish   | +3 Fish: take three $100 fish tokens | 4      |
+| Sad Dolphin   | $100 fine                            | 2      |
 
 ### Risk deck (red back)
 
-| Card              | Effect                                                                                                                              | Copies |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| Swordfish         | Take one $300 fish token                                                                                                            | TBC    |
-| Yellowfin Tuna    | Take one $500 fish token                                                                                                            | TBC    |
-| Red Dragon        | Take one $700 fish token                                                                                                            | TBC    |
-| +1 / +2 / +3 Fish | As in the Safe deck                                                                                                                 | TBC    |
-| Sadder Dolphin    | $200 fine                                                                                                                           | TBC    |
-| Shark             | Lose 3 fish, cheapest first. With fewer than 3, lose them all.                                                                      | TBC    |
-| Sinking Boat      | Lose all your fish and move your ship to a free starting dock (your choice if both are free). You may buy upgrades when you arrive. | TBC    |
+16 cards. There are no +1 or +2 Fish cards in the Risk deck.
+
+| Card           | Effect                                                                                                                              | Copies |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Boot           | 0 fish. Nothing happens.                                                                                                            | 2      |
+| Circus fish    | +3 Fish: take three $100 fish tokens                                                                                                | 2      |
+| Swordfish      | Take one $300 fish token                                                                                                            | 3      |
+| Yellowfin Tuna | Take one $500 fish token                                                                                                            | 2      |
+| Red Dragon     | Take one $700 fish token                                                                                                            | 1      |
+| Sadder Dolphin | $200 fine                                                                                                                           | 2      |
+| Shark          | Lose 3 fish, cheapest first. With fewer than 3, lose them all.                                                                      | 3      |
+| Sinking Boat   | Lose all your fish and move your ship to a free starting dock (your choice if both are free). You may buy upgrades when you arrive. | 1      |
 
 ### Event deck (yellow back)
+
+11 cards, one copy of each.
 
 An event's effect lasts until the next event is drawn. The round 15 event lasts until the end of the game.
 
