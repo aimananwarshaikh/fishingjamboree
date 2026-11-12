@@ -59,4 +59,15 @@ update.
 
 ### Web client
 
-`pnpm dev:web` is still the bare scaffold. The playable client arrives in Session 6.
+`pnpm dev:web` starts the bare web client (Vite, <http://localhost:5173>). It has no art: a grid
+drawn from `content/board.json`, highlighted legal tiles, buttons for roll, upgrades, helicopter and
+end turn, a player table, a round bar and an event log.
+
+1. Start the server (`pnpm start:server`).
+2. Open the client in two tabs. In the first, enter a name and **Create a room**.
+3. In the second, enter a name and the four-letter code and **Join room**.
+4. The first tab's player clicks **Start game**.
+
+The client connects to `ws://<page host>:8787`. To use another server, add `?server=ws://host:port`
+to the page address. Each tab keeps its own seat in `sessionStorage`, so a refresh rejoins the same
+seat and two tabs of one browser are two players.
