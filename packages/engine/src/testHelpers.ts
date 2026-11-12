@@ -3,6 +3,8 @@
  * Coordinates are (x, y) on the real board, x from the left, y from the top.
  */
 import { applyAction } from "./apply";
+import type { Ctx } from "./ctx";
+import { expandDeckList } from "./decks";
 import { getLegalActions } from "./legal";
 import { rollDie, seedRng } from "./rng";
 import { createGame } from "./setup";
@@ -11,10 +13,12 @@ import type {
   Action,
   CardId,
   Content,
+  DeckId,
   GameEvent,
   GameState,
   GameUpdate,
   PlayerId,
+  PlayerState,
   RngState,
   TileId,
 } from "./types";
@@ -120,10 +124,124 @@ export function moveTargets(state: GameState, c: Content = content): TileId[] {
   return getLegalActions(c, state, actor(state)).flatMap((a) => (a.type === "move" ? [a.to] : []));
 }
 
-/** The current actor rolls `die` and takes the first legal move, if there is one. */
+/**
+ * The current actor rolls `die` and takes the first legal move, if there is
+ * one. Any decision the landing opens for them is settled the simplest way:
+ * the first dock offered, nothing bought, no Helicopter.
+ */
 export function playTurn(state: GameState, die: number): GameState {
-  const rolled = roll(state, die).state;
-  if (rolled.phase.kind !== "move") return rolled;
-  const to = moveTargets(rolled)[0] as TileId;
-  return act(rolled, { type: "move", player: actor(rolled), to }).state;
+  const player = actor(state);
+  let next = roll(state, die).state;
+  if (next.phase.kind !== "move") return next;
+  const to = moveTargets(next)[0] as TileId;
+  next = act(next, { type: "move", player, to }).state;
+  while (actor(next) === player && next.turn.playerIndex === state.turn.playerIndex) {
+    const phase = next.phase;
+    if (phase.kind === "placeShip" && phase.reason === "sinking-boat") {
+      next = act(next, { type: "placeShip", player, dock: phase.docks[0] as string }).state;
+    } else if (phase.kind === "dockShop" || phase.kind === "turnEnd") {
+      next = act(next, { type: "endTurn", player }).state;
+    } else break;
+  }
+  return next;
+}
+
+// --- Session 4 helpers ------------------------------------------------------
+
+/** Copy of `state` with `patch` applied to player `index`. */
+export function withPlayer(
+  state: GameState,
+  index: number,
+  patch: Partial<PlayerState>,
+): GameState {
+  const next = clone(state);
+  Object.assign(next.players[index] as PlayerState, patch);
+  return next;
+}
+
+/**
+ * Copy of `state` with one copy of `card` moved to the top of `deck`'s draw
+ * pile (taken from lower in the pile, or from the discard pile). The deck's
+ * contents do not change.
+ */
+export function withTopCard(state: GameState, deck: DeckId, card: CardId): GameState {
+  const next = clone(state);
+  const { draw, discard } = next.decks[deck];
+  const from = draw.includes(card) ? draw : discard;
+  const at = from.indexOf(card);
+  if (at < 0) throw new Error(`withTopCard: no ${card} in the ${deck} deck`);
+  from.splice(at, 1);
+  draw.unshift(card);
+  return next;
+}
+
+/**
+ * Like `withEvent`, but takes the card out of the event deck as a real draw
+ * would, so the deck contents stay right.
+ */
+export function withActiveEvent(state: GameState, card: CardId, afterRound = 5): GameState {
+  const next = clone(state);
+  const { draw, discard } = next.decks.event;
+  const from = draw.includes(card) ? draw : discard;
+  const at = from.indexOf(card);
+  if (at < 0) throw new Error(`withActiveEvent: no ${card} in the event deck`);
+  from.splice(at, 1);
+  next.activeEvent = { card, drawnAfterRound: afterRound };
+  return next;
+}
+
+/**
+ * The player whose turn it is stands on `from` and moves one step to the
+ * neighbouring tile `to` (the roll is skipped: the state is put straight into
+ * the move phase with 1 step).
+ */
+export function land(state: GameState, from: TileId, to: TileId, c: Content = content): GameUpdate {
+  const next = clone(state);
+  const player = next.players[next.turn.playerIndex] as PlayerState;
+  player.position = from;
+  next.phase = {
+    kind: "move",
+    roll: { die: 1, speedBonus: 0, eventModifier: 0, steps: 1 },
+    actors: [player.id],
+  };
+  return act(next, { type: "move", player: player.id, to }, c);
+}
+
+/** Every card of `deck` wherever it is now (draw pile, discard pile, active event), sorted. */
+export function deckCards(state: GameState, deck: DeckId): CardId[] {
+  const { draw, discard } = state.decks[deck];
+  const active = deck === "event" && state.activeEvent ? [state.activeEvent.card] : [];
+  return [...draw, ...discard, ...active].sort();
+}
+
+/** The deck list from the content, sorted the same way. */
+export const fullDeck = (deck: DeckId, c: Content = content): CardId[] =>
+  expandDeckList(c.cards.decks[deck]).sort();
+
+/** A context for calling rule helpers directly. */
+export const ctxFor = (state: GameState, c: Content = content): Ctx => ({
+  content: c,
+  state: clone(state),
+  events: [],
+});
+
+/** The invariants of docs/architecture.md section 11 that hold in every state. */
+export function invariantProblems(state: GameState, c: Content = content): string[] {
+  const out: string[] = [];
+  for (const p of state.players) {
+    const capacity = p.upgrades.capacity
+      ? c.rules.upgrades.capacity.capacity
+      : c.rules.baseCapacity;
+    if (p.cash < 0) out.push(`${p.id}: negative cash`);
+    if (p.fish.length > capacity) out.push(`${p.id}: over capacity`);
+    if (p.fineTokens > 0 && p.cash !== 0) out.push(`${p.id}: fine tokens and cash`);
+    if (p.fineTokens < 0) out.push(`${p.id}: negative fine tokens`);
+  }
+  const tiles = state.players.flatMap((p) => (p.position === null ? [] : [p.position]));
+  if (new Set(tiles).size !== tiles.length) out.push("two ships share a tile");
+  for (const deck of ["safe", "risk", "event"] as const) {
+    if (deckCards(state, deck).join() !== fullDeck(deck, c).join())
+      out.push(`${deck} deck changed`);
+  }
+  return out;
 }

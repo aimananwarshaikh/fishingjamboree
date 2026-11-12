@@ -86,6 +86,8 @@ stateDiagram-v2
     [*] --> placeShip: createGame (roll-off, player 1 picks a dock)
     placeShip --> roll: setup or entry
     placeShip --> dockShop: Sinking Boat, upgrade affordable
+    placeShip --> turnEnd: Sinking Boat, nothing affordable
+    dockShop --> turnEnd: buyUpgrade, nothing more affordable
     roll --> roll: useHelicopter
     roll --> move: roll, destinations exist
     roll --> turnEnd: roll, blocked or 0 steps
@@ -115,7 +117,15 @@ The mover's own ship is not an obstacle, so a loop may cross the start tile.
 
 `MoveAction` names only the destination. The `moved` event carries one legal path, chosen deterministically, for animation (the first found trying up, right, down, left; the shortest one for a dock).
 
-Until Session 4, `resolveLanding` in `landing.ts` does nothing: a move ends the turn with no card, sale or shop.
+### Effects and modifiers (Session 4a)
+
+- **Modifiers are derived, never stored.** Every rule an event card or upgrade can change asks `modifiers.ts` (`movementModifier`, `catchBonusAt`, `sharkRepelledAt`, `helicopterUsable`, `capacityOf`, `affordableUpgrades`), which reads `state.activeEvent` and the player's upgrades. Replacing `activeEvent` is the whole expiry mechanism. These use public state only.
+- **Effects are dispatched by `effect.kind`**, never by card id, through two handler tables typed to cover every kind: `DRAW_HANDLERS` in `cards.ts` (Safe and Risk cards) and `ON_DRAW` in `eventCards.ts` (what an event card does at the moment it is drawn). A new effect kind does not compile until it has a handler.
+- **Card pipeline** (`drawAndResolve`): draw, `cardDrawn`, handler, `cardDiscarded`, then the handler's follow-up if it returned one. The card is always discarded before a decision can open (Sinking Boat's dock choice is a follow-up).
+- **`economy.ts`** holds the only ways fish, cash and fine tokens change: `gainFish` (capacity), `loseFish`, `chargeFine`, `sellFish` (shared by docks and the Helicopter).
+- **`landing.ts`** (`resolveLanding`) picks what a move's last tile does: dock (`dock.ts`), Golden Fish, Safe card or Risk card. Handlers work on one mutable `Ctx` (`ctx.ts`); one that opens a phase sets `state.phase` and returns `true`.
+- **Turn end.** Every turn passes through `finishTurn` in `apply.ts`, which opens `turnEnd` only when the Helicopter is usable. The shop closes by itself when a purchase leaves nothing affordable.
+- **Event cards.** The active card is in neither pile; it joins the event discard pile when it expires.
 
 ## 5. Actions
 
@@ -302,7 +312,7 @@ No engine output depends on object key order, wall-clock time or the host.
 - `fish.length` never exceeds the ship's capacity.
 - No two ships share a tile.
 - A player holding fine tokens has $0 cash.
-- Each deck's draw pile plus discard pile always holds the full deck list.
+- Each deck's draw pile plus discard pile always holds the full deck list (for the event deck, plus the active event card).
 - `applyAction` accepts exactly the actions in `getLegalActions`.
 - `getLegalActions` gives the same result on a state and on its redacted view.
 - Every game reaches `gameOver` after the last round, and `replay` reproduces the final state.

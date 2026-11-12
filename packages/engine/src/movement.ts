@@ -15,6 +15,7 @@
  *   directly from another dock;
  * - the move never ends on the tile it started from.
  */
+import { movementModifier } from "./modifiers";
 import type { AnyState, Board, Content, DockId, PlayerState, RollResult, TileId } from "./types";
 
 export interface Destination {
@@ -131,10 +132,7 @@ export function computeRoll(
   die: number,
 ): RollResult {
   const speedBonus = player.upgrades.speed ? content.rules.upgrades.speed.rollBonus : 0;
-  const effect = state.activeEvent
-    ? content.cards.cards[state.activeEvent.card]?.effect
-    : undefined;
-  const eventModifier = effect?.kind === "movement" ? effect.delta : 0;
+  const eventModifier = movementModifier(content, state);
   return { die, speedBonus, eventModifier, steps: Math.max(0, die + speedBonus + eventModifier) };
 }
 
