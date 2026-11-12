@@ -53,17 +53,17 @@ Nobody can join a room once the game has started. There are no spectators yet.
 
 ## 4. Server to client
 
-| Message    | Fields                                                  | Sent to              | When                                                                  |
-| ---------- | ------------------------------------------------------- | -------------------- | --------------------------------------------------------------------- |
-| `welcome`  | `v`, `seat`, `seatToken`, `contentHash`, `room`, `game` | One connection       | After `create`, `join` or `rejoin`                                    |
-| `room`     | `room`                                                  | Everyone in the room | A seat is taken, freed, connected or disconnected; the status changes |
-| `update`   | `seq`, `by`, `auto`, `events`, `view`                   | Everyone in the room | The game starts; an action is applied                                 |
-| `snapshot` | `room`, `game`                                          | One connection       | Reply to `sync`                                                       |
-| `rejected` | `clientActionId`, `seq`, `error { code, message }`      | The sender           | An intent was not applied                                             |
-| `error`    | `code`, `message`                                       | The sender           | Any other message could not be acted on                               |
-| `left`     |                                                         | The sender           | Reply to `leave`                                                      |
+| Message    | Fields                                                  | Sent to              | When                                                                                |
+| ---------- | ------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- |
+| `welcome`  | `v`, `seat`, `seatToken`, `contentHash`, `room`, `game` | One connection       | After `create`, `join` or `rejoin`                                                  |
+| `room`     | `room`                                                  | Everyone in the room | A seat is taken, freed, connected, disconnected or becomes away; the status changes |
+| `update`   | `seq`, `by`, `auto`, `events`, `view`                   | Everyone in the room | The game starts; an action is applied                                               |
+| `snapshot` | `room`, `game`                                          | One connection       | Reply to `sync`                                                                     |
+| `rejected` | `clientActionId`, `seq`, `error { code, message }`      | The sender           | An intent was not applied                                                           |
+| `error`    | `code`, `message`                                       | The sender           | Any other message could not be acted on                                             |
+| `left`     |                                                         | The sender           | Reply to `leave`                                                                    |
 
-- `room` is a `RoomInfo`: `code`, `status` (`lobby`, `playing`, `finished`), `host`, `seats` (`seat`, `name`, `connected`, in seat order), `minPlayers`, `maxPlayers`, `rev`. It is always sent whole. `rev` goes up by one on every change, so a client keeps the one with the highest `rev`.
+- `room` is a `RoomInfo`: `code`, `status` (`lobby`, `playing`, `finished`), `host`, `seats` (`seat`, `name`, `connected`, `away`, in seat order), `minPlayers`, `maxPlayers`, `rev`. It is always sent whole. `rev` goes up by one on every change, so a client keeps the one with the highest `rev`.
 - `game` is `null` in the lobby, otherwise `{ seq, view }`.
 - `view` is the receiver's own `PlayerView` (`view.viewer` is their seat). It is sent whole in every `update`; it is small.
 - `events` are the engine's `GameEvent`s for that action, the same for everyone. They are for animation and the log. The view alone is enough to carry on.
@@ -139,8 +139,8 @@ All times are settings (`CoreConfig`); the defaults are below.
 A seat is never freed during a game. The game is not paused for the other players.
 
 - A disconnected player has **60 seconds** (`reconnectGraceMs`), counted from the disconnect, to come back. Nothing happens for them in that time. If it is their decision, the game waits.
-- After the grace, the player is **away**. Whenever an away player has to decide, the server decides for them **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens.
-- Reconnecting ends this immediately. A later disconnect starts a new grace period.
+- After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message (added in stage 6b, so clients can show it). Whenever an away player has to decide, the server decides for them **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens.
+- Reconnecting ends this immediately (`away` goes back to `false`). A later disconnect starts a new grace period.
 - `leave` during a game means away at once, with no grace. The seat is kept and the player can still `rejoin`.
 - An automatic action is an ordinary action: it goes through `applyAction`, is added to the replay log, and is sent as an `update` with `auto: true`.
 
@@ -174,7 +174,7 @@ Ann creates a room, Bob and Cy join, Ann starts, and the first player places a s
 Ann  → { "type": "create", "v": 1, "name": "Ann" }
 Ann  ← { "type": "welcome", "v": 1, "seat": "p1", "seatToken": "9f…", "contentHash": "…",
          "room": { "code": "KTBM", "status": "lobby", "host": "p1", "rev": 0,
-                   "seats": [{ "seat": "p1", "name": "Ann", "connected": true }],
+                   "seats": [{ "seat": "p1", "name": "Ann", "connected": true, "away": false }],
                    "minPlayers": 2, "maxPlayers": 4 },
          "game": null }
 

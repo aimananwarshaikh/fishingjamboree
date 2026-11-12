@@ -66,6 +66,8 @@ input {
 }
 button {
   font-size: 1rem;
+  min-height: 44px;
+  min-width: 44px;
   padding: 10px 14px;
   margin: 4px 6px 4px 0;
   border: 0;
@@ -104,14 +106,28 @@ button:disabled {
   border-radius: 50%;
   margin-right: 6px;
 }
+/* Phones: turn and buttons first, then the board, then the rest. */
 .table {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "status" "board" "side";
   gap: 12px;
+}
+.table > .status {
+  grid-area: status;
+  margin-bottom: 0;
+}
+.table > .board-wrap {
+  grid-area: board;
+}
+.table > aside {
+  grid-area: side;
 }
 @media (min-width: 800px) {
   .table {
     grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    grid-template-areas: "board status" "board side";
+    grid-template-rows: auto 1fr;
     align-items: start;
   }
 }
@@ -193,4 +209,69 @@ button:disabled {
 }
 .log li.error {
   color: #c33;
+}
+
+.banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 10px 24px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+.banner strong {
+  font-size: 1.4rem;
+  white-space: nowrap;
+}
+.turn.waiting {
+  opacity: 0.85;
+}
+.event {
+  font-size: 0.95rem;
+}
+.actions button small {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+.shop {
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 4px 0 8px;
+}
+.shop h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.shop p {
+  margin: 0 0 6px;
+}
+button.helicopter {
+  background: #b5651d;
+}
+.players small.away,
+.players small.disconnected {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  color: #fff;
+}
+.players small.away {
+  background: #9b3d3d;
+}
+.players small.disconnected {
+  background: #8a7a2a;
 }

@@ -285,7 +285,9 @@ describe("transport", () => {
     await eventually(() => disconnects.mock.calls.length === 1);
     fresh.send({ type: "sync" });
     const snapshot = await fresh.waitFor("snapshot");
-    expect(snapshot.room.seats).toEqual([{ seat: "p1", name: "Ann", connected: true }]);
+    expect(snapshot.room.seats).toEqual([
+      { seat: "p1", name: "Ann", connected: true, away: false },
+    ]);
   });
 
   it("refuses create with server-busy when the room cap is reached", async () => {

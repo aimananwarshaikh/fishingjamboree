@@ -24,6 +24,11 @@ export interface SeatInfo {
   name: string;
   /** `false` while the player has no live connection. */
   connected: boolean;
+  /**
+   * In a game: the player's reconnect grace is over (or they sent `leave`), so the
+   * server plays for them when they have to decide. Always `false` in the lobby.
+   */
+  away: boolean;
 }
 
 /** Everything public about a room. Sent whole each time; a higher `rev` is newer. */

@@ -7,12 +7,14 @@ import { PROTOCOL_VERSION as V } from "../../../packages/server/src/protocol";
 import type { ClientMessage, RoomInfo, ServerMessage } from "../../../packages/server/src/protocol";
 import { loadBundledContent } from "./content";
 import { describeEvent } from "./describe";
-import { initialState, intentSent, onServerMessage } from "./store";
+import { bannerFor, initialState, intentSent, onServerMessage } from "./store";
 import type { ClientState, Context } from "./store";
 
 const content = loadBundledContent();
 const ctx: Context = {
   contentHash: content.hash,
+  rounds: content.rules.rounds,
+  cardName: (c) => content.cards.cards[c]?.name ?? c,
   describe: (events: GameEvent[], room) =>
     events
       .map((e) =>
@@ -24,9 +26,10 @@ const ctx: Context = {
 /** A real ServerCore with simulated browser tabs, each holding a `ClientState`. */
 function table() {
   let tokens = 0;
+  let time = 0;
   const core = new ServerCore({
     content,
-    now: () => 0,
+    now: () => time,
     ids: {
       roomCode: () => "BCDF",
       seatToken: () => `tok-${++tokens}`,
@@ -50,6 +53,18 @@ function table() {
       state: () => states.get(id)!,
       send: (msg: ClientMessage) => route(core.handleMessage(id, msg)),
       drop: () => route(core.disconnect(id)),
+      /** Sends the first legal action twice with the same `seq`, like a double click. */
+      doubleFirst: () => {
+        const g = states.get(id)!.game!;
+        const seat = states.get(id)!.session!.seat;
+        const { player: _p, ...action } = getLegalActions(content, g.view, seat)[0]!;
+        void _p;
+        for (let n = 0; n < 2; n++) {
+          const clientActionId = `c-${++counter}`;
+          states.set(id, intentSent(states.get(id)!, clientActionId));
+          route(core.handleMessage(id, { type: "intent", clientActionId, seq: g.seq, action }));
+        }
+      },
       /** What the UI does on a button click: the first legal action from its own view. */
       actFirst: () => {
         const g = states.get(id)!.game!;
@@ -70,7 +85,12 @@ function table() {
       },
     };
   };
-  return { core, tab };
+  /** Moves the clock and runs whatever the server has due (grace, automatic actions). */
+  const advance = (ms: number) => {
+    time += ms;
+    route(core.tick());
+  };
+  return { core, tab, advance };
 }
 
 describe("web client state against the real server core", () => {
@@ -131,6 +151,78 @@ describe("web client state against the real server core", () => {
     expect(bob2.state().session?.seat).toBe("p2");
     expect(bob2.state().game?.seq).toBe(seq);
     expect(bob2.state().game?.view.viewer).toBe("p2");
+  });
+});
+
+describe("three tabs (stage 6b)", () => {
+  it("double clicks are quiet, a closed tab is played for after the grace, all tabs finish", () => {
+    const { tab, advance } = table();
+    const tabs = [tab("a"), tab("b"), tab("c")];
+    const [ann, bob, cy] = tabs as [
+      ReturnType<typeof tab>,
+      ReturnType<typeof tab>,
+      ReturnType<typeof tab>,
+    ];
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    cy.send({ type: "join", v: V, code: "BCDF", name: "Cy" });
+    ann.send({ type: "start" });
+    const bySeat = { p1: ann, p2: bob, p3: cy } as Record<string, ReturnType<typeof tab>>;
+
+    // Ten double clicks: each applies once, and the second is rejected as stale, quietly.
+    for (let i = 0; i < 10; i++) {
+      const before = ann.state().game!.seq;
+      bySeat[ann.state().game!.view.phase.actors[0]!]!.doubleFirst();
+      expect(ann.state().game!.seq).toBe(before + 1);
+      for (const t of tabs) {
+        expect(t.state().notice).toBeNull();
+        expect(t.state().pending).toBeNull();
+      }
+    }
+
+    // Cy closes the tab. During the grace Cy is shown disconnected, then away.
+    cy.drop();
+    const cySeat = () => ann.state().room!.seats.find((s) => s.seat === "p3")!;
+    expect(cySeat()).toMatchObject({ connected: false, away: false });
+    advance(60_000);
+    expect(cySeat()).toMatchObject({ connected: false, away: true });
+    expect(bob.state().room!.seats[2]).toMatchObject({ away: true });
+
+    const live = [ann, bob];
+    for (let i = 0; i < 2000; i++) {
+      const view = ann.state().game!.view;
+      if (view.phase.kind === "gameOver") break;
+      const actor = view.phase.actors[0]!;
+      if (actor === "p3") advance(2_000);
+      else bySeat[actor]!.actFirst();
+      expect(ann.state().game?.seq).toBe(bob.state().game?.seq);
+    }
+    for (const t of live) {
+      expect(t.state().game!.view.phase.kind).toBe("gameOver");
+      expect(t.state().room!.status).toBe("finished");
+      expect(t.state().notice).toBeNull();
+    }
+    const log = ann.state().log.map((l) => l.text);
+    expect(log.some((t) => t.startsWith("Cy") && t.endsWith("(auto)"))).toBe(true);
+    expect(log.some((t) => t.startsWith("Bob") && t.endsWith("(auto)"))).toBe(false);
+    // The last update showed the game-over banner.
+    expect(ann.state().banner?.title).toBe("Game over");
+  });
+});
+
+describe("banners", () => {
+  it("round start, event card and game over", () => {
+    const round: GameEvent = { type: "roundStarted", round: 6 } as GameEvent;
+    expect(bannerFor([round], ctx, 0)).toEqual({ id: 1, title: "Round 6 of 20", detail: null });
+    const drawn = { type: "eventDrawn", afterRound: 5, card: "helicopter" } as unknown as GameEvent;
+    expect(bannerFor([drawn, round], ctx, 4)).toEqual({
+      id: 5,
+      title: "Round 6 of 20",
+      detail: "Event: Helicopter",
+    });
+    const ended = { type: "gameEnded" } as unknown as GameEvent;
+    expect(bannerFor([ended], ctx, 1)?.title).toBe("Game over");
+    expect(bannerFor([{ type: "turnEnded" } as unknown as GameEvent], ctx, 1)).toBeNull();
   });
 });
 

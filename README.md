@@ -71,3 +71,25 @@ end turn, a player table, a round bar and an event log.
 The client connects to `ws://<page host>:8787`. To use another server, add `?server=ws://host:port`
 to the page address. Each tab keeps its own seat in `sessionStorage`, so a refresh rejoins the same
 seat and two tabs of one browser are two players.
+
+The table shows whose turn it is ("Your turn: …" or "Waiting for Bob to …"), a banner when each round
+starts and when an event card is drawn, a dock shop panel when you dock, and a Helicopter button
+while that event is active. A player whose tab is closed shows as **offline** for 60 seconds, then
+**away**: the server plays for them (marked "(auto)" in the log) until they come back.
+
+### Three-tab playtest
+
+With the server and the web client running, this plays a whole game in Chromium with three tabs,
+clicking only what the page offers, and also checks a refresh mid-game, a double click, a 4th player
+joining the lobby and a phone-width (390 px) layout. It prints the result, the number of clicks and
+any console or page errors, and exits 1 if anything failed.
+
+```bash
+node scripts/playtest-three-tabs.mjs
+```
+
+If Playwright is installed globally, prefix it with `NODE_PATH="$(npm root -g)"`. `GRACE=1` also
+closes a tab and waits out the 60-second grace to check the server plays for it (about 2 minutes
+longer). `SEED=…` changes the choices, `HEADED=1` shows the browser and `WEB_URL=…` points it at
+another client address. Restart `pnpm start:server` after changing server code: it does not
+reload.

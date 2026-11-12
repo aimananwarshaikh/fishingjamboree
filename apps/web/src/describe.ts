@@ -1,5 +1,15 @@
 /** Plain-English text for events and actions. No React, so it can be tested. */
-import type { Action, Content, GameEvent, Money, PlayerId, TileId } from "@fishingjamboree/engine";
+import type {
+  Action,
+  Content,
+  GameEvent,
+  Money,
+  PlayerId,
+  PlayerView,
+  TileId,
+  UpgradeId,
+} from "@fishingjamboree/engine";
+import type { SeatInfo } from "../../../packages/server/src/protocol";
 
 export type NameOf = (player: PlayerId) => string;
 
@@ -12,6 +22,17 @@ export function tileLabel(content: Content, tile: TileId): string {
   return t ? `${t.x},${t.y}` : `#${tile}`;
 }
 
+/** A dock's name for people: "start-left" → "left starting dock". */
+export function dockName(content: Content, dock: string): string {
+  const d = content.board.docks.find((x) => x.id === dock);
+  if (d?.kind === "starting") {
+    const side = dock.replace(/^start-?/, "");
+    return side ? `${side} starting dock` : "starting dock";
+  }
+  if (d?.kind === "cruise") return "cruise dock";
+  return dock;
+}
+
 /** One line per event, or `null` for events not worth a log line. */
 export function describeEvent(ev: GameEvent, content: Content, name: NameOf): string | null {
   const card = (id: string) => content.cards.cards[id]?.name ?? id;
@@ -21,7 +42,7 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
     case "turnOrderDecided":
       return `Turn order: ${ev.order.map(name).join(", ")}.`;
     case "shipPlaced":
-      return `${name(ev.player)} places a ship at ${ev.dock}.`;
+      return `${name(ev.player)} places a ship at the ${dockName(content, ev.dock)}.`;
     case "roundStarted":
       return `Round ${ev.round} of ${content.rules.rounds}.`;
     case "turnStarted":
@@ -48,13 +69,13 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
     case "fined":
       return `${name(ev.player)} is fined ${money(ev.amount)}: pays ${money(ev.paid)}${ev.tokensTaken ? `, takes ${ev.tokensTaken} fine token(s)` : ""}.`;
     case "shipRelocated":
-      return `${name(ev.player)}'s ship is moved to dock ${ev.dock}.`;
+      return `${name(ev.player)}'s ship is moved to the ${dockName(content, ev.dock)}.`;
     case "relocationFailed":
       return `${name(ev.player)}'s ship stays put (every dock is taken).`;
     case "cardDiscarded":
       return null;
     case "docked":
-      return `${name(ev.player)} docks at ${ev.dock}.`;
+      return `${name(ev.player)} docks at the ${dockName(content, ev.dock)}.`;
     case "fishSold":
       return `${name(ev.player)} sells ${fishList(ev.fish)} for ${money(ev.total)}${ev.via === "helicopter" ? " by helicopter" : ""}.`;
     case "fineTokensPaid":
@@ -90,7 +111,7 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
 export function describeAction(action: Action, content: Content): string {
   switch (action.type) {
     case "placeShip":
-      return `Start at ${action.dock}`;
+      return `Start at the ${dockName(content, action.dock)}`;
     case "roll":
       return "Roll";
     case "move":
@@ -98,8 +119,40 @@ export function describeAction(action: Action, content: Content): string {
     case "buyUpgrade":
       return `Buy ${action.upgrade} upgrade (${money(content.rules.upgrades[action.upgrade].price)})`;
     case "useHelicopter":
-      return "Use helicopter";
+      return "Call the helicopter";
     case "endTurn":
       return "End turn";
   }
+}
+
+/** What an upgrade does, for the shop. */
+export function upgradeText(content: Content, upgrade: UpgradeId): string {
+  const u = content.rules.upgrades;
+  return upgrade === "speed"
+    ? `+${u.speed.rollBonus} to every roll`
+    : `hold ${u.capacity.capacity} fish instead of ${content.rules.baseCapacity}`;
+}
+
+/** What the deciding player has to do, as a phrase: "roll the die". */
+export function phaseTask(view: PlayerView): string {
+  switch (view.phase.kind) {
+    case "placeShip":
+      return "choose a starting dock";
+    case "roll":
+      return "roll the die";
+    case "move":
+      return `move (${view.phase.roll.steps} step${view.phase.roll.steps === 1 ? "" : "s"})`;
+    case "dockShop":
+      return "shop at the dock or end the turn";
+    case "turnEnd":
+      return "end the turn";
+    case "gameOver":
+      return "finish";
+  }
+}
+
+/** A seat's connection in words, or `null` when it is connected. */
+export function seatStatus(seat: SeatInfo | undefined): string | null {
+  if (!seat || seat.connected) return null;
+  return seat.away ? "away: the server plays for them" : "disconnected: 60 s to come back";
 }

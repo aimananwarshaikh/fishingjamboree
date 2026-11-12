@@ -57,6 +57,8 @@ export function serverUrl(): string {
 function makeContext(content: Content): Context {
   return {
     contentHash: content.hash,
+    cardName: (card) => content.cards.cards[card]?.name ?? card,
+    rounds: content.rules.rounds,
     describe: (events, room) => {
       const name = (p: string) => room?.seats.find((s) => s.seat === p)?.name ?? p;
       return events
