@@ -9,9 +9,7 @@ import { reachableDestinations } from "./movement";
 import { board, CRUISE, oracle, START_RIGHT, tile } from "./testHelpers";
 import type { TileId } from "./types";
 
-const ALL_TILES: TileId[] = board.tiles.flatMap((t) =>
-  t && t.terrain !== "island" ? [t.id] : [],
-);
+const ALL_TILES: TileId[] = board.tiles.flatMap((t) => (t && t.terrain !== "island" ? [t.id] : []));
 const STEP_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 const SHIP_SETS: [string, TileId[]][] = [

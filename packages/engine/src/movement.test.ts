@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { occupiedTiles, reachableDestinations } from "./movement";
-import {
-  board,
-  CRUISE,
-  isDock,
-  oracle,
-  START_LEFT,
-  START_RIGHT,
-  tile,
-} from "./testHelpers";
+import { board, CRUISE, isDock, oracle, START_LEFT, START_RIGHT, tile } from "./testHelpers";
 import type { PlayerState, TileId } from "./types";
 
 const set = (...tiles: TileId[]): Set<TileId> => new Set(tiles);
