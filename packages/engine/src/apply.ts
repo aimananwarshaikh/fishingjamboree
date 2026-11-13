@@ -4,7 +4,8 @@
  *
  * This file owns the turn flow: placement, the roll, the move, the shop and
  * Helicopter decisions, and the turn/round advance. What a landing does is in
- * `landing.ts`; event cards are in `eventCards.ts`.
+ * `landing.ts`; event cards are in `eventCards.ts`. Online play adds two
+ * system actions the server decides: a missed turn and removing a player.
  */
 import type { Ctx } from "./ctx";
 import { relocateTo } from "./dock";
@@ -22,10 +23,12 @@ import type {
   ApplyResult,
   DockId,
   Engine,
+  GameEndReason,
   GameState,
   PhaseKind,
   PlaceShipReason,
   PlayerState,
+  RemovalReason,
 } from "./types";
 
 /** Only two ships are placed before round 1 (rulebook setup steps 6 and 7). */
@@ -66,10 +69,19 @@ function placeOnDock(ctx: Ctx, player: PlayerState, dockId: DockId, reason: Plac
   });
 }
 
+/** The first player at or after `from` (in turn order) who is still in the game, or `null`. */
+function nextInGame(state: GameState, from: number): number | null {
+  for (let i = from; i < state.players.length; i += 1) {
+    if (!(state.players[i] as PlayerState).removed) return i;
+  }
+  return null;
+}
+
 /** Places the remaining setup ships, then starts round 1. */
 function continueSetup(ctx: Ctx): void {
   const { state } = ctx;
-  for (const player of state.players.slice(0, SETUP_SHIPS)) {
+  // The first players in turn order who are still in the game place the setup ships.
+  for (const player of state.players.filter((p) => !p.removed).slice(0, SETUP_SHIPS)) {
     if (player.position !== null) continue;
     const free = freeStartingDocks(ctx.content, state);
     if (free.length > 1) {
@@ -80,7 +92,7 @@ function continueSetup(ctx: Ctx): void {
     placeOnDock(ctx, player, free[0] as DockId, "setup");
   }
   ctx.events.push({ type: "roundStarted", round: state.round });
-  startTurn(ctx, 0);
+  startTurn(ctx, nextInGame(state, 0) as number);
 }
 
 /**
@@ -88,24 +100,26 @@ function continueSetup(ctx: Ctx): void {
  * the scores are counted and the game is over. The last event card stays
  * active (it lasts until the end of the game) and is not discarded.
  */
-function endGame(ctx: Ctx): void {
+function endGame(ctx: Ctx, reason: GameEndReason = "rounds"): void {
   const { state, content } = ctx;
   if (state.goldenFish) {
     ctx.events.push({ type: "goldenFishRemoved", spot: state.goldenFish.spot, reason: "game-end" });
     state.goldenFish = null;
   }
-  state.result = scoreGame(content, state.players);
+  state.result = scoreGame(content, state.players, reason);
   state.phase = { kind: "gameOver", actors: [] };
   ctx.events.push({ type: "gameEnded", result: state.result });
 }
 
 /**
- * Moves on from `index`'s finished turn. Ends the round after the last
- * player. Returns the next player's index, or `null` when the game is over.
+ * Moves on from `index`'s finished turn, skipping removed players. Ends the
+ * round after the last player. Returns the next player's index, or `null`
+ * when the game is over.
  */
 function advance(ctx: Ctx, index: number): number | null {
   const { state, content } = ctx;
-  if (index + 1 < state.players.length) return index + 1;
+  const next = nextInGame(state, index + 1);
+  if (next !== null) return next;
   ctx.events.push({ type: "roundEnded", round: state.round });
   if (state.round >= content.rules.rounds) {
     endGame(ctx);
@@ -114,7 +128,7 @@ function advance(ctx: Ctx, index: number): number | null {
   if (content.rules.eventAfterRounds.includes(state.round)) nextEvent(ctx, state.round);
   state.round += 1;
   ctx.events.push({ type: "roundStarted", round: state.round });
-  return 0;
+  return nextInGame(state, 0);
 }
 
 /**
@@ -175,10 +189,67 @@ function finishTurn(ctx: Ctx): void {
   closeTurn(ctx);
 }
 
+/**
+ * The deciding player ran out of time (online play). Nothing more happens in
+ * the turn; a ship that has to be placed goes on the first dock offered.
+ * Too many misses in a row remove the player.
+ */
+function missTurn(ctx: Ctx, player: PlayerState): void {
+  const { state, content } = ctx;
+  const phase = state.phase;
+  ctx.events.push({ type: "turnMissed", player: player.id });
+  player.missedTurns += 1;
+  if (phase.kind === "placeShip") {
+    const dockId = phase.docks[0] as DockId;
+    if (phase.reason === "sinking-boat") {
+      const dock = content.board.docks.find((d) => d.id === dockId);
+      if (!dock) throw new Error(`missTurn: unknown dock ${dockId}`);
+      relocateTo(ctx, player, dock); // the shop it may open is closed by the miss
+    } else {
+      placeOnDock(ctx, player, dockId, phase.reason);
+    }
+  }
+  if (player.missedTurns >= content.rules.missedTurnsBeforeRemoval) {
+    removePlayer(ctx, player, "missed-turns");
+  } else if (phase.kind === "placeShip" && phase.reason === "setup") {
+    continueSetup(ctx);
+  } else {
+    closeTurn(ctx);
+  }
+}
+
+/**
+ * `player` leaves the game for good (online play): their ship leaves the
+ * board, they get no more turns and cannot win. If it was their decision,
+ * play moves on; with one player left, the game ends and that player wins.
+ */
+function removePlayer(ctx: Ctx, player: PlayerState, reason: RemovalReason): void {
+  const { state } = ctx;
+  const phase = state.phase;
+  const deciding = phase.actors.includes(player.id);
+  player.removed = true;
+  player.position = null;
+  ctx.events.push({ type: "playerRemoved", player: player.id, reason });
+  if (state.players.filter((p) => !p.removed).length <= 1) {
+    endGame(ctx, "last-player");
+    return;
+  }
+  if (!deciding) return;
+  if (phase.kind === "placeShip" && phase.reason === "setup") continueSetup(ctx);
+  else closeTurn(ctx);
+}
+
 function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
   const { state, content } = ctx;
   const phase = state.phase;
+  if (action.type !== "missTurn" && action.type !== "removePlayer") player.missedTurns = 0;
   switch (action.type) {
+    case "missTurn":
+      missTurn(ctx, player);
+      return;
+    case "removePlayer":
+      removePlayer(ctx, player, "kicked");
+      return;
     case "placeShip": {
       if (phase.kind !== "placeShip") return;
       if (phase.reason === "sinking-boat") {
@@ -262,14 +333,20 @@ export const applyAction: Engine["applyAction"] = (content, state, action) => {
   if (!state.players.some((p) => p.id === action.player)) {
     return fail("unknown-player", `no player "${action.player}" in this game`);
   }
-  if (!phase.actors.includes(action.player)) {
+  if (action.type === "removePlayer") {
+    // The host may remove any player still in the game, at any time.
+    if (state.players.some((p) => p.id === action.player && p.removed)) {
+      return fail("illegal-action", `${action.player} has already been removed`);
+    }
+  } else if (!phase.actors.includes(action.player)) {
     return fail("not-your-turn", `it is not ${action.player}'s decision`);
-  }
-  if (!PHASE_ACTIONS[phase.kind].includes(action.type)) {
-    return fail("wrong-phase", `"${action.type}" is not possible in the ${phase.kind} phase`);
-  }
-  if (!getLegalActions(content, state, action.player).some((a) => sameAction(a, action))) {
-    return fail("illegal-action", `that "${action.type}" is not legal now`);
+  } else if (action.type !== "missTurn") {
+    if (!PHASE_ACTIONS[phase.kind].includes(action.type)) {
+      return fail("wrong-phase", `"${action.type}" is not possible in the ${phase.kind} phase`);
+    }
+    if (!getLegalActions(content, state, action.player).some((a) => sameAction(a, action))) {
+      return fail("illegal-action", `that "${action.type}" is not legal now`);
+    }
   }
 
   const draft = JSON.parse(JSON.stringify(state)) as GameState;

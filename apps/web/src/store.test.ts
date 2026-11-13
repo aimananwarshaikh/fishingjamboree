@@ -8,6 +8,7 @@ import type { ClientMessage, RoomInfo, ServerMessage } from "../../../packages/s
 import { loadBundledContent } from "./content";
 import { describeEvent } from "./describe";
 import {
+  KICKED_NOTICE,
   REPLACED_NOTICE,
   awaySecondsLeft,
   bannerFor,
@@ -166,7 +167,7 @@ describe("web client state against the real server core", () => {
 });
 
 describe("three tabs (stage 6b)", () => {
-  it("double clicks are quiet, a closed tab is played for after the grace, all tabs finish", () => {
+  it("double clicks are quiet, a closed tab has its turns missed after the grace, all tabs finish", () => {
     // Longer than the grace, so only Cy (away) is played for here.
     const { tab, advance } = table({ turnTimeoutMs: 90_000 });
     const tabs = [tab("a"), tab("b"), tab("c")];
@@ -223,7 +224,7 @@ describe("three tabs (stage 6b)", () => {
 });
 
 describe("turn timer and reconnect grace (P1-2)", () => {
-  it("shows the seconds left on the tab's own clock, and plays for a player who does not act", () => {
+  it("shows the seconds left on the tab's own clock, and misses the turn of a player who does not act", () => {
     const { tab, advance, tabNow } = table();
     const ann = tab("a");
     const bob = tab("b");
@@ -231,18 +232,18 @@ describe("turn timer and reconnect grace (P1-2)", () => {
     bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
     expect(turnSecondsLeft(ann.state(), tabNow())).toBeNull();
     ann.send({ type: "start" });
-    expect(turnSecondsLeft(ann.state(), tabNow())).toBe(60);
-    expect(ann.state().room!.timers.turnTimeoutMs).toBe(60_000);
+    expect(turnSecondsLeft(ann.state(), tabNow())).toBe(90);
+    expect(ann.state().room!.timers.turnTimeoutMs).toBe(90_000);
     advance(15_500);
-    expect(turnSecondsLeft(bob.state(), tabNow())).toBe(45);
+    expect(turnSecondsLeft(bob.state(), tabNow())).toBe(75);
     const actor = ann.state().game!.view.phase.actors[0]!;
-    advance(44_500);
+    advance(74_500);
     expect(ann.state().game!.seq).toBe(1);
-    // The next decision starts a fresh minute.
-    expect(turnSecondsLeft(ann.state(), tabNow())).toBe(60);
+    // The next turn starts a fresh 90 s.
+    expect(turnSecondsLeft(ann.state(), tabNow())).toBe(90);
     const log = ann.state().log.map((l) => l.text);
     const who = actor === "p1" ? "Ann" : "Bob";
-    expect(log.some((t) => t.startsWith(who) && t.endsWith("(auto)"))).toBe(true);
+    expect(log).toContain(`${who} misses the turn. (auto)`);
   });
 
   it("counts down a dropped player's grace, then shows them away", () => {
@@ -263,6 +264,36 @@ describe("turn timer and reconnect grace (P1-2)", () => {
     advance(40_000);
     expect(ann.state().room!.seats[2]).toMatchObject({ away: true, awayInMs: null });
     expect(awaySecondsLeft(ann.state(), "p3", tabNow())).toBeNull();
+  });
+});
+
+describe("removing a player (designer, 2026-11-13)", () => {
+  it("the host removes a player: their tab goes back to the start screen, the others see it", () => {
+    const { tab } = table();
+    const ann = tab("a");
+    const bob = tab("b");
+    const cy = tab("c");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    cy.send({ type: "join", v: V, code: "BCDF", name: "Cy" });
+    ann.send({ type: "start" });
+    ann.send({ type: "kick", seat: "p3" });
+    expect(cy.state().session).toBeNull();
+    expect(cy.state().notice).toBe(KICKED_NOTICE);
+    for (const t of [ann, bob]) {
+      expect(t.state().room!.seats[2]).toMatchObject({ removed: true, connected: false });
+      expect(t.state().log.map((l) => l.text)).toContain(
+        "Cy is removed from the game by the host.",
+      );
+      expect(t.state().notice).toBeNull();
+    }
+    // Two players are left, so the game goes on.
+    expect(ann.state().room!.status).toBe("playing");
+    ann.send({ type: "kick", seat: "p2" });
+    expect(ann.state().room!.status).toBe("finished");
+    expect(ann.state().log.map((l) => l.text)).toContain(
+      "Game over. Ann is the last player left and wins.",
+    );
   });
 });
 

@@ -1,7 +1,9 @@
 /**
- * Review P1-2: a connected player who does not act cannot stall a game (turn
- * timer), and a flaky connection cannot restart the reconnect grace for ever
- * (grace budget). docs/protocol.md §7.
+ * Review P1-2 and the designer's answers (2026-11-13): a player who does not
+ * act cannot stall a game (a turn that runs out of time is missed; three
+ * missed in a row and the player is removed), the host can remove a player,
+ * and a flaky connection cannot restart the reconnect grace for ever (grace
+ * budget). docs/protocol.md §7.
  */
 import { describe, expect, it } from "vitest";
 import { redactForClient, replay } from "@fishingjamboree/engine";
@@ -14,6 +16,7 @@ const GRACE = DEFAULT_CONFIG.reconnectGraceMs;
 const BUDGET = DEFAULT_CONFIG.reconnectBudgetMs;
 const DELAY = DEFAULT_CONFIG.autoActionDelayMs;
 const LOBBY_GRACE = DEFAULT_CONFIG.lobbyGraceMs;
+const LIMIT = content.rules.missedTurnsBeforeRemoval;
 
 const seatIndex = (seat: string) => Number(seat.slice(1)) - 1;
 
@@ -30,16 +33,26 @@ function bystander(h: Harness, n: number): string {
   throw new Error("no bystander");
 }
 
+/** Plays (first legal actions) until a player has rolled and still has to move. */
+function playUntilMove(h: Harness) {
+  for (let guard = 0; h.view("c1").phase.kind !== "move"; guard += 1) {
+    if (guard > 200) throw new Error("never reached a move");
+    act(h);
+  }
+}
+
+const eventTypes = (h: Harness, conn: string) => h.last(conn, "update").events.map((e) => e.type);
+
 describe("the defaults", () => {
-  it("bound a decision to about a minute, below the 90 s the review measured", () => {
-    expect(TURN).toBeGreaterThan(0);
-    expect(TURN).toBeLessThan(90_000);
+  it("give a whole turn 90 s, no more than the ~90 s per decision the review measured", () => {
+    expect(TURN).toBe(90_000);
     expect(GRACE).toBeLessThanOrEqual(BUDGET);
+    expect(LIMIT).toBe(3);
   });
 });
 
 describe("turn timer", () => {
-  it("plays once for a connected player who does not act, and they stay present", () => {
+  it("misses the turn of a connected player who does not act; they stay present", () => {
     const h = harness();
     const { code } = h.started(3);
     const seat = h.actor("c1")!;
@@ -51,29 +64,38 @@ describe("turn timer", () => {
     expect(h.got(watcher, "update")).toEqual([
       expect.objectContaining({ seq: 1, by: seat, auto: true }),
     ]);
-    // Still connected, not away, and nobody was told about the room.
+    expect(eventTypes(h, watcher)[0]).toBe("turnMissed");
+    expect(h.core.replayLog(code)?.actions).toEqual([{ type: "missTurn", player: seat }]);
+    // Still connected and not away; the next turn gets a fresh turn time.
     expect(h.room(code).seats[seatIndex(seat)]).toMatchObject({ connected: true, away: false });
-    expect(h.got(watcher, "room")).toHaveLength(0);
-    // The next decision gets a fresh timer, not the short away delay.
+    expect(eventTypes(h, watcher)).toContain("turnStarted");
     expect(h.core.nextDeadline()).toBe(h.now() + TURN);
-    h.advance(DELAY);
-    expect(h.view(watcher).actionCount).toBe(1);
-    // The player can act again as usual.
-    act(h, watcher);
-    expect(h.last(watcher, "update")).toMatchObject({ seq: 2, by: seat, auto: false });
   });
 
-  it("starts again on every action", () => {
+  it("counts the whole turn, not each decision: a roll does not restart it", () => {
+    const h = harness();
+    h.started(3);
+    playUntilMove(h);
+    const seat = h.actor("c1")!;
+    // The turn started with the roll that was just made; take one step back in time.
+    const deadline = h.core.nextDeadline()!;
+    expect(deadline).toBe(h.now() + TURN);
+    h.advance(TURN - 1);
+    expect(h.actor("c1")).toBe(seat);
+    h.clear();
+    h.advance(1);
+    expect(h.last("c1", "update")).toMatchObject({ by: seat, auto: true });
+    expect(eventTypes(h, "c1")).not.toContain("moved");
+    expect(h.actor("c1")).not.toBe(seat);
+  });
+
+  it("starts again when the next turn starts", () => {
     const h = harness();
     h.started(3);
     h.advance(TURN - 1_000);
-    act(h);
+    act(h); // the setup placement: the last setup ship goes on the other dock, round 1 starts
+    expect(eventTypes(h, "c1")).toContain("turnStarted");
     expect(h.core.nextDeadline()).toBe(h.now() + TURN);
-    h.clear();
-    h.advance(TURN - 1);
-    expect(h.got("c1", "update")).toHaveLength(0);
-    h.advance(1);
-    expect(h.last("c1", "update")).toMatchObject({ seq: 2, auto: true });
   });
 
   it("tells clients how long the deciding player has left", () => {
@@ -96,9 +118,9 @@ describe("turn timer", () => {
     expect(h.last("c2", "update").turnTimeLeftMs).toBe(TURN);
   });
 
-  it("shows no turn time while the deciding player is away, or once the game is over", () => {
+  it("shows no turn time while the deciding player is away; their turn is missed after the short delay", () => {
     const h = harness();
-    h.started(2);
+    h.started(3);
     const seat = h.actor("c1")!;
     const watcher = seat === "p1" ? "c2" : "c1";
     h.send(connOf(seat), { type: "leave" });
@@ -107,25 +129,24 @@ describe("turn timer", () => {
     h.advance(DELAY);
     const update = h.last(watcher, "update");
     expect(update).toMatchObject({ by: seat, auto: true });
+    expect(update.events[0]).toEqual({ type: "turnMissed", player: seat });
     expect(update.turnTimeLeftMs).toBe(h.actor(watcher) === seat ? null : TURN);
   });
 
-  it("keeps running when the deciding player drops: a locked phone costs one turn time", () => {
+  it("keeps running when the deciding player drops: a locked phone costs at most one turn time", () => {
     const h = harness();
     h.started(3);
     const seat = h.actor("c1")!;
     const watcher = seat === "p1" ? "c2" : "c1";
-    // The heartbeat notices a locked phone up to 30 s late.
+    // The heartbeat notices a locked phone up to 30 s late; the grace does not extend the turn.
     h.advance(30_000);
     h.drop(connOf(seat));
-    expect(h.core.nextDeadline()).toBe(h.now() + TURN - 30_000);
+    expect(h.core.nextDeadline()).toBe(h.now() + GRACE);
     h.clear();
     h.advance(TURN - 30_000);
     expect(h.got(watcher, "update")).toEqual([
       expect.objectContaining({ seq: 1, by: seat, auto: true }),
     ]);
-    // The next decision ends with the grace (60 s from the drop), before a new turn time.
-    expect(h.core.nextDeadline()).toBe(h.now() + GRACE - (TURN - 30_000));
   });
 
   it("can be switched off", () => {
@@ -154,11 +175,13 @@ describe("turn timer", () => {
     h.advance(1);
     expect(h.last("back", "update")).toMatchObject({ seq: 1, by: seat, auto: true });
   });
+});
 
-  it("finishes a game whose other players never act; the replay matches; nothing private is sent", () => {
+describe("missed turns in a row", () => {
+  it(`remove a silent player after ${LIMIT}; the last player left wins; replay matches; nothing private is sent`, () => {
     const h = harness();
     const { code, tokens } = h.started(3);
-    let autos = 0;
+    let misses = 0;
     for (let guard = 0; h.actor("c1") !== undefined; guard += 1) {
       if (guard > 5_000) throw new Error("the game did not end");
       if (h.actor("c1") === "p1") {
@@ -168,18 +191,30 @@ describe("turn timer", () => {
       const seq = h.view("c1").actionCount;
       h.advance(TURN);
       expect(h.last("c1", "update")).toMatchObject({ seq: seq + 1, auto: true });
-      autos += 1;
+      misses += 1;
     }
-    expect(autos).toBeGreaterThan(20);
-    expect(h.room(code).status).toBe("finished");
-    expect(h.room(code).seats.every((s) => s.connected && !s.away)).toBe(true);
+    expect(misses).toBe(2 * LIMIT);
+    expect(h.room(code)).toMatchObject({ status: "finished", host: "p1" });
+    expect(h.room(code).seats.map((s) => [s.removed, s.connected])).toEqual([
+      [false, true],
+      [true, false],
+      [true, false],
+    ]);
+    const result = h.view("c1").result!;
+    expect(result).toMatchObject({ winners: ["p1"], reason: "last-player" });
+    // The removed players were told, and their connections have no seat any more.
+    for (const conn of ["c2", "c3"]) {
+      expect(h.got(conn, "error").map((m) => m.code)).toContain("kicked");
+      h.send(conn, { type: "sync" });
+      expect(h.last(conn, "error").code).toBe("not-seated");
+    }
+    // Their tokens no longer work.
+    h.send("x", { type: "rejoin", v: V, code, seatToken: tokens[1] });
+    expect(h.last("x", "error").code).toBe("kicked");
     expect(h.core.nextDeadline()).toBeNull();
-    expect(h.last("c1", "update").turnTimeLeftMs).toBeNull();
 
     const replayed = replay(content, h.core.replayLog(code)!);
-    for (let i = 1; i <= 3; i += 1) {
-      expect(h.view(`c${i}`)).toEqual(redactForClient(replayed.state, `p${i}`));
-    }
+    expect(h.view("c1")).toEqual(redactForClient(replayed.state, "p1"));
     for (const o of h.sent) {
       if (o.kind !== "send") continue;
       const json = JSON.stringify(o.message);
@@ -190,6 +225,103 @@ describe("turn timer", () => {
         if (i !== seatIndex(`p${o.to.slice(1)}`)) expect(json).not.toContain(`"${token}"`);
       });
     }
+  });
+
+  it("an away host is removed in the end, and the host role passes on", () => {
+    const h = harness();
+    const { code } = h.started(3);
+    h.send("c1", { type: "leave" });
+    for (let guard = 0; !h.room(code).seats[0]!.removed; guard += 1) {
+      if (guard > 500) throw new Error("p1 was never removed");
+      if (h.actor("c2") === "p1") h.advance(DELAY);
+      else act(h, "c2");
+    }
+    expect(h.room(code)).toMatchObject({ status: "playing", host: "p2" });
+    expect(h.last("c2", "room").room.host).toBe("p2");
+  });
+});
+
+describe("the host removes a player", () => {
+  it("who is not deciding: the turn goes on, everyone is told, the player loses the seat", () => {
+    const h = harness();
+    const { code, tokens } = h.started(3);
+    const target = bystander(h, 3) === "p1" ? "p2" : bystander(h, 3);
+    const actor = h.actor("c1");
+    h.clear();
+    h.send("c1", { type: "kick", seat: target });
+    const update = h.last("c1", "update");
+    expect(update).toMatchObject({ by: "p1", auto: false });
+    expect(update.events).toEqual([{ type: "playerRemoved", player: target, reason: "kicked" }]);
+    expect(h.actor("c1")).toBe(actor);
+    expect(h.last("c1", "room").room.seats[seatIndex(target)]).toMatchObject({
+      removed: true,
+      connected: false,
+    });
+    // They see the update that removes them, then `kicked`, then nothing more.
+    expect(h.take(connOf(target)).map((m) => m.type)).toEqual(["update", "error"]);
+    act(h);
+    expect(h.take(connOf(target))).toEqual([]);
+    h.send("y", { type: "rejoin", v: V, code, seatToken: tokens[seatIndex(target)] });
+    expect(h.last("y", "error").code).toBe("kicked");
+  });
+
+  it("who is deciding: their turn ends and play passes on", () => {
+    const h = harness();
+    h.started(3);
+    for (let guard = 0; h.actor("c1") === "p1"; guard += 1) {
+      if (guard > 50) throw new Error("p1 kept the turn");
+      act(h);
+    }
+    const victim = h.actor("c1")!;
+    expect(victim).not.toBe("p1");
+    h.send("c1", { type: "kick", seat: victim });
+    expect(h.actor("c1")).not.toBe(victim);
+  });
+
+  it("in a two-player game: the game ends and the host wins", () => {
+    const h = harness();
+    const { code } = h.started(2);
+    h.send("c1", { type: "kick", seat: "p2" });
+    expect(h.room(code).status).toBe("finished");
+    expect(h.view("c1").result).toMatchObject({ winners: ["p1"], reason: "last-player" });
+    expect(h.last("c1", "room").room.status).toBe("finished");
+  });
+
+  it("only the host, never themselves, an unknown or a removed seat, or after the game", () => {
+    const h = harness();
+    const { code } = h.started(3);
+    h.send("c2", { type: "kick", seat: "p3" });
+    expect(h.last("c2", "error").code).toBe("not-host");
+    for (const seat of ["p1", "p9"]) {
+      h.send("c1", { type: "kick", seat });
+      expect(h.last("c1", "error").code).toBe("cannot-kick");
+    }
+    h.send("c1", { type: "kick", seat: "p3" });
+    h.send("c1", { type: "kick", seat: "p3" });
+    expect(h.last("c1", "error").code).toBe("cannot-kick");
+    h.send("c1", { type: "kick", seat: "p2" });
+    expect(h.room(code).status).toBe("finished");
+    h.send("c1", { type: "kick", seat: "p2" });
+    expect(h.last("c1", "error").code).toBe("cannot-kick");
+    expect(h.core.replayLog(code)?.actions.filter((a) => a.type === "removePlayer")).toHaveLength(
+      2,
+    );
+  });
+
+  it("in the lobby: the seat is freed and the token stops working", () => {
+    const h = harness();
+    const { code, tokens } = h.lobby(3);
+    h.send("c1", { type: "kick", seat: "p2" });
+    expect(h.room(code).seats.map((s) => s.seat)).toEqual(["p1", "p3"]);
+    expect(h.last("c3", "room").room.seats).toHaveLength(2);
+    expect(h.last("c2", "error").code).toBe("kicked");
+    h.send("c2", { type: "sync" });
+    expect(h.last("c2", "error").code).toBe("not-seated");
+    h.send("z", { type: "rejoin", v: V, code, seatToken: tokens[1] });
+    expect(h.last("z", "error").code).toBe("bad-token");
+    // The freed seat can be taken by someone new.
+    h.send("c4", { type: "join", v: V, code, name: "Dee" });
+    expect(h.last("c4", "welcome").seat).toBe("p2");
   });
 });
 

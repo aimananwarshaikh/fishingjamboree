@@ -1,9 +1,9 @@
 /** Plain-English text for events and actions. No React, so it can be tested. */
 import type {
-  Action,
   Content,
   GameEvent,
   Money,
+  PlayerAction,
   PlayerId,
   PlayerView,
   TileId,
@@ -49,6 +49,12 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
       return null;
     case "turnSkipped":
       return `${name(ev.player)} has no free starting dock and skips the turn.`;
+    case "turnMissed":
+      return `${name(ev.player)} misses the turn.`;
+    case "playerRemoved":
+      return ev.reason === "kicked"
+        ? `${name(ev.player)} is removed from the game by the host.`
+        : `${name(ev.player)} is removed from the game after ${content.rules.missedTurnsBeforeRemoval} missed turns in a row.`;
     case "rolled": {
       const r = ev.roll;
       const bonus = r.speedBonus + r.eventModifier;
@@ -103,12 +109,14 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
     case "deckReshuffled":
       return `The ${ev.deck} deck is reshuffled.`;
     case "gameEnded":
-      return `Game over. Winner: ${ev.result.winners.map(name).join(" and ")}.`;
+      return ev.result.reason === "last-player"
+        ? `Game over. ${ev.result.winners.map(name).join(" and ")} is the last player left and wins.`
+        : `Game over. Winner: ${ev.result.winners.map(name).join(" and ")}.`;
   }
 }
 
 /** Label for an action button. */
-export function describeAction(action: Action, content: Content): string {
+export function describeAction(action: PlayerAction, content: Content): string {
   switch (action.type) {
     case "placeShip":
       return `Start at the ${dockName(content, action.dock)}`;
@@ -159,6 +167,7 @@ export function seatStatus(
   seat: SeatInfo | undefined,
   secondsLeft: number | null = null,
 ): string | null {
+  if (seat?.removed) return "removed from the game";
   if (!seat || seat.connected) return null;
   if (seat.away) return "away: the server plays for them";
   return secondsLeft === null ? "disconnected" : `disconnected: ${secondsLeft} s to come back`;

@@ -166,7 +166,17 @@ An event's effect lasts until the next event is drawn. The round 15 event lasts 
 
 ## End of the game
 
-The game ends after round 20. Each player counts their cash and subtracts $100 for every fine token they still hold. Fish still on your ship are worth nothing. Most cash wins. If tied, it's a tie.
+The game ends after round 20. Each player counts their cash and subtracts $100 for every fine token they still hold. Fish still on your ship are worth nothing. Most cash wins. If tied, it's a tie. A player removed from the game (see Online play) cannot win.
+
+## Online play
+
+These rules apply to the online game (decided with the designer, 2026-11-13).
+
+- **Turn timer:** you have 90 seconds for your whole turn (rolling, moving and shopping). The screen shows how long you have left.
+- **Missed turn:** if time runs out, nothing more happens that turn. Your ship stays where it is, you draw no card and buy nothing, and play passes to the next player. If you had to place a ship (at setup, entering late, or after a Sinking Boat), it goes on the first free dock.
+- **Disconnected players:** a player who loses their connection has up to 60 seconds to come back (2 minutes in all per game). After that their turns are missed straight away until they return.
+- **Removed players:** miss 3 turns in a row and you are removed from the game. The host can also remove a player at any time. A removed player's ship leaves the board; they get no more turns, cannot win, and cannot rejoin.
+- **Last player left:** if every other player has been removed, the game ends at once and the last player wins.
 
 ## Special cases
 

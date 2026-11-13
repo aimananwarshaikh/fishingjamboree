@@ -9,6 +9,7 @@ describe("parseClientMessage", () => {
     [{ type: "start" }],
     [{ type: "sync" }],
     [{ type: "leave" }],
+    [{ type: "kick", seat: "p2" }],
     [{ type: "intent", clientActionId: "1", seq: 0, action: { type: "roll" } }],
     [{ type: "intent", clientActionId: "1", seq: 3, action: { type: "move", to: 12 } }],
     [
@@ -55,6 +56,15 @@ describe("parseClientMessage", () => {
       { type: "intent", clientActionId: "1", seq: 1.5, action: { type: "roll" } },
     ],
     ["intent without an action", { type: "intent", clientActionId: "1", seq: 0 }],
+    ["kick without a seat", { type: "kick" }],
+    [
+      "a system action from a client (missTurn)",
+      { type: "intent", clientActionId: "1", seq: 0, action: { type: "missTurn" } },
+    ],
+    [
+      "a system action from a client (removePlayer)",
+      { type: "intent", clientActionId: "1", seq: 0, action: { type: "removePlayer" } },
+    ],
     [
       "an unknown action type",
       { type: "intent", clientActionId: "1", seq: 0, action: { type: "win" } },

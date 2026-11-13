@@ -183,6 +183,8 @@ describe("reachableDestinations: other ships", () => {
       fineTokens: 0,
       upgrades: { speed: false, capacity: false },
       position,
+      missedTurns: 0,
+      removed: false,
     });
     const players = [player("a", START_LEFT), player("b", tile(3, 18)), player("c", null)];
     expect([...occupiedTiles(players, "a")]).toEqual([tile(3, 18)]);

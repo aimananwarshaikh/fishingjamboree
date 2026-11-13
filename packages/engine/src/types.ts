@@ -210,6 +210,8 @@ export interface RulesConfig {
   startingCash: Money;
   baseCapacity: number;
   fineTokenValue: Money;
+  /** Online play: a player who misses this many turns in a row is removed from the game. */
+  missedTurnsBeforeRemoval: number;
   upgrades: {
     speed: SpeedUpgradeConfig;
     capacity: CapacityUpgradeConfig;
@@ -317,8 +319,12 @@ export interface PlayerState {
   fish: Money[];
   fineTokens: number;
   upgrades: Record<UpgradeId, boolean>;
-  /** `null` while waiting off the board (before setup placement or late entry). */
+  /** `null` while waiting off the board (before setup placement or late entry), and once removed. */
   position: TileId | null;
+  /** Turns missed in a row (online play); any action of the player's own resets it. */
+  missedTurns: number;
+  /** Removed from the game (by the host, or after too many missed turns): no more turns, cannot win. */
+  removed: boolean;
 }
 
 /** A deck as the engine holds it. `draw[0]` is the top card. */
@@ -420,13 +426,19 @@ export interface PlayerScore {
   fineTokens: number;
   /** `cash - fineTokens * fineTokenValue`. May be negative. */
   total: Money;
+  /** The player was removed from the game, so cannot win. */
+  removed: boolean;
 }
+
+/** `rounds`: the last round was played. `last-player`: every other player was removed. */
+export type GameEndReason = "rounds" | "last-player";
 
 export interface GameResult {
   /** In turn order. */
   scores: PlayerScore[];
-  /** Highest total. More than one player means a shared win. */
+  /** Highest total among players not removed. More than one player means a shared win. */
   winners: PlayerId[];
+  reason: GameEndReason;
 }
 
 // --- State and view -------------------------------------------------------
@@ -514,13 +526,32 @@ export interface EndTurnAction extends ActionBase {
   type: "endTurn";
 }
 
-export type Action =
+/** What a player can choose (`getLegalActions` returns these). */
+export type PlayerAction =
   | PlaceShipAction
   | RollAction
   | MoveAction
   | BuyUpgradeAction
   | UseHelicopterAction
   | EndTurnAction;
+
+/**
+ * Online play, decided by the server and never by a client: the deciding
+ * player ran out of time, so their turn is missed (nothing more happens; a
+ * ship that has to be placed goes on the first dock offered).
+ */
+export interface MissTurnAction extends ActionBase {
+  type: "missTurn";
+}
+
+/** Online play, decided by the server (host kick): `player` leaves the game for good. */
+export interface RemovePlayerAction extends ActionBase {
+  type: "removePlayer";
+}
+
+export type SystemAction = MissTurnAction | RemovePlayerAction;
+
+export type Action = PlayerAction | SystemAction;
 
 export type ActionType = Action["type"];
 
@@ -549,6 +580,7 @@ export interface RollOffRound {
 }
 
 export type TurnSkipReason = "no-free-starting-dock";
+export type RemovalReason = "kicked" | "missed-turns";
 export type BlockedReason = "zero-steps" | "no-legal-move";
 export type FishLossReason = "shark" | "sinking-boat" | "overflow";
 export type SaleVia = "dock" | "helicopter";
@@ -562,6 +594,10 @@ export type GameEvent =
   | { type: "roundStarted"; round: number }
   | { type: "turnStarted"; player: PlayerId; round: number }
   | { type: "turnSkipped"; player: PlayerId; reason: TurnSkipReason }
+  /** The player ran out of time (online play). */
+  | { type: "turnMissed"; player: PlayerId }
+  /** The player is out of the game; their ship has left the board. */
+  | { type: "playerRemoved"; player: PlayerId; reason: RemovalReason }
   | { type: "rolled"; player: PlayerId; roll: RollResult }
   | { type: "blocked"; player: PlayerId; reason: BlockedReason }
   /** `path` starts at `from` and ends at `to`; one legal path chosen deterministically. */
@@ -630,12 +666,12 @@ export interface Engine {
    * their decision. Uses public information only, so it gives the same
    * answer for the full state and for any player's view.
    */
-  getLegalActions(content: Content, state: AnyState, player: PlayerId): Action[];
+  getLegalActions(content: Content, state: AnyState, player: PlayerId): PlayerAction[];
 
   /**
    * Validates and applies one action, then runs every automatic step up to
    * the next decision. Never mutates `state` and never throws for an illegal
-   * action.
+   * action. Also takes the system actions (`missTurn`, `removePlayer`).
    */
   applyAction(content: Content, state: GameState, action: Action): ApplyResult;
 

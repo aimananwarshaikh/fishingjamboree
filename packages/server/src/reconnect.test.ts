@@ -195,7 +195,7 @@ describe("disconnect policy: lobby", () => {
 });
 
 describe("disconnect policy: in a game", () => {
-  it("waits the reconnect grace for the deciding player, then plays for them", () => {
+  it("waits the reconnect grace for the deciding player, then misses their turns", () => {
     const h = harness(NO_TIMER);
     const { code } = h.started(3);
     const seat = h.actor("c1")!;
@@ -211,14 +211,14 @@ describe("disconnect policy: in a game", () => {
     ]);
     expect(h.core.replayLog(code)?.actions).toHaveLength(1);
 
-    // Still away and still deciding (the roll): the next action follows after the short delay.
+    // Still away and deciding again (the first turn of round 1): missed after the short delay.
     expect(h.actor(watcher)).toBe(seat);
     expect(h.core.nextDeadline()).toBe(h.now() + DELAY);
     h.advance(DELAY - 1);
     expect(h.view(watcher).actionCount).toBe(1);
     h.advance(1);
     expect(h.last(watcher, "update")).toMatchObject({ seq: 2, by: seat, auto: true });
-    expect(h.last(watcher, "update").events[0]).toMatchObject({ type: "rolled", player: seat });
+    expect(h.last(watcher, "update").events[0]).toEqual({ type: "turnMissed", player: seat });
   });
 
   it("takes one automatic action per delay, however late the tick is", () => {
@@ -415,13 +415,12 @@ describe("disconnect policy: in a game", () => {
     expect(h.core.roomCodes()).toEqual([code]);
   });
 
-  it("finishes a game for players who never come back, without spending their money", () => {
+  it("finishes a game for players who never come back: their turns are missed, then they are removed", () => {
     const h = harness(NO_TIMER);
     const { code } = h.started(3);
     h.send("c2", { type: "leave" });
     h.send("c3", { type: "leave" });
     const autoEvents: GameEvent[] = [];
-    let riskMovesWithChoice = 0;
     for (let guard = 0; h.actor("c1") !== undefined; guard += 1) {
       if (guard > 5_000) throw new Error("the game did not end");
       const seat = h.actor("c1")!;
@@ -431,26 +430,22 @@ describe("disconnect policy: in a game", () => {
         continue;
       }
       const before = h.view("c1");
-      const calm = h
-        .legal("c1", seat)
-        .some((a) => a.type === "move" && content.board.tiles[a.to]?.terrain !== "risk");
       h.advance(DELAY);
       const update = h.last("c1", "update");
       expect(update).toMatchObject({ seq: before.actionCount + 1, by: seat, auto: true });
       autoEvents.push(...update.events.filter((e) => "player" in e && e.player === seat));
-      const moved = update.events.find((e) => e.type === "moved" && e.player === seat);
-      if (moved?.type === "moved" && calm && content.board.tiles[moved.to]?.terrain === "risk") {
-        riskMovesWithChoice += 1;
-      }
       h.clear();
     }
     expect(h.room(code).status).toBe("finished");
-    expect(autoEvents.some((e) => e.type === "moved")).toBe(true);
-    expect(autoEvents.filter((e) => e.type === "upgradeBought")).toEqual([]);
-    expect(autoEvents.filter((e) => e.type === "helicopterUsed")).toEqual([]);
-    expect(riskMovesWithChoice).toBe(0);
+    // The server never plays for them: no roll, no move, no purchase, no Helicopter.
+    const kinds = new Set(autoEvents.map((e) => e.type));
+    for (const never of ["rolled", "moved", "upgradeBought", "helicopterUsed", "cardDrawn"]) {
+      expect(kinds.has(never as GameEvent["type"])).toBe(false);
+    }
+    expect(autoEvents.filter((e) => e.type === "playerRemoved")).toHaveLength(2);
+    expect(h.view("c1").result).toMatchObject({ winners: ["p1"], reason: "last-player" });
 
-    // Automatic actions are ordinary logged actions: the replay matches.
+    // Missed turns and removals are ordinary logged actions: the replay matches.
     const replayed = replay(content, h.core.replayLog(code)!);
     expect(h.view("c1")).toEqual(redactForClient(replayed.state, "p1"));
   });

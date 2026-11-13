@@ -18,7 +18,9 @@
  *
  * Besides the game it also checks: a refresh mid-game keeps the seat, a double
  * click on a button is quiet, a 4th player can join a lobby, and a phone-width
- * tab (390 px) has no horizontal scroll and tappable buttons. Rejoining (P1-1):
+ * tab (390 px) has no horizontal scroll and tappable buttons; the host removes
+ * the 4th player from the lobby. With GRACE=1 the closed tab's turns are missed
+ * and, after three in a row, its player is removed from the game. Rejoining (P1-1):
  * a closed tab's player opens a new tab and rejoins from the start-screen offer
  * (a new tab never rejoins by itself, so the three tabs stay three players);
  * and a player opens their rejoin link in a fresh browser context, while the
@@ -219,11 +221,15 @@ await pages[0].waitForFunction(() => document.querySelectorAll(".seats li").leng
 });
 check(true, "a 4th player joins (host sees 4 seats)");
 check(await noHorizontalScroll(phone), "phone: lobby has no horizontal scroll");
-await phone.getByRole("button", { name: "Leave" }).click();
+// The host removes the 4th player (the Remove button asks first).
+pages[0].once("dialog", (d) => d.accept());
+await pages[0].getByRole("button", { name: "Remove" }).last().click();
 await pages[0].waitForFunction(() => document.querySelectorAll(".seats li").length === 3, null, {
   timeout: 5000,
 });
-check(true, "the 4th player leaves again (host sees 3 seats)");
+check(true, "the host removes the 4th player (host sees 3 seats)");
+await phone.getByText("You have been removed from this room.").waitFor({ timeout: 5000 });
+check(true, "the removed player is told and is back on the start screen");
 await phoneCtx.close();
 
 // Start.
@@ -408,7 +414,7 @@ while (stats.actions < MAX_ACTIONS) {
     const gone = pages.pop();
     const seat = await seatOf(gone);
     await gone.close();
-    console.log(`.... closed ${seat}'s tab; waiting for the server to play for it`);
+    console.log(`.... closed ${seat}'s tab; waiting for the server to miss its turns`);
     {
       const tag = pages[0].locator(".disconnected").first();
       await tag.waitFor({ timeout: 35000 });
@@ -432,7 +438,14 @@ while (stats.actions < MAX_ACTIONS) {
         autoSeen = log.some((l) => l.endsWith("(auto)"));
       }
     }
-    check(autoSeen, `after the grace the server plays for ${seat} and the game goes on`);
+    check(autoSeen, `after the grace ${seat}'s turns are missed and the game goes on`);
+    // Three missed turns in a row: the seat is removed. Keep playing meanwhile,
+    // or the others' turn timers would run out too.
+    const removedCount = () => pages[0].locator(".players small.removed").count();
+    for (let i = 0; i < 400 && (await removedCount()) === 0; i++) {
+      if (!(await step(pages))) await new Promise((r) => setTimeout(r, 250));
+    }
+    check((await removedCount()) === 1, `after 3 missed turns ${seat} is shown as removed`);
     continue;
   }
 

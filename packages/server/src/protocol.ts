@@ -4,9 +4,9 @@
  * imports, so the web client can import this file too.
  */
 import type {
-  Action,
   ActionErrorCode,
   GameEvent,
+  PlayerAction,
   PlayerId,
   PlayerView,
 } from "@fishingjamboree/engine";
@@ -26,9 +26,11 @@ export interface SeatInfo {
   connected: boolean;
   /**
    * In a game: the player's reconnect grace is over (or they sent `leave`), so the
-   * server plays for them when they have to decide. Always `false` in the lobby.
+   * server misses their turns for them. Always `false` in the lobby.
    */
   away: boolean;
+  /** Removed from the game (kicked by the host, or after too many missed turns). The seat stays for the results. */
+  removed: boolean;
   /**
    * In a game, while the player is disconnected and not yet away: milliseconds
    * until the server marks them away (their reconnect grace, capped by what is
@@ -39,7 +41,7 @@ export interface SeatInfo {
 
 /** The room's time limits (docs/protocol.md §7). Fixed for the life of the room. */
 export interface RoomTimers {
-  /** How long a deciding player has before the server plays one action for them; `null`: no turn timer. */
+  /** How long a player has for a whole turn before the server misses it for them; `null`: no turn timer. */
   turnTimeoutMs: number | null;
   /** How long one disconnect may last before the player is away. */
   reconnectGraceMs: number;
@@ -67,7 +69,7 @@ export interface GameSnapshot {
   seq: number;
   view: PlayerView;
   /**
-   * Milliseconds until the server plays for the deciding player (turn timer),
+   * Milliseconds until the server misses the deciding player's turn (turn timer),
    * counted when the message is sent: add it to the time it arrived. `null`
    * when no turn timer runs (no timer set, the deciding player is away, the
    * game is over).
@@ -75,9 +77,13 @@ export interface GameSnapshot {
   turnTimeLeftMs: number | null;
 }
 
-/** An engine action without `player`: the server fills that in from the seat. */
-export type ClientAction = Action extends infer A
-  ? A extends Action
+/**
+ * An engine action a player can choose, without `player`: the server fills
+ * that in from the seat. System actions (`missTurn`, `removePlayer`) are never
+ * accepted from a client.
+ */
+export type ClientAction = PlayerAction extends infer A
+  ? A extends PlayerAction
     ? Omit<A, "player">
     : never
   : never;
@@ -94,7 +100,9 @@ export type ClientMessage =
   /** `seq` is the `seq` of the view the player was looking at when they chose. */
   | { type: "intent"; clientActionId: string; seq: number; action: ClientAction }
   | { type: "sync" }
-  | { type: "leave" };
+  | { type: "leave" }
+  /** Host only: remove `seat` from the lobby or the game for good. */
+  | { type: "kick"; seat: SeatId };
 
 export type ClientMessageType = ClientMessage["type"];
 
@@ -117,7 +125,9 @@ export type ProtocolErrorCode =
   | "not-enough-players"
   | "players-disconnected"
   | "replaced"
-  | "server-busy";
+  | "server-busy"
+  | "kicked"
+  | "cannot-kick";
 
 /** Why an intent was refused: the engine's reasons plus two of the server's. */
 export type RejectionCode = ActionErrorCode | "stale" | "no-game";
@@ -138,7 +148,7 @@ export type ServerMessage =
   /**
    * To everyone in the room. `seq` 0 is the start of the game (`by` is `null`);
    * `seq` N carries the events of action N. `auto` marks an action the server
-   * chose for an away player or a player whose turn timer ran out.
+   * applied for a player: a turn missed because they are away or ran out of time.
    * `turnTimeLeftMs` is as in `GameSnapshot`.
    */
   | {

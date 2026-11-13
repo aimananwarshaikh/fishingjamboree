@@ -166,6 +166,9 @@ export const REPLACED_NOTICE =
   "Your seat was opened in another tab or on another device, so this tab has let it go. " +
   "Play on there, or rejoin below to take it back here.";
 
+/** What a tab shows when its player was removed from the room (`kicked`). */
+export const KICKED_NOTICE = "You have been removed from this room.";
+
 /** The player left, or the saved seat no longer works: back to the start screen. */
 export function resetSession(state: ClientState, notice: string | null = null): ClientState {
   return { ...initialState, connection: state.connection, notice };
@@ -237,6 +240,8 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       // The seat now belongs to a newer connection: stop showing a table this
       // tab can no longer play at, and say why (docs/protocol.md §6).
       if (msg.code === "replaced") return resetSession(state, REPLACED_NOTICE);
+      // Removed by the host or after missed turns: the seat is gone for good.
+      if (msg.code === "kicked") return resetSession(state, KICKED_NOTICE);
       return {
         ...state,
         notice: msg.message,

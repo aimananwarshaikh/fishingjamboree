@@ -363,6 +363,7 @@ function checkRules(raw: unknown, issues: Issues): void {
   issues.int("rules.startingCash", r.startingCash, 0);
   issues.int("rules.baseCapacity", r.baseCapacity, 1);
   issues.int("rules.fineTokenValue", r.fineTokenValue, 1);
+  issues.int("rules.missedTurnsBeforeRemoval", r.missedTurnsBeforeRemoval, 1);
   const up = r.upgrades;
   if (!isObj(up)) return issues.add("rules.upgrades", "must be an object");
   const speed = up.speed;

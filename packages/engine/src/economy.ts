@@ -4,7 +4,15 @@
  */
 import type { Ctx } from "./ctx";
 import { capacityOf } from "./modifiers";
-import type { Content, FishLossReason, GameResult, Money, PlayerState, SaleVia } from "./types";
+import type {
+  Content,
+  FishLossReason,
+  GameEndReason,
+  GameResult,
+  Money,
+  PlayerState,
+  SaleVia,
+} from "./types";
 
 const sum = (values: readonly Money[]): Money => values.reduce((a, b) => a + b, 0);
 
@@ -88,13 +96,24 @@ export function sellFish(ctx: Ctx, player: PlayerState, via: SaleVia): void {
  * held; fish on the ship are worth nothing. Every player on the highest
  * total wins (a tie is a tie; fine tokens are not a tie-break).
  */
-export function scoreGame(content: Content, players: readonly PlayerState[]): GameResult {
+export function scoreGame(
+  content: Content,
+  players: readonly PlayerState[],
+  reason: GameEndReason = "rounds",
+): GameResult {
   const scores = players.map((p) => ({
     player: p.id,
     cash: p.cash,
     fineTokens: p.fineTokens,
     total: p.cash - p.fineTokens * content.rules.fineTokenValue,
+    removed: p.removed,
   }));
-  const best = Math.max(...scores.map((s) => s.total));
-  return { scores, winners: scores.filter((s) => s.total === best).map((s) => s.player) };
+  // A removed player cannot win (online play). With one player left, they win whatever the totals.
+  const inGame = scores.filter((s) => !s.removed);
+  const best = Math.max(...inGame.map((s) => s.total));
+  const winners =
+    reason === "last-player"
+      ? inGame.map((s) => s.player)
+      : inGame.filter((s) => s.total === best).map((s) => s.player);
+  return { scores, winners, reason };
 }

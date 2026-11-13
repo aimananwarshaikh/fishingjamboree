@@ -78,10 +78,12 @@ there; the old tab is told its seat was opened elsewhere and lets it go.
 
 The table shows whose turn it is and how long they have left ("Your turn: … 42 s left." or "Waiting
 for Bob to …"), a banner when each round starts and when an event card is drawn, a dock shop panel
-when you dock, and a Helicopter button while that event is active. A player who does not act within
-the turn timer (60 seconds per decision) has one action played for them. A player whose tab is closed
-shows as **offline** for up to 60 seconds (2 minutes in all per game), then **away**: the server plays
-for them (marked "(auto)" in the log) until they come back.
+when you dock, and a Helicopter button while that event is active. Each turn has 90 seconds; a turn
+that runs out is missed (the ship stays put; marked "(auto)" in the log). A player whose tab is closed
+shows as **offline** for up to 60 seconds (2 minutes in all per game), then **away**: their turns are
+missed straight away until they come back. Three missed turns in a row remove a player from the game,
+and the host can remove a player with the **Remove** button. The last player left wins. See "Online
+play" in `docs/rulebook.md`.
 
 ### Three-tab playtest
 
