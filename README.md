@@ -76,10 +76,12 @@ nothing rejoins until you click it. To move to another browser or device, copy t
 from the lobby or the table (`#rejoin=CODE.TOKEN`; it is your seat, so don't share it) and open it
 there; the old tab is told its seat was opened elsewhere and lets it go.
 
-The table shows whose turn it is ("Your turn: …" or "Waiting for Bob to …"), a banner when each round
-starts and when an event card is drawn, a dock shop panel when you dock, and a Helicopter button
-while that event is active. A player whose tab is closed shows as **offline** for 60 seconds, then
-**away**: the server plays for them (marked "(auto)" in the log) until they come back.
+The table shows whose turn it is and how long they have left ("Your turn: … 42 s left." or "Waiting
+for Bob to …"), a banner when each round starts and when an event card is drawn, a dock shop panel
+when you dock, and a Helicopter button while that event is active. A player who does not act within
+the turn timer (60 seconds per decision) has one action played for them. A player whose tab is closed
+shows as **offline** for up to 60 seconds (2 minutes in all per game), then **away**: the server plays
+for them (marked "(auto)" in the log) until they come back.
 
 ### Three-tab playtest
 

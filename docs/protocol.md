@@ -61,17 +61,21 @@ Nobody can join a room once the game has started. There are no spectators yet.
 | ---------- | ------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- |
 | `welcome`  | `v`, `seat`, `seatToken`, `contentHash`, `room`, `game` | One connection       | After `create`, `join` or `rejoin`                                                  |
 | `room`     | `room`                                                  | Everyone in the room | A seat is taken, freed, connected, disconnected or becomes away; the status changes |
-| `update`   | `seq`, `by`, `auto`, `events`, `view`                   | Everyone in the room | The game starts; an action is applied                                               |
+| `update`   | `seq`, `by`, `auto`, `events`, `view`, `turnTimeLeftMs` | Everyone in the room | The game starts; an action is applied                                               |
 | `snapshot` | `room`, `game`                                          | One connection       | Reply to `sync`                                                                     |
 | `rejected` | `clientActionId`, `seq`, `error { code, message }`      | The sender           | An intent was not applied                                                           |
 | `error`    | `code`, `message`                                       | The sender           | Any other message could not be acted on                                             |
 | `left`     |                                                         | The sender           | Reply to `leave`                                                                    |
 
-- `room` is a `RoomInfo`: `code`, `status` (`lobby`, `playing`, `finished`), `host`, `seats` (`seat`, `name`, `connected`, `away`, in seat order), `minPlayers`, `maxPlayers`, `rev`. It is always sent whole. `rev` goes up by one on every change, so a client keeps the one with the highest `rev`.
-- `game` is `null` in the lobby, otherwise `{ seq, view }`.
+- `room` is a `RoomInfo`: `code`, `status` (`lobby`, `playing`, `finished`), `host`, `seats` (`seat`, `name`, `connected`, `away`, `awayInMs`, in seat order), `minPlayers`, `maxPlayers`, `timers`, `rev`. It is always sent whole. `rev` goes up by one on every change, so a client keeps the one with the highest `rev`.
+- `timers` is the room's time limits, fixed when the room is created: `turnTimeoutMs` (`null` if there is no turn timer), `reconnectGraceMs`, `reconnectBudgetMs` ([section 7](#7-disconnect-policy)).
+- `awayInMs` is, in a game, for a disconnected player who is not yet away: how many milliseconds are left before they are away. Otherwise `null`.
+- `game` is `null` in the lobby, otherwise `{ seq, view, turnTimeLeftMs }`.
+- `turnTimeLeftMs` (in `game` and in `update`) is how many milliseconds the deciding player has left before the server plays for them. It is `null` when no turn timer runs: no timer is set, the deciding player is away (the server acts after the short delay instead), or the game is over.
+- **Times are relative.** `awayInMs` and `turnTimeLeftMs` are counted when the message is sent. A client adds them to the time the message arrived on its own clock, so client and server clocks need not agree. They are not resent as time passes; a later message carries fresh values.
 - `view` is the receiver's own `PlayerView` (`view.viewer` is their seat). It is sent whole in every `update`; it is small.
 - `events` are the engine's `GameEvent`s for that action, the same for everyone. They are for animation and the log. The view alone is enough to carry on.
-- `by` is the seat that acted (`null` for the start of the game). `auto` is `true` when the server chose the action for an away player ([section 7](#7-disconnect-policy)).
+- `by` is the seat that acted (`null` for the start of the game). `auto` is `true` when the server chose the action, for an away player or because the turn timer ran out ([section 7](#7-disconnect-policy)).
 - `contentHash` lets a client check, before the game starts, that the content it bundles matches the server's.
 - When the game ends, the last `update` carries `view.result`, and a `room` message with status `finished` follows it.
 
@@ -142,13 +146,24 @@ All times are settings (`CoreConfig`); the defaults are below.
 
 A seat is never freed during a game. The game is not paused for the other players.
 
-- A disconnected player has **60 seconds** (`reconnectGraceMs`), counted from the disconnect, to come back. Nothing happens for them in that time. If it is their decision, the game waits.
+**Turn timer** (added for review P1-2, 2026-11-13).
+
+- The deciding player has **60 seconds** (`turnTimeoutMs`) from the previous action, the start of the game, or the moment a room nobody was connected to is rejoined. Every action starts it again.
+- When it runs out, the server plays **one** action for them (as for an away player, below), sent with `auto: true`. They are not marked away; their next decision gets a fresh 60 seconds.
+- It runs whether the player is connected or not: a disconnect never extends a decision. A phone that locks mid-decision costs at most one turn time per decision.
+- Clients see it as `turnTimeLeftMs` ([section 4](#4-server-to-client)). There is no turn timer in the lobby. `turnTimeoutMs: null` switches it off.
+
+**Reconnect grace and its budget.**
+
+- A disconnected player has up to **60 seconds** (`reconnectGraceMs`), counted from the disconnect, to come back. During that time they are not away; if it is their decision, the turn timer still runs.
+- Each player has a **budget** of **2 minutes** (`reconnectBudgetMs`) of grace for the whole game. The time they spend disconnected and not away is taken from it (at most one grace per disconnect; time while nobody in the room is connected does not count). A disconnect with less than 60 seconds of budget left gets only what is left; with nothing left the player is away at once. The budget is full for everyone when the game starts.
+- Clients see what is left of a disconnected player's grace as `awayInMs`.
 - After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message (added in stage 6b, so clients can show it). Whenever an away player has to decide, the server decides for them **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens.
-- Reconnecting ends this immediately (`away` goes back to `false`). A later disconnect starts a new grace period.
-- `leave` during a game means away at once, with no grace. The seat is kept and the player can still `rejoin`.
+- Reconnecting ends this immediately (`away` goes back to `false`). A later disconnect starts a new grace period, from what is left of the budget.
+- `leave` during a game means away at once, with no grace and no budget used. The seat is kept and the player can still `rejoin`.
 - An automatic action is an ordinary action: it goes through `applyAction`, is added to the replay log, and is sent as an `update` with `auto: true`.
 
-**What the server chooses for an away player** (`chooseAutoAction` in `autoplay.ts`). The aim is to keep the game moving while doing as little as possible on the player's behalf. It is deterministic, uses only public information and never spends the player's money.
+**What the server chooses for an away player, or when the turn timer runs out** (`chooseAutoAction` in `autoplay.ts`). The aim is to keep the game moving while doing as little as possible on the player's behalf. It is deterministic, uses only public information and never spends the player's money.
 
 | Phase       | Action                                                                                              |
 | ----------- | --------------------------------------------------------------------------------------------------- |
@@ -163,12 +178,12 @@ A seat is never freed during a game. The game is not paused for the other player
 ### When nobody is connected
 
 - The server plays for nobody. The game stands still.
-- When someone reconnects, every other disconnected player's 60-second grace starts again from that moment (unless they had sent `leave`).
+- When someone reconnects, every other disconnected player's grace starts again from that moment (unless they had sent `leave`), capped by what is left of their budget; a player with no budget left stays away. The turn timer also counts from that moment.
 - A room nobody has been connected to for **30 minutes** (`roomIdleTtlMs`) is deleted, whatever its status.
 
 ### Not covered
 
-There is no turn timer for a player who is connected but not acting. Playtests are run on a voice call; see [section 10](#10-open-items).
+The host cannot kick or pause; see [section 10](#10-open-items).
 
 ## 8. Example
 
@@ -178,8 +193,11 @@ Ann creates a room, Bob and Cy join, Ann starts, and the first player places a s
 Ann  → { "type": "create", "v": 1, "name": "Ann" }
 Ann  ← { "type": "welcome", "v": 1, "seat": "p1", "seatToken": "9f…", "contentHash": "…",
          "room": { "code": "KTBM", "status": "lobby", "host": "p1", "rev": 0,
-                   "seats": [{ "seat": "p1", "name": "Ann", "connected": true, "away": false }],
-                   "minPlayers": 2, "maxPlayers": 4 },
+                   "seats": [{ "seat": "p1", "name": "Ann", "connected": true, "away": false,
+                               "awayInMs": null }],
+                   "minPlayers": 2, "maxPlayers": 4,
+                   "timers": { "turnTimeoutMs": 60000, "reconnectGraceMs": 60000,
+                               "reconnectBudgetMs": 120000 } },
          "game": null }
 
 Bob  → { "type": "join", "v": 1, "code": "ktbm", "name": "Bob" }
@@ -190,7 +208,8 @@ Cy   → join … (seat p3, room rev 2)
 Ann  → { "type": "start" }
 all  ← { "type": "room", "room": { …, "status": "playing", "rev": 3 } }
 all  ← { "type": "update", "seq": 0, "by": null, "auto": false,
-         "events": [gameStarted, turnOrderDecided, …], "view": { …, "viewer": "p1" | "p2" | "p3" } }
+         "events": [gameStarted, turnOrderDecided, …], "view": { …, "viewer": "p1" | "p2" | "p3" },
+         "turnTimeLeftMs": 60000 }
 
 Bob  → { "type": "intent", "clientActionId": "b-1", "seq": 0,
          "action": { "type": "placeShip", "dock": "start-left" } }
@@ -239,7 +258,7 @@ The web client can import the message types from `packages/server/src/protocol.t
 
 ## 10. Open items
 
-- No turn timer for connected players, no host "kick", no pause.
+- No host "kick", no pause. The turn timer's length and what happens when it runs out are open with the designer (`docs/next-steps.md`, question 4).
 - No spectators (`redactForClient` already accepts `"spectator"`).
 - No rematch in the same room (Milestone B3).
 - Rooms live in memory: a server restart ends every game. The replay log would be enough to restore one.

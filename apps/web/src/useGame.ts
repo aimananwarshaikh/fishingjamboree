@@ -103,6 +103,7 @@ function makeContext(content: Content): Context {
     contentHash: content.hash,
     cardName: (card) => content.cards.cards[card]?.name ?? card,
     rounds: content.rules.rounds,
+    now: () => Date.now(),
     describe: (events, room) => {
       const name = (p: string) => room?.seats.find((s) => s.seat === p)?.name ?? p;
       return events

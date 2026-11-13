@@ -8,7 +8,7 @@ A full online game for 2–4 players runs in a browser (desktop and phone width)
 
 - Create a room, others join by code, the host starts, 20 rounds are played to a scored result.
 - A refresh rejoins the seat. A player who closed their tab gets their seat back from the start screen (saved seats in `localStorage`) or from a rejoin link `#rejoin=CODE.TOKEN`. A tab whose seat is taken over goes back to the start screen with a message.
-- A player who is away for 60 seconds (or leaves) is played for by the server.
+- A player who is away for 60 seconds (or leaves) is played for by the server. Since B1 (P1-2): a turn timer (60 s per decision) and a reconnect grace budget (2 minutes per player per game).
 - The engine follows `docs/rulebook.md` with no known rule bug (`docs/review-2026-11-17.md`). 1,000 seeded random games pass in `fuzz.test.ts`.
 - `scripts/playtest-three-tabs.mjs` (Playwright) plays whole games in three tabs by clicking only what a player can click.
 
@@ -22,10 +22,10 @@ Full detail, evidence and file references are in [`docs/review-2026-11-17.md`](r
 
 ### P1
 
-| Item                                                | Status                                                                                                                                                                                                                                                                                                                  | Model |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| P1-1 A player who closes their tab cannot come back | **Done** (PR #15, client only). Not done from it: a player who lost both the tab and the saved seat (new browser or device) still cannot get back without a rejoin link; there is no rejoin by name.                                                                                                                    |       |
-| P1-2 One player can hold the game up                | **Open.** Add a turn timer for connected players (then the server plays for them), and give the 60 s reconnect grace a total budget so repeated drops cannot restart it for ever. Decide what the timer length is and whether the host can kick or pause. `core.ts:415-431`, `core.ts:530-537`; `docs/protocol.md` §10. | Opus  |
+| Item                                                | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Model |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| P1-1 A player who closes their tab cannot come back | **Done** (PR #15, client only). Not done from it: a player who lost both the tab and the saved seat (new browser or device) still cannot get back without a rejoin link; there is no rejoin by name.                                                                                                                                                                                                                                                    |       |
+| P1-2 One player can hold the game up                | **Done** (B1, server and a small client change; no engine or rule change). Turn timer: 60 s per decision for the deciding player, connected or not; then the server plays one action (not away). Reconnect grace: still 60 s per drop, now within a 2-minute budget per player per game. Clients get `RoomInfo.timers`, `SeatInfo.awayInMs` and `turnTimeLeftMs`. Open for the designer: question 4 (length, away after a timeout, host kick or pause). |       |
 
 ### P2
 
@@ -71,14 +71,14 @@ Small fixes and tests: Sonnet unless noted.
 - `useGame.ts` (backoff, saved session, `bad-token` reset, `leave`). `scripts/playtest-three-tabs.mjs` covers it but is not in `pnpm check` or CI (`.github/workflows/ci.yml`).
 - `fuzz.test.ts`: count the event types reached and fail if an expected one never appears (`turnSkipped`, `relocationFailed`, Sinking Boat to the cruise dock); read the token value from content (`fuzz.test.ts:130`).
 - Engine: Helicopter expiring between start and end of a turn, and use on the last turn of round 20; a Sinking Boat victim taking a late entrant's dock; `applyAction` leaves its input untouched.
-- Server: two rooms at once; a connection that drops repeatedly inside the grace; the transport's `close()` during a game; unusual Unicode names.
+- Server: two rooms at once; the transport's `close()` during a game; unusual Unicode names.
 
 ## Questions for the designer
 
 1. **The left starting dock has one exit.** (3,19) opens only onto (3,18), so a ship ending on (3,18) shuts the dock in both directions for a turn. The right dock has two exits. Add an exit, or leave it? (Review P2-6; 280 stuck turns in about 60,000.)
 2. **A player on $0 beats anyone holding fine tokens.** Totals can be negative. Is that intended, or should fines be capped or scored differently? (929 of 1,000 random games had a negative total.)
 3. **What should the server do for an away player?** Head for the nearest dock and sit there, skip the card draw, or something else? (P2-3; today they end near −$220.)
-4. **Turn timer.** How long may a connected player take, and what happens at the end of it (the server plays for them once, or they become "away")? Can the host kick a player? (P1-2.)
+4. **Turn timer.** Built with the simplest choice (P1-2, B1): 60 seconds per decision, then the server plays **one** action for the player, who is not marked away. So a connected player who never acts costs about 2–3 minutes per turn of theirs. Is 60 seconds right? Should a player who times out become "away" instead (their later decisions then take 2 seconds until they act again)? Can the host kick or pause? Also: the reconnect grace budget is 2 minutes per player per game; is that right?
 5. Information only, no decision needed unless you disagree: missed turns for players 3 and 4 never happened in 1,000 random games; the Golden Fish was lost to a full ship about three times as often as it was taken.
 6. **Final zone names.** The board art's zone labels all read "SAFE ZONE 3" (placeholder).
 7. **PNG of the board with the round-track layer hidden**, ideally 2× (2756×3938). Until it arrives the client can crop or cover the left-hand track strip. Needed for B2.
@@ -88,9 +88,8 @@ Small fixes and tests: Sonnet unless noted.
 Phases are in `docs/build-plan.md` section 5.
 
 - **B1 (review fixes):**
-  - No turn timer for connected players (P1-2).
   - Rooms are in memory only (P2-5).
-  - The "offline" tag says "60 s to come back" from the server default; the client does not know `reconnectGraceMs`. Send it in the protocol when P1-2 changes the grace.
+  - P1-2 follow-ups, if the designer wants them (question 4): away after a timeout, a host pause or kick (kick belongs with B3), a per-room timer length chosen in the lobby (the room already holds its own `timers`).
 - **B2 (real UI):**
   - The log is per tab; a refresh restarts it from "Joined room …" (the protocol sends no event history on rejoin, by design). Decide if the real UI needs history; if so, it is a protocol change.
   - Round banner and "Round N/20" progress bar with the three event marks (decided 2026-11-12; the bare client only has the bar). Needs the PNG from the designer.
@@ -108,7 +107,7 @@ Phases are in `docs/build-plan.md` section 5.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2 first, then P2-4 (small, protects other rooms), P2-3 once the designer answers question 3, then P2-5. Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
+1. **B1 [OPUS]:** P1-2 is done. Next P2-4 (small, protects other rooms), P2-3 once the designer answers question 3, then P2-5. Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
 

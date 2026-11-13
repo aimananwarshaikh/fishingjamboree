@@ -2,12 +2,20 @@ import { describe, expect, it } from "vitest";
 import { getLegalActions } from "@fishingjamboree/engine";
 import type { GameEvent } from "@fishingjamboree/engine";
 import { ServerCore } from "../../../packages/server/src/core";
-import type { Outbound } from "../../../packages/server/src/core";
+import type { CoreConfig, Outbound } from "../../../packages/server/src/core";
 import { PROTOCOL_VERSION as V } from "../../../packages/server/src/protocol";
 import type { ClientMessage, RoomInfo, ServerMessage } from "../../../packages/server/src/protocol";
 import { loadBundledContent } from "./content";
 import { describeEvent } from "./describe";
-import { REPLACED_NOTICE, bannerFor, initialState, intentSent, onServerMessage } from "./store";
+import {
+  REPLACED_NOTICE,
+  awaySecondsLeft,
+  bannerFor,
+  initialState,
+  intentSent,
+  onServerMessage,
+  turnSecondsLeft,
+} from "./store";
 import type { ClientState, Context } from "./store";
 
 const content = loadBundledContent();
@@ -24,12 +32,15 @@ const ctx: Context = {
 };
 
 /** A real ServerCore with simulated browser tabs, each holding a `ClientState`. */
-function table() {
+function table(config: Partial<CoreConfig> = {}) {
   let tokens = 0;
   let time = 0;
+  // The tabs' clock runs 5 s ahead of the server's: countdowns must not care.
+  const tabCtx: Context = { ...ctx, now: () => time + 5_000 };
   const core = new ServerCore({
     content,
     now: () => time,
+    config,
     ids: {
       roomCode: () => "BCDF",
       seatToken: () => `tok-${++tokens}`,
@@ -43,7 +54,7 @@ function table() {
     for (const o of out) {
       if (o.kind !== "send") continue;
       const s = states.get(o.to) ?? initialState;
-      states.set(o.to, onServerMessage(s, o.message as ServerMessage, ctx));
+      states.set(o.to, onServerMessage(s, o.message as ServerMessage, tabCtx));
     }
   };
   const tab = (id: string) => {
@@ -90,7 +101,7 @@ function table() {
     time += ms;
     route(core.tick());
   };
-  return { core, tab, advance };
+  return { core, tab, advance, tabNow: () => time + 5_000 };
 }
 
 describe("web client state against the real server core", () => {
@@ -156,7 +167,8 @@ describe("web client state against the real server core", () => {
 
 describe("three tabs (stage 6b)", () => {
   it("double clicks are quiet, a closed tab is played for after the grace, all tabs finish", () => {
-    const { tab, advance } = table();
+    // Longer than the grace, so only Cy (away) is played for here.
+    const { tab, advance } = table({ turnTimeoutMs: 90_000 });
     const tabs = [tab("a"), tab("b"), tab("c")];
     const [ann, bob, cy] = tabs as [
       ReturnType<typeof tab>,
@@ -207,6 +219,50 @@ describe("three tabs (stage 6b)", () => {
     expect(log.some((t) => t.startsWith("Bob") && t.endsWith("(auto)"))).toBe(false);
     // The last update showed the game-over banner.
     expect(ann.state().banner?.title).toBe("Game over");
+  });
+});
+
+describe("turn timer and reconnect grace (P1-2)", () => {
+  it("shows the seconds left on the tab's own clock, and plays for a player who does not act", () => {
+    const { tab, advance, tabNow } = table();
+    const ann = tab("a");
+    const bob = tab("b");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    expect(turnSecondsLeft(ann.state(), tabNow())).toBeNull();
+    ann.send({ type: "start" });
+    expect(turnSecondsLeft(ann.state(), tabNow())).toBe(60);
+    expect(ann.state().room!.timers.turnTimeoutMs).toBe(60_000);
+    advance(15_500);
+    expect(turnSecondsLeft(bob.state(), tabNow())).toBe(45);
+    const actor = ann.state().game!.view.phase.actors[0]!;
+    advance(44_500);
+    expect(ann.state().game!.seq).toBe(1);
+    // The next decision starts a fresh minute.
+    expect(turnSecondsLeft(ann.state(), tabNow())).toBe(60);
+    const log = ann.state().log.map((l) => l.text);
+    const who = actor === "p1" ? "Ann" : "Bob";
+    expect(log.some((t) => t.startsWith(who) && t.endsWith("(auto)"))).toBe(true);
+  });
+
+  it("counts down a dropped player's grace, then shows them away", () => {
+    const { tab, advance, tabNow } = table({ turnTimeoutMs: null });
+    const ann = tab("a");
+    const bob = tab("b");
+    const cy = tab("c");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    cy.send({ type: "join", v: V, code: "BCDF", name: "Cy" });
+    ann.send({ type: "start" });
+    expect(turnSecondsLeft(ann.state(), tabNow())).toBeNull();
+    cy.drop();
+    expect(awaySecondsLeft(ann.state(), "p3", tabNow())).toBe(60);
+    expect(awaySecondsLeft(ann.state(), "p2", tabNow())).toBeNull();
+    advance(20_000);
+    expect(awaySecondsLeft(ann.state(), "p3", tabNow())).toBe(40);
+    advance(40_000);
+    expect(ann.state().room!.seats[2]).toMatchObject({ away: true, awayInMs: null });
+    expect(awaySecondsLeft(ann.state(), "p3", tabNow())).toBeNull();
   });
 });
 
@@ -270,6 +326,7 @@ describe("store rules for seq and rev", () => {
     seats: [],
     minPlayers: 2,
     maxPlayers: 4,
+    timers: { turnTimeoutMs: 60_000, reconnectGraceMs: 60_000, reconnectBudgetMs: 120_000 },
     rev,
   });
   const roomMsg = (rev: number): ServerMessage => ({ type: "room", room: room(rev) });
@@ -280,10 +337,11 @@ describe("store rules for seq and rev", () => {
     auto: false,
     events: [],
     view: view(seq),
+    turnTimeLeftMs: 60_000,
   });
   const withGame = (seq: number): ClientState => ({
     ...initialState,
-    game: { seq, view: view(seq) },
+    game: { seq, view: view(seq), turnTimeLeftMs: 60_000 },
   });
 
   it("applies the next update, ignores old and repeated ones, asks for sync on a gap", () => {
@@ -299,7 +357,7 @@ describe("store rules for seq and rev", () => {
     const gap = onServerMessage(withGame(3), update(6), ctx);
     const fixed = onServerMessage(
       gap,
-      { type: "snapshot", room: room(5), game: { seq: 6, view: view(6) } },
+      { type: "snapshot", room: room(5), game: { seq: 6, view: view(6), turnTimeLeftMs: 1_000 } },
       ctx,
     );
     expect(fixed.game?.seq).toBe(6);

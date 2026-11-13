@@ -8,6 +8,9 @@
  *   disconnect(conn)          a connection closed
  *   tick()                    do whatever is due now (call it on a timer)
  *   nextDeadline()            when `tick` next has work, or `null`
+ *
+ * Time limits in a game (docs/protocol.md §7): a turn timer for the deciding
+ * player, and a reconnect grace per disconnect, capped by a budget per player.
  */
 import { applyAction, createGame, redactForClient } from "@fishingjamboree/engine";
 import type { Action, Content, GameEvent, GameState, ReplayLog } from "@fishingjamboree/engine";
@@ -22,6 +25,7 @@ import type {
   RejectionCode,
   RoomInfo,
   RoomStatus,
+  RoomTimers,
   SeatId,
   ServerMessage,
 } from "./protocol";
@@ -38,8 +42,16 @@ export type Outbound =
 export interface CoreConfig {
   /** In the lobby, a disconnected player's seat is kept this long, then freed. */
   lobbyGraceMs: number;
-  /** In a game, a disconnected player has this long to come back before the server plays for them. */
+  /**
+   * In a game, the deciding player has this long after the previous action;
+   * then the server plays one action for them (connected or not). `null`: no
+   * turn timer. Copied into each room when it is created.
+   */
+  turnTimeoutMs: number | null;
+  /** In a game, a disconnected player has this long to come back before they are away. */
   reconnectGraceMs: number;
+  /** The most reconnect grace one player can use in a whole game, over all their disconnects. */
+  reconnectBudgetMs: number;
   /** Pause before each action the server takes for an away player, so others can follow. */
   autoActionDelayMs: number;
   /** A room with no connections at all is deleted after this long. */
@@ -49,7 +61,9 @@ export interface CoreConfig {
 
 export const DEFAULT_CONFIG: CoreConfig = {
   lobbyGraceMs: 2 * 60_000,
+  turnTimeoutMs: 60_000,
   reconnectGraceMs: 60_000,
+  reconnectBudgetMs: 2 * 60_000,
   autoActionDelayMs: 2_000,
   roomIdleTtlMs: 30 * 60_000,
   maxNameLength: 20,
@@ -74,6 +88,10 @@ interface Seat {
   left: boolean;
   /** In a game: the reconnect grace is over (or the player left), so the server plays for them. */
   away: boolean;
+  /** In a game, while disconnected and not away: when the current grace started counting. */
+  graceFrom: number | null;
+  /** In a game: reconnect grace this player can still use (`reconnectBudgetMs` at the start). */
+  graceLeftMs: number;
 }
 
 interface Game {
@@ -95,6 +113,7 @@ interface Room {
   emptySince: number | null;
   /** When someone last connected to a room that had nobody connected. */
   resumedAt: number;
+  timers: RoomTimers;
 }
 
 interface Step {
@@ -228,6 +247,11 @@ export class ServerCore {
       game: null,
       emptySince: null,
       resumedAt: this.now(),
+      timers: {
+        turnTimeoutMs: this.config.turnTimeoutMs,
+        reconnectGraceMs: this.config.reconnectGraceMs,
+        reconnectBudgetMs: this.config.reconnectBudgetMs,
+      },
     };
     this.rooms.set(code, room);
     const seat = this.addSeat(room, name, conn);
@@ -269,6 +293,7 @@ export class ServerCore {
       out.push({ kind: "close", to: seat.conn, reason: "replaced" });
     }
     this.occupy(room);
+    this.chargeGrace(room, seat);
     seat.conn = conn;
     seat.disconnectedAt = null;
     seat.left = false;
@@ -319,6 +344,10 @@ export class ServerCore {
       lastActionAt: this.now(),
     };
     room.status = "playing";
+    for (const s of room.seats) {
+      s.graceFrom = null;
+      s.graceLeftMs = room.timers.reconnectBudgetMs;
+    }
     room.rev += 1;
     this.broadcastRoom(out, room);
     this.broadcastUpdate(out, room, null, false, created.events);
@@ -415,25 +444,48 @@ export class ServerCore {
     if (room.status === "playing" && game && room.emptySince === null) {
       // A disconnected player becomes away when the grace ends; everyone is told.
       for (const seat of room.seats) {
-        if (seat.disconnectedAt === null || seat.away) continue;
-        steps.push({
-          at: Math.max(seat.disconnectedAt, room.resumedAt) + this.config.reconnectGraceMs,
-          run: (out) => this.markAway(out, room, seat),
-        });
+        const at = this.awayAt(room, seat);
+        if (at === null) continue;
+        steps.push({ at, run: (out) => this.markAway(out, room, seat) });
       }
+      // The server decides for an away player after a short delay, and for
+      // anyone else (connected or not) when the turn timer runs out.
+      const turnDeadline = this.turnDeadline(room, game);
       for (const actor of game.state.phase.actors) {
         const seat = room.seats.find((s) => s.id === actor);
-        if (!seat || seat.disconnectedAt === null || !seat.away) continue;
-        steps.push({
-          at: game.lastActionAt + this.config.autoActionDelayMs,
-          run: (out) => this.autoAct(out, room, game, seat),
-        });
+        if (!seat) continue;
+        const at = seat.away ? game.lastActionAt + this.config.autoActionDelayMs : turnDeadline;
+        if (at === null) continue;
+        steps.push({ at, run: (out) => this.autoAct(out, room, game, seat) });
       }
     }
     return steps.reduce<Step | null>((a, b) => (a === null || b.at < a.at ? b : a), null);
   }
 
+  /** When a disconnected player's grace ends, or `null` if none is running. */
+  private awayAt(room: Room, seat: Seat): number | null {
+    if (room.status !== "playing" || seat.away || seat.graceFrom === null) return null;
+    return seat.graceFrom + Math.min(room.timers.reconnectGraceMs, seat.graceLeftMs);
+  }
+
+  /** When the turn timer runs out for a deciding player who is not away. */
+  private turnDeadline(room: Room, game: Game): number | null {
+    const timeout = room.timers.turnTimeoutMs;
+    if (timeout === null) return null;
+    // Time while nobody was connected does not count.
+    return Math.max(game.lastActionAt, room.resumedAt) + timeout;
+  }
+
+  /** Ends a running grace and takes the time it lasted (at most one grace) from the budget. */
+  private chargeGrace(room: Room, seat: Seat) {
+    if (seat.graceFrom === null) return;
+    const used = Math.min(this.now() - seat.graceFrom, room.timers.reconnectGraceMs);
+    seat.graceLeftMs = Math.max(0, seat.graceLeftMs - used);
+    seat.graceFrom = null;
+  }
+
   private markAway(out: Outbound[], room: Room, seat: Seat) {
+    this.chargeGrace(room, seat);
     seat.away = true;
     room.rev += 1;
     this.broadcastRoom(out, room);
@@ -510,6 +562,8 @@ export class ServerCore {
       disconnectedAt: null,
       left: false,
       away: false,
+      graceFrom: null,
+      graceLeftMs: room.timers.reconnectBudgetMs,
     };
     room.seats.push(seat);
     room.seats.sort((a, b) => a.id.localeCompare(b.id));
@@ -522,18 +576,31 @@ export class ServerCore {
     if (room.emptySince === null) return;
     room.emptySince = null;
     room.resumedAt = this.now();
-    // Every other disconnected player's grace starts again (docs/protocol.md §7).
-    for (const seat of room.seats) if (!seat.left) seat.away = false;
+    if (room.status !== "playing") return;
+    // Every other disconnected player's grace starts again (docs/protocol.md §7),
+    // as far as their budget allows.
+    for (const seat of room.seats) {
+      if (seat.left || seat.conn !== null || seat.graceLeftMs <= 0) continue;
+      seat.away = false;
+      seat.graceFrom = room.resumedAt;
+    }
   }
 
   /** The seat loses its connection but stays in the room. */
   private vacate(room: Room, seat: Seat, left: boolean) {
+    const playing = room.status === "playing";
     seat.conn = null;
     seat.disconnectedAt = this.now();
     seat.left = left;
-    seat.away = left && room.status === "playing";
+    // No grace after `leave`, or once the player's budget is spent.
+    seat.away = playing && (left || seat.graceLeftMs <= 0);
+    seat.graceFrom = playing && !seat.away ? this.now() : null;
     room.rev += 1;
-    if (room.seats.every((s) => s.conn === null)) room.emptySince = this.now();
+    if (room.seats.every((s) => s.conn === null)) {
+      room.emptySince = this.now();
+      // Graces stop counting while nobody is connected.
+      for (const s of room.seats) this.chargeGrace(room, s);
+    }
   }
 
   private removeLobbySeat(out: Outbound[], room: Room, seat: Seat) {
@@ -564,9 +631,11 @@ export class ServerCore {
         name: s.name,
         connected: s.conn !== null,
         away: s.away,
+        awayInMs: this.msUntil(this.awayAt(room, s)),
       })),
       minPlayers: this.content.rules.minPlayers,
       maxPlayers: this.content.rules.maxPlayers,
+      timers: { ...room.timers },
       rev: room.rev,
     };
   }
@@ -574,7 +643,21 @@ export class ServerCore {
   private snapshot(room: Room, seat: Seat): GameSnapshot | null {
     if (!room.game) return null;
     const view = redactForClient(room.game.state, seat.id);
-    return { seq: view.actionCount, view };
+    return { seq: view.actionCount, view, turnTimeLeftMs: this.turnTimeLeft(room) };
+  }
+
+  private msUntil(at: number | null): number | null {
+    return at === null ? null : Math.max(0, at - this.now());
+  }
+
+  /** What clients are told about the turn timer: `null` unless it is running for someone. */
+  private turnTimeLeft(room: Room): number | null {
+    const game = room.game;
+    if (!game || room.status !== "playing") return null;
+    const deciding = game.state.phase.actors.some(
+      (actor) => room.seats.find((s) => s.id === actor)?.away === false,
+    );
+    return deciding ? this.msUntil(this.turnDeadline(room, game)) : null;
   }
 
   private welcome(out: Outbound[], room: Room, seat: Seat) {
@@ -613,13 +696,14 @@ export class ServerCore {
   ) {
     const state = room.game?.state;
     if (!state) return;
+    const turnTimeLeftMs = this.turnTimeLeft(room);
     for (const seat of room.seats) {
       if (seat.conn === null) continue;
       const view = redactForClient(state, seat.id);
       out.push({
         kind: "send",
         to: seat.conn,
-        message: { type: "update", seq: view.actionCount, by, auto, events, view },
+        message: { type: "update", seq: view.actionCount, by, auto, events, view, turnTimeLeftMs },
       });
     }
   }

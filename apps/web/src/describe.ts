@@ -151,8 +151,15 @@ export function phaseTask(view: PlayerView): string {
   }
 }
 
-/** A seat's connection in words, or `null` when it is connected. */
-export function seatStatus(seat: SeatInfo | undefined): string | null {
+/**
+ * A seat's connection in words, or `null` when it is connected. `secondsLeft`
+ * is what is left of a disconnected player's reconnect grace (from `awayInMs`).
+ */
+export function seatStatus(
+  seat: SeatInfo | undefined,
+  secondsLeft: number | null = null,
+): string | null {
   if (!seat || seat.connected) return null;
-  return seat.away ? "away: the server plays for them" : "disconnected: 60 s to come back";
+  if (seat.away) return "away: the server plays for them";
+  return secondsLeft === null ? "disconnected" : `disconnected: ${secondsLeft} s to come back`;
 }

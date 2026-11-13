@@ -8,6 +8,7 @@ import { loadBundledContent } from "./content";
 import { useGame } from "./useGame";
 import type { RejoinOffer } from "./useGame";
 import { rejoinLink } from "./savedSeats";
+import { awaySecondsLeft, turnSecondsLeft } from "./store";
 import type { Banner, ClientState } from "./store";
 
 const content = loadBundledContent();
@@ -225,16 +226,29 @@ function Lobby(props: {
   );
 }
 
+/** The time now, updated every second while a component that shows a countdown is mounted. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
 function TurnStatus(props: {
+  state: ClientState;
   view: PlayerView;
   me: string;
   name: (p: string) => string;
   seats: SeatInfo[];
 }) {
-  const { view, me, name } = props;
+  const { state, view, me, name } = props;
+  const now = useNow();
   if (view.phase.kind === "gameOver") return <p className="turn">Game over.</p>;
   const actor = view.phase.actors[0];
   if (!actor) return <p className="turn">…</p>;
+  const left = turnSecondsLeft(state, now);
   if (actor === me) {
     const hint =
       view.phase.kind === "move"
@@ -245,14 +259,19 @@ function TurnStatus(props: {
     return (
       <p className="turn mine">
         Your turn: {phaseTask(view)}.{hint}
+        {left !== null && <span className="timer"> {left} s left.</span>}
       </p>
     );
   }
-  const status = seatStatus(props.seats.find((s) => s.seat === actor));
+  const status = seatStatus(
+    props.seats.find((s) => s.seat === actor),
+    awaySecondsLeft(state, actor, now),
+  );
   return (
     <p className="turn waiting">
       Waiting for <b>{name(actor)}</b> to {phaseTask(view)}
-      {status ? ` (${status})` : ""}…
+      {status ? ` (${status})` : ""}
+      {left !== null && <span className="timer"> {left} s left</span>}…
     </p>
   );
 }
@@ -304,7 +323,7 @@ function Table(props: {
             ))}
           </div>
         </div>
-        <TurnStatus view={view} me={me} name={name} seats={room.seats} />
+        <TurnStatus state={state} view={view} me={me} name={name} seats={room.seats} />
         {event && (
           <p className="event">
             Event: <b>{event.name}</b>
@@ -384,7 +403,9 @@ function Table(props: {
                       {seat && !seat.connected && (
                         <small
                           className={seat.away ? "away" : "disconnected"}
-                          title={seatStatus(seat) ?? ""}
+                          title={
+                            seatStatus(seat, awaySecondsLeft(state, seat.seat, Date.now())) ?? ""
+                          }
                         >
                           {seat.away ? "away" : "offline"}
                         </small>

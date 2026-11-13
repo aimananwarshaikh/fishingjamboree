@@ -48,6 +48,10 @@ export interface ClientState {
   pending: string | null;
   /** The latest banner (round start, event card, game over); the UI hides it after a moment. */
   banner: Banner | null;
+  /** When the server will play for the deciding player, on this tab's clock (`ctx.now`); `null`: no turn timer. */
+  turnDeadline: number | null;
+  /** When `room` arrived, on this tab's clock: its seats' `awayInMs` count from here. */
+  roomAt: number;
 }
 
 export const initialState: ClientState = {
@@ -61,6 +65,8 @@ export const initialState: ClientState = {
   needsSync: false,
   pending: null,
   banner: null,
+  turnDeadline: null,
+  roomAt: 0,
 };
 
 export interface Context {
@@ -72,6 +78,30 @@ export interface Context {
   cardName?: (card: string) => string;
   /** Rounds in a game, for "Round 6 of 20". */
   rounds?: number;
+  /** This tab's clock in milliseconds, for the server's countdowns. Defaults to 0. */
+  now?: () => number;
+}
+
+/** A countdown from the server (milliseconds left when it was sent) as a time on this tab's clock. */
+function deadline(msLeft: number | null | undefined, ctx: Context): number | null {
+  return msLeft === null || msLeft === undefined ? null : (ctx.now?.() ?? 0) + msLeft;
+}
+
+/** Whole seconds until `at` (rounded up, never below 0), or `null`. */
+export function secondsUntil(at: number | null, now: number): number | null {
+  return at === null ? null : Math.max(0, Math.ceil((at - now) / 1000));
+}
+
+/** Seconds the deciding player has left before the server plays for them, or `null`. */
+export function turnSecondsLeft(state: ClientState, now: number): number | null {
+  return secondsUntil(state.turnDeadline, now);
+}
+
+/** Seconds a disconnected seat has left before it is away, or `null`. */
+export function awaySecondsLeft(state: ClientState, seat: SeatId, now: number): number | null {
+  const info = state.room?.seats.find((s) => s.seat === seat);
+  if (!info || info.awayInMs === null) return null;
+  return secondsUntil(state.roomAt + info.awayInMs, now);
 }
 
 /** The banner for an update's events, or `null` if none of them deserve one. */
@@ -108,6 +138,17 @@ function newerRoom(current: RoomInfo | null, incoming: RoomInfo): RoomInfo {
   return incoming;
 }
 
+/** `newerRoom`, and when the room was taken (its countdowns start then). */
+function takeRoom(
+  state: ClientState,
+  current: RoomInfo | null,
+  incoming: RoomInfo,
+  ctx: Context,
+): Pick<ClientState, "room" | "roomAt"> {
+  const room = newerRoom(current, incoming);
+  return { room, roomAt: room === incoming ? (ctx.now?.() ?? 0) : state.roomAt };
+}
+
 export function connectionChanged(state: ClientState, connection: Connection): ClientState {
   return { ...state, connection, pending: connection === "open" ? state.pending : null };
 }
@@ -138,9 +179,10 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       return {
         ...state,
         session,
-        room: newerRoom(state.session?.code === session.code ? state.room : null, msg.room),
+        ...takeRoom(state, state.session?.code === session.code ? state.room : null, msg.room, ctx),
         // A rejoin returns the current game; take it whole.
         game: msg.game,
+        turnDeadline: deadline(msg.game?.turnTimeLeftMs, ctx),
         pending: null,
         needsSync: false,
         notice: null,
@@ -149,7 +191,7 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       };
     }
     case "room":
-      return { ...state, room: newerRoom(state.room, msg.room) };
+      return { ...state, ...takeRoom(state, state.room, msg.room, ctx) };
     case "update": {
       const have = state.game?.seq ?? -1;
       if (msg.seq <= have) return state; // old or repeated
@@ -164,7 +206,8 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       });
       return {
         ...state,
-        game: { seq: msg.seq, view: msg.view },
+        game: { seq: msg.seq, view: msg.view, turnTimeLeftMs: msg.turnTimeLeftMs },
+        turnDeadline: deadline(msg.turnTimeLeftMs, ctx),
         log: addLog(state, texts, "event"),
         pending: null,
         notice: null,
@@ -176,8 +219,9 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       const take = msg.game !== null && msg.game.seq >= have;
       return {
         ...state,
-        room: newerRoom(state.room, msg.room),
+        ...takeRoom(state, state.room, msg.room, ctx),
         game: take ? msg.game : state.game,
+        turnDeadline: take ? deadline(msg.game?.turnTimeLeftMs, ctx) : state.turnDeadline,
         needsSync: false,
         pending: null,
       };

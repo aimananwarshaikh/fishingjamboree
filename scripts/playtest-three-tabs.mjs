@@ -13,7 +13,7 @@
  * Options (environment variables):
  *   WEB_URL      default http://localhost:5173
  *   SEED         default "playtest" (picks among the offered choices)
- *   GRACE=1      also close a tab and wait out the 60 s reconnect grace
+ *   GRACE=1      also close a tab and wait out the reconnect grace (60 s by default)
  *   HEADED=1     show the browser
  *
  * Besides the game it also checks: a refresh mid-game keeps the seat, a double
@@ -235,6 +235,12 @@ check(await waitAllSeq(pages, 0), "game started on all three tabs");
     new Set(seats).size === 3 && !seats.includes(null),
     `each tab is its own player (${seats.join(", ")})`,
   );
+  // P1-2: the turn text shows the turn timer on every tab.
+  const timers = await Promise.all(pages.map((p) => p.locator(".turn .timer").innerText()));
+  check(
+    timers.every((t) => /^\d+ s left/.test(t.trim())),
+    `the turn text shows the time left (${timers.map((t) => t.trim()).join(" | ")})`,
+  );
 }
 
 /** A new tab in the same browser: offers the saved seats, rejoins none by itself. */
@@ -403,6 +409,15 @@ while (stats.actions < MAX_ACTIONS) {
     const seat = await seatOf(gone);
     await gone.close();
     console.log(`.... closed ${seat}'s tab; waiting for the server to play for it`);
+    {
+      const tag = pages[0].locator(".disconnected").first();
+      await tag.waitFor({ timeout: 35000 });
+      const title = await tag.getAttribute("title");
+      check(
+        /^disconnected: \d+ s to come back$/.test(title ?? ""),
+        `the offline tag counts down the grace ("${title}")`,
+      );
+    }
     const seqAtClose = Math.max(...(await Promise.all(pages.map(seqOf))));
     // Keep playing the remaining seats; the server must act for the closed one.
     const end = Date.now() + 120000;

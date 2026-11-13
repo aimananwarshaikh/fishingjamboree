@@ -29,6 +29,22 @@ export interface SeatInfo {
    * server plays for them when they have to decide. Always `false` in the lobby.
    */
   away: boolean;
+  /**
+   * In a game, while the player is disconnected and not yet away: milliseconds
+   * until the server marks them away (their reconnect grace, capped by what is
+   * left of their budget). Counted when the message is sent; `null` otherwise.
+   */
+  awayInMs: number | null;
+}
+
+/** The room's time limits (docs/protocol.md §7). Fixed for the life of the room. */
+export interface RoomTimers {
+  /** How long a deciding player has before the server plays one action for them; `null`: no turn timer. */
+  turnTimeoutMs: number | null;
+  /** How long one disconnect may last before the player is away. */
+  reconnectGraceMs: number;
+  /** The most reconnect grace one player can use in a whole game. */
+  reconnectBudgetMs: number;
 }
 
 /** Everything public about a room. Sent whole each time; a higher `rev` is newer. */
@@ -41,6 +57,7 @@ export interface RoomInfo {
   seats: SeatInfo[];
   minPlayers: number;
   maxPlayers: number;
+  timers: RoomTimers;
   /** Goes up by one on every change to this object. */
   rev: number;
 }
@@ -49,6 +66,13 @@ export interface RoomInfo {
 export interface GameSnapshot {
   seq: number;
   view: PlayerView;
+  /**
+   * Milliseconds until the server plays for the deciding player (turn timer),
+   * counted when the message is sent: add it to the time it arrived. `null`
+   * when no turn timer runs (no timer set, the deciding player is away, the
+   * game is over).
+   */
+  turnTimeLeftMs: number | null;
 }
 
 /** An engine action without `player`: the server fills that in from the seat. */
@@ -114,7 +138,8 @@ export type ServerMessage =
   /**
    * To everyone in the room. `seq` 0 is the start of the game (`by` is `null`);
    * `seq` N carries the events of action N. `auto` marks an action the server
-   * chose for a disconnected player.
+   * chose for an away player or a player whose turn timer ran out.
+   * `turnTimeLeftMs` is as in `GameSnapshot`.
    */
   | {
       type: "update";
@@ -123,6 +148,7 @@ export type ServerMessage =
       auto: boolean;
       events: GameEvent[];
       view: PlayerView;
+      turnTimeLeftMs: number | null;
     }
   /** Reply to `sync`. */
   | { type: "snapshot"; room: RoomInfo; game: GameSnapshot | null }
