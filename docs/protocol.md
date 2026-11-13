@@ -14,7 +14,11 @@ Written in Session 5, stage 5a (2026-11-12). It replaces the sketch in `docs/arc
 
 - A room has a **code**: 4 letters from `BCDFGHJKMNPQRSTVWXZ` (no vowels, so no words; no `L`). Codes are matched in any case, ignoring spaces around them.
 - A room has **2 to 4 seats** (`minPlayers` and `maxPlayers` in `content/rules.json`). Seat ids are `p1` to `p4` and are the engine's player ids. A player who joins takes the lowest free seat.
-- Each seat has a **seat token**: a 128-bit random secret sent once, to its owner, in `welcome`. It proves who owns the seat when reconnecting. The client keeps it (for example in `localStorage`, with the room code).
+- Each seat has a **seat token**: a 128-bit random secret sent once, to its owner, in `welcome`. It proves who owns the seat when reconnecting. Where the web client keeps it (`apps/web/src/useGame.ts`, `savedSeats.ts`):
+  - **`sessionStorage`** (per tab): room code, seat and token. A refresh rejoins from here by itself.
+  - **`localStorage`** (shared by every tab of the browser): a list of saved seats (room code, seat, token, player name, when saved), one entry per room and seat, newest first, at most 10, dropped after 2 days. The start screen of a tab with no seat of its own _offers_ them ("Rejoin room KTBM as Ann"); nothing rejoins until the player clicks, so two tabs of one browser can still be two players. An entry is removed on `left`, on `bad-token` (that token) and on `room-not-found` (every seat of that room).
+  - **Rejoin link**: the lobby and the table show the page address with `#rejoin=CODE.TOKEN`. The token is in the fragment, so it is never sent to a web server or logged. Opening the link offers the seat in the same way and rejoins on click; the fragment is then removed from the address bar. The link is the player's own seat and must not be shared.
+  - After `replaced` (§6) a tab drops its `sessionStorage` seat and goes back to the start screen with a message, so neither a retry nor a refresh takes the seat back by itself.
 - A connection holds at most one seat.
 - A **name** is trimmed, inner whitespace is collapsed, and it must be 1 to 20 characters. Two players in a room cannot have the same name (ignoring case).
 - The **host** is the player who created the room. Only the host can start the game. If the host's seat is freed in the lobby, the lowest remaining seat becomes host.

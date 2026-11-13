@@ -275,3 +275,22 @@ button.helicopter {
 .players small.disconnected {
   background: #8a7a2a;
 }
+.rejoin-offers ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.rejoin-offers small {
+  margin-left: 4px;
+  opacity: 0.75;
+}
+.rejoin-link summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.rejoin-link input {
+  font-family: monospace;
+  font-size: 0.85rem;
+}

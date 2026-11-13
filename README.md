@@ -70,7 +70,11 @@ end turn, a player table, a round bar and an event log.
 
 The client connects to `ws://<page host>:8787`. To use another server, add `?server=ws://host:port`
 to the page address. Each tab keeps its own seat in `sessionStorage`, so a refresh rejoins the same
-seat and two tabs of one browser are two players.
+seat and two tabs of one browser are two players. Seats are also remembered by the browser
+(`localStorage`): after closing a tab, the start screen offers **Rejoin room KTBM as Ann**, and
+nothing rejoins until you click it. To move to another browser or device, copy the **Rejoin link**
+from the lobby or the table (`#rejoin=CODE.TOKEN`; it is your seat, so don't share it) and open it
+there; the old tab is told its seat was opened elsewhere and lets it go.
 
 The table shows whose turn it is ("Your turn: …" or "Waiting for Bob to …"), a banner when each round
 starts and when an event card is drawn, a dock shop panel when you dock, and a Helicopter button
