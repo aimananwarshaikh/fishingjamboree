@@ -202,12 +202,12 @@ The game ends after round 20. Each player counts their cash and subtracts $100 f
 
 ## Zones (from `assets/board/board-zones.jpg`)
 
-`assets/board/board-zones.jpg` is used only to tell the three zones apart (colours below). Everything else (tiles, island, docks, fishing spots, risk areas) is traced from the original board art. Zones apply to the +1 Fish to All Catch events. Names are proposed, not final.
+`assets/board/board-zones.jpg` is used only to tell the three zones apart (colours below). Everything else (tiles, island, docks, fishing spots, risk areas) is traced from the original board art. Zones apply to the +1 Fish to All Catch events. Names chosen 2026-11-13 at the designer's request (calm, risk-free fishing spots); the designer may still edit them.
 
-| Zone | Colour     | Area                                                                    | Working name   |
+| Zone | Colour     | Area                                                                    | Name           |
 | ---- | ---------- | ----------------------------------------------------------------------- | -------------- |
 | 1    | Teal       | Shallows by the beach and the starting docks (bottom)                   | Pearl Shallows |
-| 2    | Light blue | Middle: around the island and Shipwreck Bay, and the right-hand channel | Kelp Reach     |
-| 3    | Dark blue  | Deep water: top and top-left, around the cruise ship dock               | Windward Deep  |
+| 2    | Light blue | Middle: around the island and Shipwreck Bay, and the right-hand channel | Coral Haven    |
+| 3    | Dark blue  | Deep water: top and top-left, around the cruise ship dock               | Sapphire Deep  |
 
-Shipwreck Bay and Davy Jones' Locker are the two risk areas (grey). Alternate names: Gull Banks, Mistral Run, Coral Narrows, Saltmarsh Sound, Open Fathoms.
+Shipwreck Bay and Davy Jones' Locker are the two risk areas (grey). Other names considered: Kelp Reach, Windward Deep, Gull Banks, Lagoon Glades, Silverfin Sound, Open Fathoms.
