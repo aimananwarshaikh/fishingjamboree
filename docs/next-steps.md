@@ -80,11 +80,11 @@ Answers received 2026-11-13 are recorded under each question (also in the notes 
 1. **The left starting dock has one exit.** (3,19) opens only onto (3,18), so a ship ending on (3,18) shuts the dock in both directions for a turn. The right dock has two exits. Add an exit, or leave it? (Review P2-6; 280 stuck turns in about 60,000.)
    - **Answer:** keep it as it is unless playtests show a major problem. Closed.
 2. **A player on $0 beats anyone holding fine tokens.** Totals can be negative. Is that intended, or should fines be capped or scored differently? (929 of 1,000 random games had a negative total.)
-   - **Answer (partial):** the designer agrees that $0 beats $0 with fine tokens, and expects a player with $300 cash and 2 fine tokens to beat a $0 player (net +$100). **Still open:** under the rulebook that case cannot happen, because fines are paid from cash first and tokens are taken only for the part that cannot be paid. So a player with fine tokens always has $0 cash and a negative total, and unsold fish are worth nothing at the end. The real case to decide: Player 1 never fishes and ends on $0; Player 2 fished all game, was fined $200 with no cash, and never docked again, so ends on −$200 with fish on board. Player 1 wins. Is that intended?
+   - **Answer:** keep the rule as written. A player holding fine tokens always has $0 cash (fines are paid from cash first), unsold fish are worth nothing at the end, so a player who never fishes ($0) beats one who ends on −$200 with fish on board. Intended: fishing is a risk and you must get back to a dock. Playtests will show if it feels wrong. Closed.
 3. **What should the server do for an away player?** (P2-3; today they end near −$220.)
    - **Answer:** do not play for them. When the turn timer runs out, the turn passes to the next player and counts as a missed turn. The host can kick a player. As a backup, a player who misses 2 or 3 turns in a row is kicked automatically. If (later) there are bots, the host chooses whether a bot takes the kicked player's place or the game goes on without them. If only one player is left, they win at once.
 4. **Turn timer.** How long, and can the host kick or pause?
-   - **Answer:** 60 or 90 seconds **per turn** (recommend one); the host can kick players. This replaces the "one automatic action" choice built in P1-2 (see B1 below). Details still to settle with the designer: see "P1-2 rework" under B1.
+   - **Answer:** **90 seconds per whole turn** (roll, move, shop). The host can kick players. This replaces the "one automatic action" choice built in P1-2 (see "P1-2 rework" under B1).
 5. Information only, no decision needed unless you disagree: missed turns for players 3 and 4 never happened in 1,000 random games; the Golden Fish was lost to a full ship about three times as often as it was taken.
 6. **Final zone names.**
    - **Answer:** choose names that sound like calm, risk-free fishing spots; the designer may edit them later. Done: Pearl Shallows (1), Coral Haven (2), Sapphire Deep (3), in `content/board.json` and the rulebook. The board art's labels still read "SAFE ZONE 3" and need the designer's update. The event cards still say "Zone 1/2/3".
@@ -96,7 +96,11 @@ Answers received 2026-11-13 are recorded under each question (also in the notes 
 Phases are in `docs/build-plan.md` section 5.
 
 - **B1 (review fixes):**
-  - **P1-2 rework (designer answers to questions 3 and 4):** missed turns instead of automatic actions, a host kick, an automatic kick after missed turns in a row, and an automatic win for the last player left. This is a rule change (engine, rulebook) as well as a server change. It replaces P2-3 (what the server plays for an away player). Open details are listed in the PR discussion and must be settled before building.
+  - **P1-2 rework (designer answers to questions 3 and 4):** missed turns instead of automatic actions, a host kick, an automatic kick after missed turns in a row, and an automatic win for the last player left. This is a rule change (engine, rulebook) as well as a server change. It replaces P2-3 (what the server plays for an away player). Decided with the designer on 2026-11-13:
+    - 90 seconds per whole turn, from the start of the turn.
+    - When it runs out, nothing more happens that turn: no move, no card, no purchase; the ship stays where it is; the turn passes and counts as missed. A ship that must be placed (setup, late entry, Sinking Boat) is placed by the server on the first free dock, since placing cannot be skipped.
+    - 3 missed turns in a row: the player is kicked automatically. The host can kick at any time.
+    - Proposed defaults, not objected to: a kicked player's ship leaves the board, they are shown as "left" in the results and cannot win, and they cannot rejoin; an away player's turn is missed after the short delay instead of the full 90 seconds; with one player left the game ends and they win; a bot taking a kicked player's place waits for B6.
   - Rooms are in memory only (P2-5).
   - P1-2 follow-ups, if the designer wants them (question 4): away after a timeout, a host pause or kick (kick belongs with B3), a per-room timer length chosen in the lobby (the room already holds its own `timers`).
 - **B2 (real UI):**
