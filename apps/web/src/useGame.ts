@@ -1,5 +1,5 @@
 /** Connects the socket to the store: one hook that gives the UI state and commands. */
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Action } from "@fishingjamboree/engine";
 import { PROTOCOL_VERSION } from "../../../packages/server/src/protocol";
 import type {
@@ -18,6 +18,8 @@ import {
   resetSession,
 } from "./store";
 import type { ClientState, Connection, Context, Session } from "./store";
+import { loadSavedSeats, parseRejoinFragment, removeSeat, saveSeat } from "./savedSeats";
+import type { RejoinTarget, SavedSeat, StorageLike } from "./savedSeats";
 
 type Step =
   | { t: "server"; msg: ServerMessage }
@@ -29,7 +31,9 @@ type Step =
 const STORAGE_KEY = "fishingjamboree.session";
 
 // sessionStorage, not localStorage: every tab is its own player, so two tabs of
-// one browser can sit at the same table.
+// one browser can sit at the same table. A refresh rejoins from here by itself.
+// Seats are also kept in localStorage (savedSeats.ts), but only offered on the
+// start screen, never rejoined without a click.
 function loadSession(): Session | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -45,6 +49,46 @@ function saveSession(session: Session | null) {
   } catch {
     /* storage unavailable: reconnecting by hand still works */
   }
+}
+
+function shared(): StorageLike | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+const savedSeats = (): SavedSeat[] => {
+  const s = shared();
+  return s ? loadSavedSeats(s, Date.now()) : [];
+};
+
+/** A rejoin link the page was opened with (`#rejoin=CODE.TOKEN`), if any. */
+function linkInAddress(): RejoinTarget | null {
+  return parseRejoinFragment(window.location.hash);
+}
+/** Takes the seat token out of the address bar (and so out of history and bookmarks). */
+function clearLinkFromAddress() {
+  if (!window.location.hash) return;
+  try {
+    window.history.replaceState(
+      window.history.state,
+      "",
+      window.location.pathname + window.location.search,
+    );
+  } catch {
+    window.location.hash = "";
+  }
+}
+
+/** A seat the start screen can offer to rejoin. */
+export interface RejoinOffer {
+  code: string;
+  seatToken: string;
+  /** The player's name, when this browser has seen it (a link alone does not carry it). */
+  name: string | null;
+  /** Where it came from: this browser's saved seats, or a rejoin link. */
+  from: "saved" | "link";
 }
 
 export function serverUrl(): string {
@@ -94,11 +138,17 @@ export function useGame(content: Content) {
     stop: false,
   });
   const counter = useRef(0);
+  /** The `rejoin` in flight, so a refused token can be forgotten. */
+  const attempt = useRef<RejoinTarget | null>(null);
+  const [saved, setSaved] = useState<SavedSeat[]>(savedSeats);
+  const [link, setLink] = useState<RejoinTarget | null>(linkInAddress);
 
   const open = useCallback((first: ClientMessage) => {
     socket.current?.close();
     retry.current.stop = false;
     dispatch({ t: "connection", c: "connecting" });
+    attempt.current =
+      first.type === "rejoin" ? { code: first.code, seatToken: first.seatToken } : null;
     const ws = new WebSocket(serverUrl());
     socket.current = ws;
     ws.onopen = () => {
@@ -115,17 +165,53 @@ export function useGame(content: Content) {
       }
       if (msg.type === "error") {
         if (msg.code === "bad-token" || msg.code === "room-not-found") {
-          // The saved seat is gone (room deleted or seat freed): start over.
+          // The saved seat is gone (room deleted or seat freed): start over,
+          // and stop offering it.
           saveSession(null);
+          const tried = attempt.current;
+          const store = shared();
+          if (tried && store)
+            setSaved(
+              removeSeat(
+                store,
+                tried.code,
+                msg.code === "bad-token" ? tried.seatToken : null,
+                Date.now(),
+              ),
+            );
           retry.current.stop = true;
           dispatch({ t: "reset", notice: msg.message });
           return;
         }
-        if (msg.code === "replaced") retry.current.stop = true;
+        if (msg.code === "replaced") {
+          // The seat was opened in another tab or on another device. Let it go:
+          // no retry, and a refresh of this tab will not take it back by itself
+          // (the saved seat stays offered on the start screen).
+          retry.current.stop = true;
+          saveSession(null);
+          setSaved(savedSeats());
+        }
       }
-      if (msg.type === "welcome")
+      if (msg.type === "welcome") {
         saveSession({ code: msg.room.code, seat: msg.seat, seatToken: msg.seatToken });
-      if (msg.type === "left") saveSession(null);
+        const name = msg.room.seats.find((s) => s.seat === msg.seat)?.name ?? msg.seat;
+        const store = shared();
+        if (store)
+          setSaved(
+            saveSeat(
+              store,
+              { code: msg.room.code, seat: msg.seat, seatToken: msg.seatToken, name },
+              Date.now(),
+            ),
+          );
+      }
+      if (msg.type === "left") {
+        const session = stateRef.current.session;
+        const store = shared();
+        if (session && store)
+          setSaved(removeSeat(store, session.code, session.seatToken, Date.now()));
+        saveSession(null);
+      }
       dispatch({ t: "server", msg });
     };
     ws.onclose = () => {
@@ -147,9 +233,10 @@ export function useGame(content: Content) {
     };
   }, []);
 
-  // Pick up a saved seat when the page loads (a refresh keeps the player's seat).
+  // Pick up this tab's seat when the page loads (a refresh keeps the player's
+  // seat). A rejoin link in the address wins: it is only offered, not followed.
   useEffect(() => {
-    const session = loadSession();
+    const session = linkInAddress() ? null : loadSession();
     if (session) {
       open({
         type: "rejoin",
@@ -178,8 +265,34 @@ export function useGame(content: Content) {
     if (state.needsSync) send({ type: "sync" });
   }, [state.needsSync, send]);
 
+  const rejoin = useCallback(
+    (offer: RejoinTarget) => {
+      if (offer.code === link?.code && offer.seatToken === link.seatToken) {
+        clearLinkFromAddress();
+        setLink(null);
+      }
+      open({ type: "rejoin", v: PROTOCOL_VERSION, code: offer.code, seatToken: offer.seatToken });
+    },
+    [open, link],
+  );
+
+  // Offered on the start screen only: a link first, then saved seats, newest
+  // first. Nothing is offered while this tab is rejoining its own seat.
+  const offers: RejoinOffer[] = [];
+  if (link) {
+    const known = saved.find((s) => s.code === link.code && s.seatToken === link.seatToken);
+    offers.push({ ...link, name: known?.name ?? null, from: "link" });
+  }
+  if (!state.session && !loadSession()) {
+    for (const s of saved)
+      if (!offers.some((o) => o.seatToken === s.seatToken))
+        offers.push({ code: s.code, seatToken: s.seatToken, name: s.name, from: "saved" });
+  }
+
   return {
     state,
+    offers,
+    rejoin,
     create: (name: string) => open({ type: "create", v: PROTOCOL_VERSION, name }),
     join: (code: string, name: string) => open({ type: "join", v: PROTOCOL_VERSION, code, name }),
     start: () => send({ type: "start" }),

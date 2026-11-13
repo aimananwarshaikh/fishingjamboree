@@ -18,11 +18,15 @@
  *
  * Besides the game it also checks: a refresh mid-game keeps the seat, a double
  * click on a button is quiet, a 4th player can join a lobby, and a phone-width
- * tab (390 px) has no horizontal scroll and tappable buttons.
+ * tab (390 px) has no horizontal scroll and tappable buttons. Rejoining (P1-1):
+ * a closed tab's player opens a new tab and rejoins from the start-screen offer
+ * (a new tab never rejoins by itself, so the three tabs stay three players);
+ * and a player opens their rejoin link in a fresh browser context, while the
+ * old tab is told its seat was opened elsewhere and does not take it back.
  *
  * Exits 1 on any failed check or any console/page error.
  */
-/* global setTimeout, document, window -- document and window are used inside page.evaluate */
+/* global setTimeout, URL, document, window -- document and window are used inside page.evaluate */
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -59,6 +63,7 @@ function check(ok, what) {
 }
 
 const browser = await playwright.chromium.launch({ headless: process.env.HEADED !== "1" });
+const extraContexts = [];
 const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
 
 function watch(page, label) {
@@ -224,6 +229,106 @@ await phoneCtx.close();
 // Start.
 await pages[0].getByRole("button", { name: "Start game" }).click();
 check(await waitAllSeq(pages, 0), "game started on all three tabs");
+{
+  const seats = await Promise.all(pages.map(seatOf));
+  check(
+    new Set(seats).size === 3 && !seats.includes(null),
+    `each tab is its own player (${seats.join(", ")})`,
+  );
+}
+
+/** A new tab in the same browser: offers the saved seats, rejoins none by itself. */
+async function closeAndRejoinFromOffer(i) {
+  const old = pages[i];
+  const seat = await seatOf(old);
+  const name = names[i];
+  await old.close();
+  console.log(`.... closed ${name}'s tab (${seat}); opening a new tab`);
+  const page = await openTab(`${name}(new tab)`);
+  const offer = page.getByRole("button", { name: `Rejoin room ${code} as ${name}` });
+  await offer.waitFor({ timeout: 5000 });
+  const offered = await page.locator(".rejoin-offers button").allInnerTexts();
+  await page.waitForTimeout(800);
+  check(
+    (await page.locator("[data-seq]").count()) === 0,
+    `a new tab offers saved seats (${offered.join(" / ")}) and rejoins none by itself`,
+  );
+  await offer.click();
+  await page.locator("[data-seq]").waitFor({ timeout: 8000 });
+  const after = await seatOf(page);
+  const seq = Math.max(...(await Promise.all(pages.filter((p) => p !== old).map(seqOf))));
+  check(
+    after === seat && (await seqOf(page)) >= seq,
+    `${name} rejoins from the offer in a new tab (${seat} → ${after})`,
+  );
+  pages[i] = page;
+  // The others see the seat connected again.
+  const others = pages.filter((p) => p !== page);
+  const back = await others[0]
+    .waitForFunction(
+      () => document.querySelectorAll(".players .disconnected, .players .away").length === 0,
+      null,
+      { timeout: 5000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  check(back, `the others see ${name} back online`);
+}
+
+/** The rejoin link, opened in a fresh browser context (another browser or device). */
+async function rejoinByLink(i) {
+  const old = pages[i];
+  const seat = await seatOf(old);
+  const name = names[i];
+  const link = await old.getByLabel("Your rejoin link").inputValue();
+  check(
+    link.includes(`#rejoin=${code}.`) && !link.split("#")[0].includes(code),
+    "the rejoin link carries the seat in the fragment only",
+  );
+  const fresh = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  extraContexts.push(fresh);
+  const page = await fresh.newPage();
+  watch(page, `${name}(link)`);
+  await page.goto(link);
+  const offer = page.getByRole("button", { name: `Rejoin room ${code}` });
+  await offer.waitFor({ timeout: 5000 });
+  await page.waitForTimeout(800);
+  check(
+    (await page.locator("[data-seq]").count()) === 0 &&
+      (await page.locator(".rejoin-offers button").count()) === 1,
+    "opening the rejoin link offers the seat and waits for a click",
+  );
+  await offer.click();
+  await page.locator("[data-seq]").waitFor({ timeout: 8000 });
+  check((await seatOf(page)) === seat, `${name} rejoins by link in another browser (${seat})`);
+  check(
+    new URL(page.url()).hash === "",
+    `the link is removed from the address bar (${page.url()})`,
+  );
+  // The old tab is replaced: start screen, a clear message, and it stays put.
+  await old.locator(".notice").waitFor({ timeout: 5000 });
+  const notice = await old.locator(".notice").innerText();
+  await old.waitForTimeout(3000);
+  check(
+    /opened in another tab or on another device/.test(notice) &&
+      (await old.locator("[data-seq]").count()) === 0,
+    `the old tab says its seat was opened elsewhere and leaves the table ("${notice.split(".")[0]}")`,
+  );
+  check(
+    (await seatOf(page)) === seat && (await page.locator(".notice").count()) === 0,
+    "the old tab does not take the seat back",
+  );
+  // A refresh of the old tab offers the seat but does not take it.
+  await old.reload();
+  await old.locator(".rejoin-offers").waitFor({ timeout: 5000 });
+  await old.waitForTimeout(800);
+  check(
+    (await old.locator("[data-seq]").count()) === 0 && (await seatOf(page)) === seat,
+    "a refresh of the old tab offers the seat and does not take it",
+  );
+  await old.close();
+  pages[i] = page;
+}
 
 // ---------------------------------------------------------------------------
 // Play. Mid-game checks happen at fixed action numbers.
@@ -231,6 +336,8 @@ let refreshed = false;
 let doubleClicked = false;
 let phoneChecked = false;
 let graceDone = !GRACE;
+let offerRejoined = false;
+let linkRejoined = false;
 let lastSeq = 0;
 
 while (stats.actions < MAX_ACTIONS) {
@@ -249,6 +356,18 @@ while (stats.actions < MAX_ACTIONS) {
       seatBefore !== null && seatBefore === seatAfter && seqAfter >= seqBefore,
       `refresh mid-game keeps the seat (${seatBefore} → ${seatAfter}, seq ${seqBefore} → ${seqAfter})`,
     );
+  }
+
+  // Close a tab and rejoin from the offer in a new tab of the same browser.
+  if (!offerRejoined && stats.actions >= 25) {
+    offerRejoined = true;
+    await closeAndRejoinFromOffer(1);
+  }
+
+  // Open the rejoin link in another browser.
+  if (!linkRejoined && stats.actions >= 35) {
+    linkRejoined = true;
+    await rejoinByLink(2);
   }
 
   // Phone width on the table screen: open a 4th view of seat p1's game? A seat

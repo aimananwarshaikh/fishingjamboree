@@ -120,6 +120,11 @@ export function dismissNotice(state: ClientState): ClientState {
   return { ...state, notice: null };
 }
 
+/** What a tab shows when its seat was opened somewhere else (`replaced`). */
+export const REPLACED_NOTICE =
+  "Your seat was opened in another tab or on another device, so this tab has let it go. " +
+  "Play on there, or rejoin below to take it back here.";
+
 /** The player left, or the saved seat no longer works: back to the start screen. */
 export function resetSession(state: ClientState, notice: string | null = null): ClientState {
   return { ...initialState, connection: state.connection, notice };
@@ -185,6 +190,9 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
         notice: msg.error.code === "stale" ? null : msg.error.message,
       };
     case "error":
+      // The seat now belongs to a newer connection: stop showing a table this
+      // tab can no longer play at, and say why (docs/protocol.md §6).
+      if (msg.code === "replaced") return resetSession(state, REPLACED_NOTICE);
       return {
         ...state,
         notice: msg.message,

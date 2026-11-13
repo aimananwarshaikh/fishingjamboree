@@ -7,7 +7,7 @@ import { PROTOCOL_VERSION as V } from "../../../packages/server/src/protocol";
 import type { ClientMessage, RoomInfo, ServerMessage } from "../../../packages/server/src/protocol";
 import { loadBundledContent } from "./content";
 import { describeEvent } from "./describe";
-import { bannerFor, initialState, intentSent, onServerMessage } from "./store";
+import { REPLACED_NOTICE, bannerFor, initialState, intentSent, onServerMessage } from "./store";
 import type { ClientState, Context } from "./store";
 
 const content = loadBundledContent();
@@ -207,6 +207,40 @@ describe("three tabs (stage 6b)", () => {
     expect(log.some((t) => t.startsWith("Bob") && t.endsWith("(auto)"))).toBe(false);
     // The last update showed the game-over banner.
     expect(ann.state().banner?.title).toBe("Game over");
+  });
+});
+
+describe("rejoin from another tab or device (P1-1)", () => {
+  it("a new tab takes the seat with the saved token; the old tab lets it go and gets nothing more", () => {
+    const { tab } = table();
+    const ann = tab("a");
+    const bob = tab("b");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    ann.send({ type: "start" });
+    const bySeat = { p1: ann, p2: bob } as Record<string, ReturnType<typeof tab>>;
+    for (let i = 0; i < 5; i++) bySeat[ann.state().game!.view.phase.actors[0]!]!.actFirst();
+    const token = ann.state().session!.seatToken;
+    const seq = ann.state().game!.seq;
+
+    // Ann opens the rejoin link on a phone while the laptop tab is still open.
+    const phone = tab("a-phone");
+    phone.send({ type: "rejoin", v: V, code: "bcdf", seatToken: token });
+    expect(phone.state().session).toEqual({ code: "BCDF", seat: "p1", seatToken: token });
+    expect(phone.state().game?.seq).toBe(seq);
+
+    // The old tab is back on the start screen with a clear message.
+    expect(ann.state().session).toBeNull();
+    expect(ann.state().game).toBeNull();
+    expect(ann.state().notice).toBe(REPLACED_NOTICE);
+
+    // Play goes on from the phone; the old tab hears nothing more.
+    bySeat.p1 = phone;
+    for (let i = 0; i < 5; i++) bySeat[phone.state().game!.view.phase.actors[0]!]!.actFirst();
+    expect(phone.state().game!.seq).toBe(seq + 5);
+    expect(bob.state().game!.seq).toBe(seq + 5);
+    expect(ann.state().game).toBeNull();
+    expect(bob.state().room!.seats[0]).toMatchObject({ name: "Ann", connected: true });
   });
 });
 

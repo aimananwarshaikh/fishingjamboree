@@ -6,6 +6,8 @@ import { Board, playerColor } from "./Board";
 import { describeAction, phaseTask, seatStatus, upgradeText } from "./describe";
 import { loadBundledContent } from "./content";
 import { useGame } from "./useGame";
+import type { RejoinOffer } from "./useGame";
+import { rejoinLink } from "./savedSeats";
 import type { Banner, ClientState } from "./store";
 
 const content = loadBundledContent();
@@ -34,7 +36,13 @@ export function App() {
         </p>
       )}
       {!state.session || !state.room ? (
-        <Start busy={state.connection === "connecting"} onCreate={game.create} onJoin={game.join} />
+        <Start
+          busy={state.connection === "connecting"}
+          offers={game.offers}
+          onRejoin={game.rejoin}
+          onCreate={game.create}
+          onJoin={game.join}
+        />
       ) : state.room.status === "lobby" || !state.game ? (
         <Lobby state={state} room={state.room} onStart={game.start} onLeave={game.leave} />
       ) : (
@@ -62,8 +70,69 @@ function BannerView({ banner }: { banner: Banner | null }) {
   );
 }
 
+/**
+ * Seats this browser held, or a rejoin link the page was opened with. Only a
+ * click rejoins: two tabs of one browser share these, and each can be its own
+ * player.
+ */
+function RejoinOffers(props: {
+  offers: RejoinOffer[];
+  busy: boolean;
+  onRejoin: (o: RejoinOffer) => void;
+}) {
+  if (props.offers.length === 0) return null;
+  return (
+    <section className="card rejoin-offers">
+      <h2>Back to a game?</h2>
+      <ul>
+        {props.offers.map((o) => (
+          <li key={o.seatToken}>
+            <button disabled={props.busy} onClick={() => props.onRejoin(o)}>
+              Rejoin room {o.code}
+              {o.name ? ` as ${o.name}` : ""}
+            </button>
+            {o.from === "link" && <small>from your rejoin link</small>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The player's own rejoin link, to open their seat in another browser or device. */
+function RejoinLinkBox({ code, seatToken }: { code: string; seatToken: string }) {
+  const link = rejoinLink(window.location.href, code, seatToken);
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard
+      ?.writeText(link)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+  return (
+    <details className="rejoin-link">
+      <summary>Rejoin link</summary>
+      <p>
+        Opens <b>your seat</b> in another browser or on another device, or after closing this tab.
+        It is yours alone: do not share it. Anyone with it can play as you.
+      </p>
+      <input
+        readOnly
+        value={link}
+        aria-label="Your rejoin link"
+        onFocus={(e) => e.currentTarget.select()}
+      />
+      <button className="secondary" onClick={copy}>
+        {copied ? "Copied" : "Copy link"}
+      </button>
+    </details>
+  );
+}
+
 function Start(props: {
   busy: boolean;
+  offers: RejoinOffer[];
+  onRejoin: (o: RejoinOffer) => void;
   onCreate: (name: string) => void;
   onJoin: (code: string, name: string) => void;
 }) {
@@ -71,31 +140,34 @@ function Start(props: {
   const [code, setCode] = useState("");
   const ready = name.trim().length > 0 && !props.busy;
   return (
-    <section className="card">
-      <label>
-        Your name
-        <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} autoFocus />
-      </label>
-      <button disabled={!ready} onClick={() => props.onCreate(name)}>
-        Create a room
-      </button>
-      <hr />
-      <label>
-        Room code
-        <input
-          value={code}
-          maxLength={4}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          autoCapitalize="characters"
-        />
-      </label>
-      <button
-        disabled={!ready || code.trim().length !== 4}
-        onClick={() => props.onJoin(code, name)}
-      >
-        Join room
-      </button>
-    </section>
+    <>
+      <RejoinOffers offers={props.offers} busy={props.busy} onRejoin={props.onRejoin} />
+      <section className="card">
+        <label>
+          Your name
+          <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} autoFocus />
+        </label>
+        <button disabled={!ready} onClick={() => props.onCreate(name)}>
+          Create a room
+        </button>
+        <hr />
+        <label>
+          Room code
+          <input
+            value={code}
+            maxLength={4}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            autoCapitalize="characters"
+          />
+        </label>
+        <button
+          disabled={!ready || code.trim().length !== 4}
+          onClick={() => props.onJoin(code, name)}
+        >
+          Join room
+        </button>
+      </section>
+    </>
   );
 }
 
@@ -146,6 +218,9 @@ function Lobby(props: {
       <button className="secondary" onClick={props.onLeave}>
         Leave
       </button>
+      {state.session && (
+        <RejoinLinkBox code={state.session.code} seatToken={state.session.seatToken} />
+      )}
     </section>
   );
 }
@@ -349,6 +424,10 @@ function Table(props: {
             </button>
           </div>
         )}
+
+        <div className="card">
+          <RejoinLinkBox code={state.session!.code} seatToken={state.session!.seatToken} />
+        </div>
 
         <div className="card log">
           <h3>Log</h3>
