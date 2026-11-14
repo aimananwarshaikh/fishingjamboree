@@ -237,6 +237,14 @@ export function invariantProblems(state: GameState, c: Content = content): strin
     if (p.fineTokens > 0 && p.cash !== 0) out.push(`${p.id}: fine tokens and cash`);
     if (p.fineTokens < 0) out.push(`${p.id}: negative fine tokens`);
   }
+  for (const p of state.players) {
+    if (p.removed && p.position !== null) out.push(`${p.id}: removed but on the board`);
+    if (p.removed && state.phase.actors.includes(p.id)) out.push(`${p.id}: removed but deciding`);
+    if (!p.removed && (p.missedTurns < 0 || p.missedTurns >= c.rules.missedTurnsBeforeRemoval))
+      out.push(`${p.id}: missed turns out of range`);
+  }
+  if (state.phase.kind !== "gameOver" && state.players.filter((p) => !p.removed).length < 2)
+    out.push("fewer than two players left but the game goes on");
   const tiles = state.players.flatMap((p) => (p.position === null ? [] : [p.position]));
   if (new Set(tiles).size !== tiles.length) out.push("two ships share a tile");
   for (const deck of ["safe", "risk", "event"] as const) {

@@ -171,7 +171,7 @@ describe("a whole game over WebSockets", () => {
     expect(new Set(ids).size).toBe(opened);
   });
 
-  it("plays for a player who stays away, on the tick timer, until they rejoin", async () => {
+  it("misses the turn of a player who stays away, on the tick timer, until they rejoin", async () => {
     const { connect } = await start(
       { rateBurst: 1e6, ratePerSecond: 1e6 },
       { reconnectGraceMs: 40, autoActionDelayMs: 5 },
@@ -183,10 +183,10 @@ describe("a whole game over WebSockets", () => {
     bob.ws.close();
     await ann.waitFor("room", (m) => !m.room.seats[1]!.connected);
 
-    // Ann plays her turns; the server plays Bob's once his grace is over.
+    // Ann plays her turns; the server misses Bob's once his grace is over.
     const autos = () => ann.messages.filter((m) => m.type === "update" && m.auto).length;
-    for (let guard = 0; autos() < 6; guard += 1) {
-      if (guard > 500) throw new Error("the server never played for Bob");
+    for (let guard = 0; autos() < 1; guard += 1) {
+      if (guard > 500) throw new Error("the server never missed a turn for Bob");
       const v = ann.view!;
       const seq = v.actionCount;
       if (v.phase.actors[0] === "p1") {
@@ -197,6 +197,7 @@ describe("a whole game over WebSockets", () => {
     }
     const auto = ann.messages.find((m) => m.type === "update" && m.auto);
     expect(auto).toMatchObject({ by: "p2", auto: true });
+    expect(auto?.type === "update" && auto.events[0]).toEqual({ type: "turnMissed", player: "p2" });
 
     // Bob rejoins and gets the current game.
     const back = await connect();
@@ -286,7 +287,7 @@ describe("transport", () => {
     fresh.send({ type: "sync" });
     const snapshot = await fresh.waitFor("snapshot");
     expect(snapshot.room.seats).toEqual([
-      { seat: "p1", name: "Ann", connected: true, away: false },
+      { seat: "p1", name: "Ann", connected: true, away: false, removed: false, awayInMs: null },
     ]);
   });
 

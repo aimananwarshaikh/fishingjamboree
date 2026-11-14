@@ -41,7 +41,7 @@ Plain JSON on each player, updated where the event already happens. This is the 
 | `goldenFishTaken`    | Golden Fish claimed.                                                                                    |
 | `turnsMissed`        | Turns skipped because blocked. Not for awards: for the simulator only.                                  |
 
-Cards the server plays for an away player count like any other play. That is a known weakness: an away player's stats are not "chosen". A player who is away when the game ends cannot win awards (decided).
+Since the online play rules (B1, P1-2), an away player's turns are missed, not played for them, so their stats only come from their own turns. A removed player (see `docs/rulebook.md`, Online play) leaves the board and cannot win, so they get no awards either. A player who is away when the game ends cannot win awards (decided).
 
 ## Candidate pool
 
@@ -143,7 +143,7 @@ The ending should be exciting: anything could happen, and a close game can be de
 3. **Ties:** every tied player gets the full amount. A stat of 0 never wins (nobody wins Boot Lord with no boots).
 4. **Pool:** keep Landlubber, and keep Homebody at the smallest tier ($100). **Light Catch is dropped** (it rewards doing badly). Everything else in the pool stays as drafted. The pool is still a draft and can be edited in `content/awards.json`.
 5. **Amounts are per award**, from about $100 to $500, tiered as above and tuned in simulation (B6).
-6. **Away players cannot win awards.** A player who is away when the game ends is not eligible. Their stats still count for comparison, so they can still be the "winner" of a race and the award then goes unpaid (no second place).
+6. **Away players cannot win awards.** A player who is away when the game ends is not eligible, and a removed player already cannot win. Their stats still count for comparison, so they can still be the "winner" of a race and the award then goes unpaid (no second place).
 7. **A Sinking Boat arrival does not count as a dock visit** for Dock Regular. Neither does a Helicopter sale: only a chosen docking counts.
 8. **No cap on how many awards one player wins.** The budget rule (a combined value cap on the 3 drawn awards) does the job instead.
 9. **Name: Golden Hook Awards.** Chosen because it sounds like a trophy at a fishing contest, and it doesn't clash with the Golden Fish ($1000 token). In the UI, each award is "the Golden Hook for Daredevil" and so on. The content file is `content/awards.json` and the engine event is `awardGiven`. (The designer asked for a name that works for the project; change it if it doesn't feel right.)

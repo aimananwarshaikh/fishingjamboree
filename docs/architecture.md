@@ -44,7 +44,7 @@ replay(content: Content, log: ReplayLog): GameUpdate
 
 - `applyAction` treats its input as immutable and returns a new state. It applies the action and then runs every automatic step up to the next decision, so one action can produce many events (move, draw, catch, end of turn, end of round, event draw, next turn start).
 - `getLegalActions` returns complete actions. Callers never build an action by hand; they pick one from the list. The largest list is move destinations (a few dozen at most).
-- `applyAction` accepts an action if and only if it is in `getLegalActions` for that player.
+- `applyAction` accepts an action if and only if it is in `getLegalActions` for that player, with two exceptions: the **system actions** `missTurn` (only by the deciding player) and `removePlayer` (any player still in the game). They are never in `getLegalActions` and never accepted from a client; only the server applies them (turn timer, away players, host kick). `getLegalActions` returns `PlayerAction[]`; `Action = PlayerAction | SystemAction`. Added 2026-11-13 for online play (rulebook "Online play").
 
 ## 4. State, phases and turn flow
 

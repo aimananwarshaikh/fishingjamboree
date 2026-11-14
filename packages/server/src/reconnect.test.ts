@@ -9,6 +9,8 @@ const GRACE = DEFAULT_CONFIG.reconnectGraceMs;
 const DELAY = DEFAULT_CONFIG.autoActionDelayMs;
 const LOBBY_GRACE = DEFAULT_CONFIG.lobbyGraceMs;
 const IDLE = DEFAULT_CONFIG.roomIdleTtlMs;
+/** These tests are about the reconnect grace alone; the turn timer has its own (turnTimer.test.ts). */
+const NO_TIMER = { turnTimeoutMs: null };
 
 const seatIndex = (seat: string) => Number(seat.slice(1)) - 1;
 
@@ -193,8 +195,8 @@ describe("disconnect policy: lobby", () => {
 });
 
 describe("disconnect policy: in a game", () => {
-  it("waits the reconnect grace for the deciding player, then plays for them", () => {
-    const h = harness();
+  it("waits the reconnect grace for the deciding player, then misses their turns", () => {
+    const h = harness(NO_TIMER);
     const { code } = h.started(3);
     const seat = h.actor("c1")!;
     const watcher = seat === "p1" ? "c2" : "c1";
@@ -209,18 +211,18 @@ describe("disconnect policy: in a game", () => {
     ]);
     expect(h.core.replayLog(code)?.actions).toHaveLength(1);
 
-    // Still away and still deciding (the roll): the next action follows after the short delay.
+    // Still away and deciding again (the first turn of round 1): missed after the short delay.
     expect(h.actor(watcher)).toBe(seat);
     expect(h.core.nextDeadline()).toBe(h.now() + DELAY);
     h.advance(DELAY - 1);
     expect(h.view(watcher).actionCount).toBe(1);
     h.advance(1);
     expect(h.last(watcher, "update")).toMatchObject({ seq: 2, by: seat, auto: true });
-    expect(h.last(watcher, "update").events[0]).toMatchObject({ type: "rolled", player: seat });
+    expect(h.last(watcher, "update").events[0]).toEqual({ type: "turnMissed", player: seat });
   });
 
   it("takes one automatic action per delay, however late the tick is", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     h.started(3);
     const seat = h.actor("c1")!;
     const watcher = seat === "p1" ? "c2" : "c1";
@@ -231,7 +233,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("does nothing while the disconnected player is not the one deciding", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code } = h.started(3);
     const actor = h.actor("c1")!;
     const idle = ["p1", "p2", "p3"].find((s) => s !== actor)!;
@@ -244,7 +246,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("plays after the short delay for a player whose grace ran out before their turn", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     h.started(3);
     const first = h.actor("c1")!;
     const away = ["p1", "p2", "p3"].find((s) => s !== first)!;
@@ -258,8 +260,8 @@ describe("disconnect policy: in a game", () => {
     expect(h.last(watcher, "update")).toMatchObject({ seq: seq + 1, by: away, auto: true });
   });
 
-  it("gives a player who drops during their own turn the full grace", () => {
-    const h = harness();
+  it("gives a player who drops during their own turn the full grace (no turn timer)", () => {
+    const h = harness(NO_TIMER);
     h.started(3);
     const seat = h.actor("c1")!;
     const watcher = seat === "p1" ? "c2" : "c1";
@@ -272,7 +274,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("cancels the automatic action when the player is back in time", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(3);
     const seat = h.actor("c1")!;
     h.drop(connOf(seat));
@@ -286,7 +288,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("stops playing for a player the moment they are back", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(3);
     const seat = h.actor("c1")!;
     h.drop(connOf(seat));
@@ -301,7 +303,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("gives no grace to a player who chose to leave, and keeps their seat for a rejoin", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(3);
     const seat = h.actor("c1")!;
     const watcher = seat === "p1" ? "c2" : "c1";
@@ -323,7 +325,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("pauses while nobody is connected, and restarts the grace when someone returns", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(3);
     const seat = h.actor("c1")!;
     const other = ["p1", "p2", "p3"].find((s) => s !== seat)!;
@@ -342,7 +344,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("tells everyone when a dropped player becomes away, and when they are back", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(3);
     h.drop("c2");
     expect(h.last("c1", "room").room.seats[1]).toMatchObject({ connected: false, away: false });
@@ -359,7 +361,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("marks a player who leaves a game away at once, but never in the lobby", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code } = h.started(3);
     h.send("c3", { type: "leave" });
     expect(h.last("c1", "room").room.seats[2]).toMatchObject({ connected: false, away: true });
@@ -373,7 +375,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("clears away for every disconnected player when an empty room is joined again", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(3);
     h.drop("c2");
     h.advance(GRACE);
@@ -388,7 +390,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("deletes a room nobody has been connected to for the idle time", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(2);
     h.drop("c1");
     h.advance(5_000);
@@ -403,7 +405,7 @@ describe("disconnect policy: in a game", () => {
   });
 
   it("keeps an idle room when someone reconnects in time", () => {
-    const h = harness();
+    const h = harness(NO_TIMER);
     const { code, tokens } = h.started(2);
     h.drop("c1");
     h.drop("c2");
@@ -413,13 +415,12 @@ describe("disconnect policy: in a game", () => {
     expect(h.core.roomCodes()).toEqual([code]);
   });
 
-  it("finishes a game for players who never come back, without spending their money", () => {
-    const h = harness();
+  it("finishes a game for players who never come back: their turns are missed, then they are removed", () => {
+    const h = harness(NO_TIMER);
     const { code } = h.started(3);
     h.send("c2", { type: "leave" });
     h.send("c3", { type: "leave" });
     const autoEvents: GameEvent[] = [];
-    let riskMovesWithChoice = 0;
     for (let guard = 0; h.actor("c1") !== undefined; guard += 1) {
       if (guard > 5_000) throw new Error("the game did not end");
       const seat = h.actor("c1")!;
@@ -429,26 +430,22 @@ describe("disconnect policy: in a game", () => {
         continue;
       }
       const before = h.view("c1");
-      const calm = h
-        .legal("c1", seat)
-        .some((a) => a.type === "move" && content.board.tiles[a.to]?.terrain !== "risk");
       h.advance(DELAY);
       const update = h.last("c1", "update");
       expect(update).toMatchObject({ seq: before.actionCount + 1, by: seat, auto: true });
       autoEvents.push(...update.events.filter((e) => "player" in e && e.player === seat));
-      const moved = update.events.find((e) => e.type === "moved" && e.player === seat);
-      if (moved?.type === "moved" && calm && content.board.tiles[moved.to]?.terrain === "risk") {
-        riskMovesWithChoice += 1;
-      }
       h.clear();
     }
     expect(h.room(code).status).toBe("finished");
-    expect(autoEvents.some((e) => e.type === "moved")).toBe(true);
-    expect(autoEvents.filter((e) => e.type === "upgradeBought")).toEqual([]);
-    expect(autoEvents.filter((e) => e.type === "helicopterUsed")).toEqual([]);
-    expect(riskMovesWithChoice).toBe(0);
+    // The server never plays for them: no roll, no move, no purchase, no Helicopter.
+    const kinds = new Set(autoEvents.map((e) => e.type));
+    for (const never of ["rolled", "moved", "upgradeBought", "helicopterUsed", "cardDrawn"]) {
+      expect(kinds.has(never as GameEvent["type"])).toBe(false);
+    }
+    expect(autoEvents.filter((e) => e.type === "playerRemoved")).toHaveLength(2);
+    expect(h.view("c1").result).toMatchObject({ winners: ["p1"], reason: "last-player" });
 
-    // Automatic actions are ordinary logged actions: the replay matches.
+    // Missed turns and removals are ordinary logged actions: the replay matches.
     const replayed = replay(content, h.core.replayLog(code)!);
     expect(h.view("c1")).toEqual(redactForClient(replayed.state, "p1"));
   });

@@ -39,15 +39,16 @@ Nobody can join a room once the game has started. There are no spectators yet.
 
 ## 3. Client to server
 
-| Message  | Fields                            | Allowed when                 | Reply                                             |
-| -------- | --------------------------------- | ---------------------------- | ------------------------------------------------- |
-| `create` | `v`, `name`                       | The connection has no seat   | `welcome`                                         |
-| `join`   | `v`, `code`, `name`               | No seat; the room is a lobby | `welcome`; `room` to the others                   |
-| `rejoin` | `v`, `code`, `seatToken`          | No seat                      | `welcome`; `room` to the others                   |
-| `start`  |                                   | Host, in the lobby           | `room`, then `update` with `seq` 0, to everyone   |
-| `intent` | `clientActionId`, `seq`, `action` | Seated                       | `update` to everyone, or `rejected` to the sender |
-| `sync`   |                                   | Seated                       | `snapshot`                                        |
-| `leave`  |                                   | Seated                       | `left`; `room` to the others                      |
+| Message  | Fields                            | Allowed when                 | Reply                                                                              |
+| -------- | --------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------- |
+| `create` | `v`, `name`                       | The connection has no seat   | `welcome`                                                                          |
+| `join`   | `v`, `code`, `name`               | No seat; the room is a lobby | `welcome`; `room` to the others                                                    |
+| `rejoin` | `v`, `code`, `seatToken`          | No seat                      | `welcome`; `room` to the others                                                    |
+| `start`  |                                   | Host, in the lobby           | `room`, then `update` with `seq` 0, to everyone                                    |
+| `intent` | `clientActionId`, `seq`, `action` | Seated                       | `update` to everyone, or `rejected` to the sender                                  |
+| `sync`   |                                   | Seated                       | `snapshot`                                                                         |
+| `leave`  |                                   | Seated                       | `left`; `room` to the others                                                       |
+| `kick`   | `seat`                            | Host, lobby or game          | Lobby: `room`; game: `update` and `room`; the removed player gets `error` `kicked` |
 
 - `v` is the protocol version, currently `1`. The server refuses any other value with `unsupported-version`, so an old cached web client fails clearly instead of misbehaving.
 - `action` is an engine `Action` without `player`: `{ "type": "roll" }`, `{ "type": "move", "to": 57 }`, `{ "type": "placeShip", "dock": "start-left" }`, `{ "type": "buyUpgrade", "upgrade": "speed" }`, `{ "type": "useHelicopter" }`, `{ "type": "endTurn" }`. Clients pick one from `getLegalActions(content, view, seat)`.
@@ -61,17 +62,21 @@ Nobody can join a room once the game has started. There are no spectators yet.
 | ---------- | ------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- |
 | `welcome`  | `v`, `seat`, `seatToken`, `contentHash`, `room`, `game` | One connection       | After `create`, `join` or `rejoin`                                                  |
 | `room`     | `room`                                                  | Everyone in the room | A seat is taken, freed, connected, disconnected or becomes away; the status changes |
-| `update`   | `seq`, `by`, `auto`, `events`, `view`                   | Everyone in the room | The game starts; an action is applied                                               |
+| `update`   | `seq`, `by`, `auto`, `events`, `view`, `turnTimeLeftMs` | Everyone in the room | The game starts; an action is applied                                               |
 | `snapshot` | `room`, `game`                                          | One connection       | Reply to `sync`                                                                     |
 | `rejected` | `clientActionId`, `seq`, `error { code, message }`      | The sender           | An intent was not applied                                                           |
 | `error`    | `code`, `message`                                       | The sender           | Any other message could not be acted on                                             |
 | `left`     |                                                         | The sender           | Reply to `leave`                                                                    |
 
-- `room` is a `RoomInfo`: `code`, `status` (`lobby`, `playing`, `finished`), `host`, `seats` (`seat`, `name`, `connected`, `away`, in seat order), `minPlayers`, `maxPlayers`, `rev`. It is always sent whole. `rev` goes up by one on every change, so a client keeps the one with the highest `rev`.
-- `game` is `null` in the lobby, otherwise `{ seq, view }`.
+- `room` is a `RoomInfo`: `code`, `status` (`lobby`, `playing`, `finished`), `host`, `seats` (`seat`, `name`, `connected`, `away`, `removed`, `awayInMs`, in seat order), `minPlayers`, `maxPlayers`, `timers`, `rev`. It is always sent whole. `rev` goes up by one on every change, so a client keeps the one with the highest `rev`.
+- `timers` is the room's time limits, fixed when the room is created: `turnTimeoutMs` (`null` if there is no turn timer), `reconnectGraceMs`, `reconnectBudgetMs` ([section 7](#7-disconnect-policy)).
+- `awayInMs` is, in a game, for a disconnected player who is not yet away: how many milliseconds are left before they are away. Otherwise `null`.
+- `game` is `null` in the lobby, otherwise `{ seq, view, turnTimeLeftMs }`.
+- `turnTimeLeftMs` (in `game` and in `update`) is how many milliseconds the deciding player has left before the server plays for them. It is `null` when no turn timer runs: no timer is set, the deciding player is away (the server acts after the short delay instead), or the game is over.
+- **Times are relative.** `awayInMs` and `turnTimeLeftMs` are counted when the message is sent. A client adds them to the time the message arrived on its own clock, so client and server clocks need not agree. They are not resent as time passes; a later message carries fresh values.
 - `view` is the receiver's own `PlayerView` (`view.viewer` is their seat). It is sent whole in every `update`; it is small.
 - `events` are the engine's `GameEvent`s for that action, the same for everyone. They are for animation and the log. The view alone is enough to carry on.
-- `by` is the seat that acted (`null` for the start of the game). `auto` is `true` when the server chose the action for an away player ([section 7](#7-disconnect-policy)).
+- `by` is the seat that acted (`null` for the start of the game; the host for a kick). `auto` is `true` when the server missed a turn, for an away player or because the turn timer ran out ([section 7](#7-disconnect-policy)).
 - `contentHash` lets a client check, before the game starts, that the content it bundles matches the server's.
 - When the game ends, the last `update` carries `view.result`, and a `room` message with status `finished` follows it.
 
@@ -79,23 +84,25 @@ Nobody can join a room once the game has started. There are no spectators yet.
 
 `error.code`:
 
-| Code                   | Meaning                                                           |
-| ---------------------- | ----------------------------------------------------------------- |
-| `bad-message`          | Not a valid message (wrong shape, unknown type, malformed action) |
-| `unsupported-version`  | `v` is not the server's protocol version                          |
-| `not-seated`           | The connection has no seat; `create`, `join` or `rejoin` first    |
-| `already-seated`       | The connection already has a seat; `leave` first                  |
-| `room-not-found`       | No room has that code                                             |
-| `room-full`            | Every seat is taken                                               |
-| `game-started`         | Joining or starting a room that is no longer a lobby              |
-| `name-invalid`         | The name is empty or too long                                     |
-| `name-taken`           | Someone in the room has that name                                 |
-| `bad-token`            | The seat token does not belong to a seat in that room             |
-| `not-host`             | Only the host can start the game                                  |
-| `not-enough-players`   | Fewer than `minPlayers` seats are taken                           |
-| `players-disconnected` | A seated player is disconnected, so the game cannot start         |
-| `replaced`             | The seat was opened on a newer connection; this one is closed     |
-| `server-busy`          | No free room code could be found                                  |
+| Code                   | Meaning                                                             |
+| ---------------------- | ------------------------------------------------------------------- |
+| `bad-message`          | Not a valid message (wrong shape, unknown type, malformed action)   |
+| `unsupported-version`  | `v` is not the server's protocol version                            |
+| `not-seated`           | The connection has no seat; `create`, `join` or `rejoin` first      |
+| `already-seated`       | The connection already has a seat; `leave` first                    |
+| `room-not-found`       | No room has that code                                               |
+| `room-full`            | Every seat is taken                                                 |
+| `game-started`         | Joining or starting a room that is no longer a lobby                |
+| `name-invalid`         | The name is empty or too long                                       |
+| `name-taken`           | Someone in the room has that name                                   |
+| `bad-token`            | The seat token does not belong to a seat in that room               |
+| `not-host`             | Only the host can start the game                                    |
+| `not-enough-players`   | Fewer than `minPlayers` seats are taken                             |
+| `players-disconnected` | A seated player is disconnected, so the game cannot start           |
+| `replaced`             | The seat was opened on a newer connection; this one is closed       |
+| `server-busy`          | No free room code could be found                                    |
+| `kicked`               | This player was removed from the room; the token no longer works    |
+| `cannot-kick`          | That seat cannot be removed (yourself, unknown, removed, game over) |
 
 `rejected.error.code`: the engine's `game-over`, `unknown-player`, `not-your-turn`, `wrong-phase`, `illegal-action`, plus:
 
@@ -142,33 +149,43 @@ All times are settings (`CoreConfig`); the defaults are below.
 
 A seat is never freed during a game. The game is not paused for the other players.
 
-- A disconnected player has **60 seconds** (`reconnectGraceMs`), counted from the disconnect, to come back. Nothing happens for them in that time. If it is their decision, the game waits.
-- After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message (added in stage 6b, so clients can show it). Whenever an away player has to decide, the server decides for them **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens.
-- Reconnecting ends this immediately (`away` goes back to `false`). A later disconnect starts a new grace period.
-- `leave` during a game means away at once, with no grace. The seat is kept and the player can still `rejoin`.
-- An automatic action is an ordinary action: it goes through `applyAction`, is added to the replay log, and is sent as an `update` with `auto: true`.
+**Turn timer and missed turns** (review P1-2; rules decided with the designer, 2026-11-13; rulebook "Online play").
 
-**What the server chooses for an away player** (`chooseAutoAction` in `autoplay.ts`). The aim is to keep the game moving while doing as little as possible on the player's behalf. It is deterministic, uses only public information and never spends the player's money.
+- A player has **90 seconds** (`turnTimeoutMs`) for a whole turn: rolling, moving and shopping. It counts from the start of the turn (each setup placement counts as one), or from the moment a room nobody was connected to is rejoined. Decisions inside the turn do not restart it.
+- When it runs out, the server applies the engine's system action `missTurn` for them: nothing more happens that turn (no move, no card, no purchase, no Helicopter) and the turn passes. A ship that has to be placed (setup, late entry, Sinking Boat) goes on the first dock offered. The update has `auto: true`. The player is not marked away.
+- It runs whether the player is connected or not: a disconnect never extends a turn.
+- Clients see it as `turnTimeLeftMs` ([section 4](#4-server-to-client)). There is no turn timer in the lobby. `turnTimeoutMs: null` switches it off.
+- **The server never plays for a player.** It only misses their turns.
+- **3 missed turns in a row** (`missedTurnsBeforeRemoval` in `content/rules.json`) and the engine removes the player (`playerRemoved`, reason `missed-turns`). Any action of the player's own resets the count.
 
-| Phase       | Action                                                                                              |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| `placeShip` | The first free dock                                                                                 |
-| `roll`      | `roll` (never the Helicopter)                                                                       |
-| `move`      | The first legal destination that is not a risk tile; if every destination is a risk tile, the first |
-| `dockShop`  | `endTurn` (never buys an upgrade)                                                                   |
-| `turnEnd`   | `endTurn` (never the Helicopter)                                                                    |
+**Removing a player** (host kick).
 
-"First" is the order of `getLegalActions`. A move may end on a dock, which sells the player's fish as usual.
+- The host sends `kick { seat }`. In the lobby the seat is freed at once (as after `leave`). In a game the server applies the engine's system action `removePlayer` (`playerRemoved`, reason `kicked`); the update's `by` is the host.
+- A removed player's ship leaves the board; they get no more turns, cannot win, and are shown in the results. Their seat stays in `RoomInfo` with `removed: true`; their token stops working (`rejoin` answers `kicked`).
+- Their connection is sent `error` `kicked` (after the update that removed them) and then has no seat; the socket stays open.
+- If the host is removed (after missed turns), the lowest remaining seat becomes host.
+- With one player left the game ends at once and they win (`result.reason` is `last-player`).
+- Only the host can kick (`not-host`); not themselves, an unknown or already removed seat, or after the game (`cannot-kick`).
+
+**Reconnect grace and its budget.**
+
+- A disconnected player has up to **60 seconds** (`reconnectGraceMs`), counted from the disconnect, to come back. During that time they are not away; if it is their turn, the turn timer still runs.
+- Each player has a **budget** of **2 minutes** (`reconnectBudgetMs`) of grace for the whole game. The time they spend disconnected and not away is taken from it (at most one grace per disconnect; time while nobody in the room is connected does not count). A disconnect with less than 60 seconds of budget left gets only what is left; with nothing left the player is away at once. The budget is full for everyone when the game starts.
+- Clients see what is left of a disconnected player's grace as `awayInMs`.
+- After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message. Whenever it is an away player's turn, the server misses it **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens. So an away player is removed after three of their turns.
+- Reconnecting ends this immediately (`away` goes back to `false`). A later disconnect starts a new grace period, from what is left of the budget.
+- `leave` during a game means away at once, with no grace and no budget used. The seat is kept and the player can still `rejoin` (until they are removed).
+- A missed turn or a removal is an ordinary action: it goes through `applyAction`, is added to the replay log, and is sent as an `update`. Clients can never send these actions (`parse.ts` refuses them).
 
 ### When nobody is connected
 
-- The server plays for nobody. The game stands still.
-- When someone reconnects, every other disconnected player's 60-second grace starts again from that moment (unless they had sent `leave`).
+- The server misses nobody's turn. The game stands still.
+- When someone reconnects, every other disconnected player's grace starts again from that moment (unless they had sent `leave`), capped by what is left of their budget; a player with no budget left stays away. The turn timer also counts from that moment.
 - A room nobody has been connected to for **30 minutes** (`roomIdleTtlMs`) is deleted, whatever its status.
 
 ### Not covered
 
-There is no turn timer for a player who is connected but not acting. Playtests are run on a voice call; see [section 10](#10-open-items).
+The host cannot pause the game; see [section 10](#10-open-items).
 
 ## 8. Example
 
@@ -178,8 +195,11 @@ Ann creates a room, Bob and Cy join, Ann starts, and the first player places a s
 Ann  → { "type": "create", "v": 1, "name": "Ann" }
 Ann  ← { "type": "welcome", "v": 1, "seat": "p1", "seatToken": "9f…", "contentHash": "…",
          "room": { "code": "KTBM", "status": "lobby", "host": "p1", "rev": 0,
-                   "seats": [{ "seat": "p1", "name": "Ann", "connected": true, "away": false }],
-                   "minPlayers": 2, "maxPlayers": 4 },
+                   "seats": [{ "seat": "p1", "name": "Ann", "connected": true, "away": false,
+                               "removed": false, "awayInMs": null }],
+                   "minPlayers": 2, "maxPlayers": 4,
+                   "timers": { "turnTimeoutMs": 90000, "reconnectGraceMs": 60000,
+                               "reconnectBudgetMs": 120000 } },
          "game": null }
 
 Bob  → { "type": "join", "v": 1, "code": "ktbm", "name": "Bob" }
@@ -190,7 +210,8 @@ Cy   → join … (seat p3, room rev 2)
 Ann  → { "type": "start" }
 all  ← { "type": "room", "room": { …, "status": "playing", "rev": 3 } }
 all  ← { "type": "update", "seq": 0, "by": null, "auto": false,
-         "events": [gameStarted, turnOrderDecided, …], "view": { …, "viewer": "p1" | "p2" | "p3" } }
+         "events": [gameStarted, turnOrderDecided, …], "view": { …, "viewer": "p1" | "p2" | "p3" },
+         "turnTimeLeftMs": 90000 }
 
 Bob  → { "type": "intent", "clientActionId": "b-1", "seq": 0,
          "action": { "type": "placeShip", "dock": "start-left" } }
@@ -239,7 +260,7 @@ The web client can import the message types from `packages/server/src/protocol.t
 
 ## 10. Open items
 
-- No turn timer for connected players, no host "kick", no pause.
+- No pause. A bot taking a removed player's place (the designer's option, once bots exist, B6).
 - No spectators (`redactForClient` already accepts `"spectator"`).
 - No rematch in the same room (Milestone B3).
 - Rooms live in memory: a server restart ends every game. The replay log would be enough to restore one.

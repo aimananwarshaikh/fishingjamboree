@@ -65,6 +65,9 @@ export function parseClientMessage(raw: unknown): ParseResult {
     case "sync":
     case "leave":
       return { ok: true, message: { type: raw.type } };
+    case "kick":
+      if (!isShortString(raw.seat)) return fail("kick: seat must be a short string");
+      return { ok: true, message: { type: "kick", seat: raw.seat } };
     case "intent": {
       if (!isShortString(raw.clientActionId)) {
         return fail("intent: clientActionId must be a short string");

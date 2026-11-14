@@ -84,7 +84,7 @@ describe("redactForClient", () => {
   it("shows the result once the game is over", () => {
     const over = clone(base);
     over.phase = { kind: "gameOver", actors: [] };
-    over.result = { scores: [], winners: [] };
+    over.result = { scores: [], winners: [], reason: "rounds" };
     expect(redactForClient(over, p0).result).toEqual(over.result);
   });
 });
