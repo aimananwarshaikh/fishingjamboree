@@ -91,6 +91,25 @@ The numbers below are placeholders. They need the simulator (B6) to set properly
 - **Ties:** every tied player gets the full amount, unless the stat is 0 (nobody gets an award for 0 boots). For "least" awards a tie at 0 is common and shouldn't pay. Alternative: split the amount between tied players. Decide before building (question 3).
 - **A secret goal changes little in the moment.** Players don't know which awards are live, so the behaviour effect is general ("risk could pay") rather than targeted. That is fine and intended: it nudges the average play, and the surprise at the end is the fun. If more steering is wanted, see the variants.
 
+## Design goal and amount tiers (designer, 2026-11-14)
+
+The ending should be exciting: anything could happen, and a close game can be decided by the awards. Like the longest train in Ticket to Ride or the most camels in Jaipur, an award is big enough to settle a close fight and not big enough to win the game for a player who did nothing.
+
+- **Close games** (about $200 to $400 apart): the awards are often the deciding factor.
+- **Wide gaps** (about $1000 or more): the awards should very rarely flip the result.
+- Amounts are per award, from about $100 to $500, set by simulation (B6). The tiers below are placeholders.
+
+| Tier        | Placeholder | Awards                                                                                 | Reason                                              |
+| ----------- | ----------- | -------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Pity / luck | $100        | Boot Lord, Light Catch, Homebody                                                       | Mostly luck, or rewards doing badly                 |
+| Standard    | $200        | Sea Legs, Dock Regular, Overstuffed, Fine Print, Shark Bait, Clean Hands, Golden Touch | A side goal, or a softened bit of bad luck          |
+| Strong      | $300        | Big Haul, Landlubber, One of Each?                                                     | Consistent play or a real trade-off                 |
+| Major       | $500        | Daredevil, Stripped Down                                                               | Costly to chase (Sharks, Sinking Boat; no upgrades) |
+
+- Keep a pity award below the loss it softens (a Shark costs about $300 of fish).
+- **Budget rule:** when the 3 awards are drawn, cap their combined value (for example $800 to $900). Then the awards alone can never overturn a gap of about $1000.
+- Simulation targets: share of games where a bonus flips the winner, flip rate by final gap (high under $400, near zero over $1000), and how often one player takes all three.
+
 ## Variants worth considering
 
 - **Reveal one award at an event point** (after round 10, say). Players then play for it. More strategy, less surprise.
