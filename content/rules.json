@@ -8,6 +8,7 @@
   "baseCapacity": 5,
   "fineTokenValue": 100,
   "missedTurnsBeforeRemoval": 3,
+  "setupShips": 2,
   "upgrades": {
     "speed": {
       "price": 200,

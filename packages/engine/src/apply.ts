@@ -32,9 +32,6 @@ import type {
   RemovalReason,
 } from "./types";
 
-/** Only two ships are placed before round 1 (rulebook setup steps 6 and 7). */
-const SETUP_SHIPS = 2;
-
 const PHASE_ACTIONS: Record<PhaseKind, readonly ActionType[]> = {
   placeShip: ["placeShip"],
   roll: ["roll", "useHelicopter"],
@@ -43,6 +40,12 @@ const PHASE_ACTIONS: Record<PhaseKind, readonly ActionType[]> = {
   turnEnd: ["useHelicopter", "endTurn"],
   gameOver: [],
 };
+
+/**
+ * `applyAction` checks legality first, so these cannot happen; if one does,
+ * it is a bug, and failing loudly beats quietly ending the turn.
+ */
+const impossible = (what: string) => new Error(`applyAction: impossible: ${what}`);
 
 const fail = (code: ActionErrorCode, message: string): ApplyResult => ({
   ok: false,
@@ -82,14 +85,15 @@ function nextInGame(state: GameState, from: number): number | null {
 function continueSetup(ctx: Ctx): void {
   const { state } = ctx;
   // The first players in turn order who are still in the game place the setup ships.
-  for (const player of state.players.filter((p) => !p.removed).slice(0, SETUP_SHIPS)) {
+  const setupShips = ctx.content.rules.setupShips;
+  for (const player of state.players.filter((p) => !p.removed).slice(0, setupShips)) {
     if (player.position !== null) continue;
     const free = freeStartingDocks(ctx.content, state);
     if (free.length > 1) {
       state.phase = { kind: "placeShip", reason: "setup", docks: free, actors: [player.id] };
       return;
     }
-    // compileContent guarantees two starting docks, so one is always left here.
+    // compileContent keeps setupShips within the starting docks, so one is always left here.
     placeOnDock(ctx, player, free[0] as DockId, "setup");
   }
   ctx.events.push({ type: "roundStarted", round: state.round });
@@ -257,11 +261,11 @@ function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
       removePlayer(ctx, player, "kicked");
       return;
     case "placeShip": {
-      if (phase.kind !== "placeShip") return;
+      if (phase.kind !== "placeShip") throw impossible("placeShip outside a placeShip phase");
       if (phase.reason === "sinking-boat") {
         // The victim chose between the free starting docks.
         const dock = content.board.docks.find((d) => d.id === action.dock);
-        if (!dock) return;
+        if (!dock) throw impossible(`placeShip on an unknown dock ${action.dock}`);
         if (!relocateTo(ctx, player, dock)) finishTurn(ctx);
         return;
       }
@@ -288,12 +292,14 @@ function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
       return;
     }
     case "move": {
-      if (phase.kind !== "move" || player.position === null) return;
+      if (phase.kind !== "move" || player.position === null) {
+        throw impossible("move outside a move phase or with no ship on the board");
+      }
       const from = player.position;
       const dest = destinationsFor(content, state, player, phase.roll.steps).find(
         (d) => d.to === action.to,
       );
-      if (!dest) return;
+      if (!dest) throw impossible(`move to ${action.to}, which is not a destination`);
       player.position = dest.to;
       ctx.events.push({ type: "moved", player: player.id, from, to: dest.to, path: dest.path });
       if (!resolveLanding(ctx)) finishTurn(ctx);
@@ -315,7 +321,7 @@ function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
     }
     case "useHelicopter": {
       const fee = helicopterFee(content, state);
-      if (fee === null) return;
+      if (fee === null) throw impossible("useHelicopter with no Helicopter event");
       // The fee comes out of cash on hand before anything is sold.
       player.cash -= fee;
       state.turn.helicopterUsed = true;

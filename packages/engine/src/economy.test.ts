@@ -147,10 +147,11 @@ describe("sellFish", () => {
 
   it("uses the token value from the content", () => {
     const raw = rawContent();
-    raw.rules.fineTokenValue = 200;
-    const { ctx, player } = setup({ fineTokens: 2, fish: [300] }, compiledContent(raw));
+    // $50 tokens: $300 of fish pays off 6 of them (with $100 tokens it would be 3).
+    raw.rules.fineTokenValue = 50;
+    const { ctx, player } = setup({ fineTokens: 8, fish: [300] }, compiledContent(raw));
     sellFish(ctx, player, "helicopter");
-    expect(player).toMatchObject({ cash: 100, fineTokens: 1 });
+    expect(player).toMatchObject({ cash: 0, fineTokens: 2 });
     expect(ctx.events[0]).toMatchObject({ via: "helicopter" });
   });
 });

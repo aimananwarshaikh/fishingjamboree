@@ -76,10 +76,8 @@ function expireEvent(ctx: Ctx): void {
 export function nextEvent(ctx: Ctx, afterRound: number): void {
   const { state, content } = ctx;
   expireEvent(ctx);
-  const deck = state.decks.event;
-  // Content with no event cards at all: nothing to draw.
-  if (deck.draw.length === 0 && deck.discard.length === 0) return;
-  const drawn = drawCard("event", deck, state.rng);
+  // compileContent refuses an empty event deck, so there is always a card to draw.
+  const drawn = drawCard("event", state.decks.event, state.rng);
   state.rng = drawn.rng;
   state.decks.event = drawn.deck;
   ctx.events.push(...drawn.events);

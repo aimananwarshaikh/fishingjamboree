@@ -71,8 +71,12 @@ end turn, a player table, a round bar and an event log.
 3. In the second, enter a name and the four-letter code and **Join room**.
 4. The first tab's player clicks **Start game**.
 
-The client connects to `ws://<page host>:8787`. To use another server, add `?server=ws://host:port`
-to the page address. Each tab keeps its own seat in `sessionStorage`, so a refresh rejoins the same
+The client connects to `ws://<page host>:8787` (`wss://` on an `https` page). In a dev build
+(`pnpm dev:web`) you can point it at another server by adding `?server=ws://host:port` to the page
+address. A production build (`vite build`) ignores `?server=` unless that server is on the list it
+was built with, `VITE_ALLOWED_SERVERS=wss://a.example,wss://b.example:8443` (origins, comma-separated),
+so a link cannot send a player's saved seat token to someone else's server; an `https` page only
+ever uses `wss://`. Each tab keeps its own seat in `sessionStorage`, so a refresh rejoins the same
 seat and two tabs of one browser are two players. Seats are also remembered by the browser
 (`localStorage`): after closing a tab, the start screen offers **Rejoin room KTBM as Ann**, and
 nothing rejoins until you click it. To move to another browser or device, copy the **Rejoin link**

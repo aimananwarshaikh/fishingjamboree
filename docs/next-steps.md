@@ -43,36 +43,30 @@ Small fixes and tests: Sonnet unless noted.
 
 **Engine**
 
-- Make the impossible branches in `apply.ts:183, 187, 214, 219, 241` throw instead of returning quietly.
-- Make `compileContent` check that fish values, fines and prices are multiples of `fineTokenValue` (`content.ts:240-245`, `:365`), with a test.
-- Redact `players`, `turn` and `phase` field by field in `view.ts:26-29`, or fix the comment.
-- Make `replay` check `schemaVersion` (`replay.ts:10-15`).
-- Remove the dead branch for content with no event cards (`eventCards.ts:80-81`).
-- Move `SETUP_SHIPS = 2` (`apply.ts:32`) into `content/rules.json`. Needed for the 5–6 player variant, which is not planned yet.
-- Fix the three doc drifts: `architecture.md` §4 vs §12 item 28 (Helicopter and fine tokens); `rulebook.md` Docks (sell before pay); the stale "Risk (15)" and "exact landing" rows in the notes log.
+- **Done (B1):** the impossible branches in `apply.ts` throw; `compileContent` checks money values are multiples of `fineTokenValue`; views copy each player field by field (the comment now says what is copied whole); `replay` checks `schemaVersion`; the dead empty-event-deck branch is gone; `setupShips` is in `content/rules.json`; the three doc drifts are fixed. Tests: `packages/engine/src/hardening.test.ts`.
 
 **Server**
 
 - Per-IP connection limit, `Origin` check, backpressure limit, idle limit for sockets with no seat; room codes can be walked and the host cannot remove a stranger from the lobby (`transport.ts:205-211`, `:243-254`; `core.ts:241-245`). These belong with B5 (deploy); a kick button belongs with B3.
-- Clean player names (control, zero-width and right-to-left characters; Unicode normalisation) (`core.ts:496-499`).
+- **Done (B1):** player names cleaned (NFC; control, zero-width and direction characters dropped; compared as NFKC lower case; length in characters). `cleanName`/`nameKey` in `core.ts`, `hardening.test.ts`.
 - A disconnected lobby seat holds its name for 2 minutes (`core.ts:249-251`); a rejoin link now covers most cases, so it is low priority.
-- Clear `away` when a game finishes (`core.ts:530-535`).
-- Replace `localeCompare` in seat ordering (`core.ts:515`): wrong from `p10`.
-- Validate `PORT` and make shutdown not wait on keep-alive connections (`main.ts:15`, `:43-49`).
+- **Done (B1):** `away` is cleared when a game finishes.
+- **Done (B1):** seats sort by number (`seatNumber`).
+- **Done (B1):** `PORT` is validated (`config.ts`) and shutdown closes idle keep-alive connections (at most 5 s).
 
 **Web client**
 
-- **`?server=` can send the seat token to another server** (`useGame.ts:50-52`, `:151-160`). **A bit more important since P1-1:** the token now also sits in `localStorage` and in rejoin links, and the client sends `rejoin` with it to whatever `?server=` says. Allow `?server=` in dev builds only, or check it against an allow-list. Do this before any public deploy (B5); Sonnet.
-- `leave` while reconnecting is lost, because the pending retry timer reopens the socket (`useGame.ts:186-189`, `:137-146`, `:100`).
-- After errors other than `bad-token` and `room-not-found` during a rejoin (for example `unsupported-version`) the table is dead (`useGame.ts:116-125`).
+- **Done (B1):** `?server=` is honoured only in a dev build or for a server on `VITE_ALLOWED_SERVERS` (`serverUrl.ts`, notes log). Was: `?server=` could send the seat token to another server.
+- **Done (B1):** `leave` while reconnecting cancels the rejoin and forgets the seat (`connection.ts`).
+- **Done (B1):** a rejoin refused for another reason goes back to the start screen with the message (`server-error` is retried).
 - The server port is fixed at 8787 (`useGame.ts:54`) and an `https` page needs `wss`. See B5.
 
 **Missing tests** (Sonnet)
 
-- `useGame.ts` (backoff, saved session, `bad-token` reset, `leave`). `scripts/playtest-three-tabs.mjs` covers it but is not in `pnpm check` or CI (`.github/workflows/ci.yml`).
-- `fuzz.test.ts`: count the event types reached and fail if an expected one never appears (`turnSkipped`, `relocationFailed`, Sinking Boat to the cruise dock); read the token value from content (`fuzz.test.ts:130`).
-- Engine: Helicopter expiring between start and end of a turn, and use on the last turn of round 20; a Sinking Boat victim taking a late entrant's dock; `applyAction` leaves its input untouched.
-- Server: two rooms at once; the transport's `close()` during a game; unusual Unicode names.
+- **Done (B1):** the connection logic moved to `connection.ts` and is tested (`connection.test.ts`: backoff, saved session, each refusal, `leave`). Still open: `scripts/playtest-three-tabs.mjs` is not in `pnpm check` or CI (`.github/workflows/ci.yml`).
+- **Done (B1):** `fuzz.test.ts` requires every event type a random bot can reach (a table that does not compile until a new event type is listed; the five it cannot reach name the test that covers them) and reads the token value from content.
+- **Done (B1):** engine: the Helicopter on the last turn of an event round and of round 20; a Sinking Boat victim taking a late entrant's dock; `applyAction` leaves its input untouched (`hardening.test.ts`).
+- **Done (B1):** server: two rooms at once (`roomIsolation.test.ts`, P2-4); the transport's `close()` during a game (`transport.test.ts`); unusual Unicode names (`hardening.test.ts`).
 
 ## Questions for the designer
 
@@ -122,7 +116,7 @@ Phases are in `docs/build-plan.md` section 5.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2, P2-4, P2-5 and B1b (Golden Hook Awards) are done (P2-3 replaced by the missed-turn rules). Left: the P3 list (Sonnet; the `?server=` restriction first), then the end-of-B1 review (item 3).
+1. **B1 [OPUS]:** P1-2, P2-4, P2-5, B1b (Golden Hook Awards) and the P3 list are done (P2-3 replaced by the missed-turn rules), except the P3 items that belong with B5 (server limits, `Origin` check, the fixed port) and the low-priority lobby name hold. Next: the end-of-B1 review (item 3).
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
 

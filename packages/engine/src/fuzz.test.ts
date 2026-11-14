@@ -13,7 +13,7 @@ import { replay } from "./replay";
 import { randomInt, seedRng } from "./rng";
 import { createGame } from "./setup";
 import { content, deepFreeze, invariantProblems } from "./testHelpers";
-import type { Action, GameState, ReplayLog } from "./types";
+import type { Action, GameEvent, GameEventType, GameState, ReplayLog } from "./types";
 import { redactForClient } from "./view";
 
 const GAMES = 1000;
@@ -49,9 +49,73 @@ function illegalCandidates(state: GameState, legal: Action[]): Action[] {
   return candidates.filter((c) => !legalKeys.has(key(c)));
 }
 
-function fuzzGame(seed: string, playerCount: number): void {
+/**
+ * Whether the random bot must reach each event type in the run. The table
+ * does not compile until a new event type is added, so a new branch is
+ * either reached here or named with the test that covers it instead.
+ */
+const MUST_REACH: Record<GameEventType, true | string> = {
+  gameStarted: true,
+  turnOrderDecided: true,
+  shipPlaced: true,
+  roundStarted: true,
+  turnStarted: true,
+  turnSkipped: "too rare for a random bot: apply.test.ts (late entry with no free starting dock)",
+  turnMissed: "server system action, never chosen by a player: missedTurns.test.ts",
+  playerRemoved: "server system action, never chosen by a player: missedTurns.test.ts",
+  rolled: true,
+  blocked: true,
+  moved: true,
+  cardDrawn: true,
+  fishGained: true,
+  fishLost: true,
+  sharkRepelled: true,
+  fined: true,
+  shipRelocated: true,
+  relocationFailed: "too rare for a random bot: dock.test.ts (Sinking Boat with every dock taken)",
+  cardDiscarded: true,
+  docked: true,
+  fishSold: true,
+  fineTokensPaid: true,
+  upgradeBought: true,
+  helicopterUsed: true,
+  goldenFishPlaced: true,
+  goldenFishTaken: true,
+  goldenFishLost: true,
+  goldenFishRemoved: true,
+  turnEnded: true,
+  roundEnded: true,
+  eventExpired: true,
+  eventDrawn: true,
+  deckReshuffled: true,
+  awardGiven: true,
+  gameEnded: true,
+};
+
+/** Special cases inside an event type that must come up too. */
+const MUST_REACH_CASES = ["shipRelocated:starting", "awardGiven:paid", "awardGiven:none"];
+// Not reached by the bot, covered elsewhere: "shipRelocated:cruise" (dock.test.ts,
+// "both starting docks taken: the cruise ship dock").
+
+/** How often each event type (and a few special cases) came up over the run. */
+type Seen = Map<string, number>;
+
+function tally(seen: Seen, events: readonly GameEvent[]): void {
+  const bump = (k: string) => seen.set(k, (seen.get(k) ?? 0) + 1);
+  for (const e of events) {
+    bump(e.type);
+    if (e.type === "shipRelocated") {
+      const kind = content.board.docks.find((d) => d.id === e.dock)?.kind;
+      bump(`shipRelocated:${kind}`);
+    }
+    if (e.type === "awardGiven") bump(e.winners.length > 0 ? "awardGiven:paid" : "awardGiven:none");
+  }
+}
+
+function fuzzGame(seed: string, playerCount: number, seen: Seen = new Map()): void {
   const players = SEATS.slice(0, playerCount);
   const created = createGame(content, { seed, players });
+  tally(seen, created.events);
   let state = created.state;
   const actions: Action[] = [];
   let botRng = seedRng(`bot:${seed}`);
@@ -103,6 +167,7 @@ function fuzzGame(seed: string, playerCount: number): void {
       );
     }
     actions.push(action);
+    tally(seen, result.events);
     state = result.state;
     const problems = invariantProblems(state);
     if (problems.length > 0) {
@@ -131,7 +196,8 @@ function fuzzGame(seed: string, playerCount: number): void {
     const won = result.awards
       .filter((a) => a.winners.includes(s.player))
       .reduce((sum, a) => sum + a.amount, 0);
-    if (s.awards !== won || s.total !== p.cash - 100 * p.fineTokens + won)
+    const tokenValue = content.rules.fineTokenValue;
+    if (s.awards !== won || s.total !== p.cash - tokenValue * p.fineTokens + won)
       throw new FuzzFailure(seed, playerCount, n, `bad total for ${s.player}`);
   }
 
@@ -151,10 +217,18 @@ function fuzzGame(seed: string, playerCount: number): void {
 
 describe(`fuzz: random bot, ${GAMES} games`, () => {
   it("every game plays to a correct result with all invariants held", () => {
+    const seen: Seen = new Map();
     for (let g = 0; g < GAMES; g++) {
-      fuzzGame(`fuzz-${g}`, 2 + (g % 3));
+      fuzzGame(`fuzz-${g}`, 2 + (g % 3), seen);
     }
-    expect(true).toBe(true);
+    // Every branch the bot can reach was reached at least once.
+    const required = [
+      ...Object.entries(MUST_REACH)
+        .filter(([, v]) => v === true)
+        .map(([k]) => k),
+      ...MUST_REACH_CASES,
+    ];
+    expect(required.filter((k) => !seen.has(k))).toEqual([]);
   }, 600_000);
 
   it("the harness catches a failure and names seed, players and action", () => {
