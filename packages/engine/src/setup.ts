@@ -2,6 +2,7 @@
  * createGame: shuffles the decks, runs the turn-order roll-off and stops at
  * the first decision (player 1 choosing a starting dock).
  */
+import { drawAwards, emptyStats } from "./awards";
 import { buildDeck } from "./decks";
 import { rollDie, seedRng } from "./rng";
 import type {
@@ -114,6 +115,11 @@ export const createGame: Engine["createGame"] = (content, setup: GameSetup) => {
     goldenFish: null,
     result: null,
     rng,
+    // Secret until the end: never in a client view (view.ts).
+    awards: {
+      chosen: drawAwards(content, seed, players.length),
+      stats: Object.fromEntries(rolled.order.map((id) => [id, emptyStats()])),
+    },
   };
 
   const events: GameEvent[] = [

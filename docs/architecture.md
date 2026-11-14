@@ -270,6 +270,10 @@ Terrain characters: `.` off-board, `~` sea, `#` island, `D` dock, `S` Shipwreck 
 }
 ```
 
+### `awards.json` (Golden Hook Awards, B1b)
+
+`perGame` (awards drawn, by player count), `budget` (the drawn awards' amounts add up to at most this) and `awards`: each with `id`, `name`, `text`, `kind` (`most`, `least`, `condition`), `stat` (a counted stat from `PlayerStats` or `upgradesBought` / `fineTokens`), `min`/`max` (conditions only), `amount` and `conflicts`. Resolution is keyed by `kind` and `stat` in `awards.ts`, so a new award is content only. `compileContent` checks the shapes, the ids in `conflicts`, a count for every player count, and that each count has at least one valid draw. Design and decisions: `docs/bonus-awards.md`.
+
 ## 8. RNG, determinism and replays
 
 - **Generator:** sfc32. Its state is four unsigned 32-bit integers (`RngState`), it uses only 32-bit integer maths (identical in every JS runtime), and it passes the standard statistical test suites.
@@ -277,21 +281,23 @@ Terrain characters: `.` off-board, `~` sea, `#` island, `D` dock, `S` Shipwreck 
 - **Integers:** uniform in a range by rejection sampling, so there is no modulo bias on the die.
 - **Shuffle:** Fisher–Yates.
 - **One stream** for the roll-off, dice and shuffles. Every draw returns the next RNG state, which goes back into `state.rng`.
+- **The Golden Hook Awards use their own stream**, seeded from the setup seed plus a fixed suffix, used once in `createGame`. So the awards do not change the dice, decks or turn order: a seed plays the same game with or without them.
 - **Replay:** `ReplayLog` holds `contentHash`, `setup` and the ordered `actions`. `replay` re-creates the game and applies each action; the result must match the original state exactly. The server appends to the log as it applies actions.
 
 No engine output depends on object key order, wall-clock time or the host.
 
 ## 9. Hidden information
 
-| Information                                                      | Visibility |
-| ---------------------------------------------------------------- | ---------- |
-| Order of every draw pile, including the undrawn event cards      | Hidden     |
-| RNG state                                                        | Hidden     |
-| Size of each draw pile, every discard pile                       | Public     |
-| Each player's cash, fish values, fine tokens, upgrades, position | Public     |
-| Active event, Golden Fish, round, phase, roll                    | Public     |
+| Information                                                      | Visibility                                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Order of every draw pile, including the undrawn event cards      | Hidden                                                              |
+| RNG state                                                        | Hidden                                                              |
+| Size of each draw pile, every discard pile                       | Public                                                              |
+| Each player's cash, fish values, fine tokens, upgrades, position | Public                                                              |
+| Active event, Golden Fish, round, phase, roll                    | Public                                                              |
+| Golden Hook Awards in play, per-player stats (`state.awards`)    | Hidden until the result; then in `result.awards` and `result.stats` |
 
-`redactForClient(state, viewer)` replaces each deck with `{ drawCount, discard }` and drops `rng`. Every viewer currently receives the same information; the `viewer` parameter is there so a future private element does not change the signature. A drawn card is revealed by its `cardDrawn` event and resolves inside the same action, so there is never a drawn-but-hidden card in the state.
+`redactForClient(state, viewer)` replaces each deck with `{ drawCount, discard }` and drops `rng` and `awards`. Every viewer currently receives the same information; the `viewer` parameter is there so a future private element does not change the signature. A drawn card is revealed by its `cardDrawn` event and resolves inside the same action, so there is never a drawn-but-hidden card in the state.
 
 ## 10. Protocol sketch (designed fully in Session 5)
 

@@ -101,15 +101,21 @@ describe("a full 20-round game", () => {
     expect(count(events, "fishSold")).toBeGreaterThan(0);
     expect(state.players.some((p) => p.cash > 0)).toBe(true);
 
-    // The result: in turn order, total = cash - $100 per fine token, best total wins.
+    // The result: in turn order, total = cash - $100 per fine token + awards won, best total wins.
     const result = state.result!;
     expect(result.scores.map((s) => s.player)).toEqual(state.players.map((p) => p.id));
+    expect(result.awards.map((a) => a.award)).toEqual(state.awards.chosen);
+    expect(result.awards).toHaveLength(n === 2 ? 2 : 3);
     for (const [i, p] of state.players.entries()) {
+      const won = result.awards
+        .filter((a) => a.winners.includes(p.id))
+        .reduce((sum, a) => sum + a.amount, 0);
       expect(result.scores[i]).toEqual({
         player: p.id,
         cash: p.cash,
         fineTokens: p.fineTokens,
-        total: p.cash - 100 * p.fineTokens,
+        awards: won,
+        total: p.cash - 100 * p.fineTokens + won,
         removed: false,
       });
       expect(p.cash).toBe(cashFromEvents(events, p.id));
@@ -120,7 +126,9 @@ describe("a full 20-round game", () => {
     );
     expect(result.winners.length).toBeGreaterThan(0);
 
-    // gameEnded is the last event and carries the same result.
+    // One awardGiven per drawn award, just before gameEnded, which is the last event.
+    const reveal = events.slice(-1 - result.awards.length, -1);
+    expect(reveal).toEqual(result.awards.map((a) => ({ type: "awardGiven", ...a })));
     expect(events.at(-1)).toEqual({ type: "gameEnded", result });
     expect(count(events, "gameEnded")).toBe(1);
 
@@ -132,15 +140,62 @@ describe("a full 20-round game", () => {
 
   // Pinned outcomes for the seeds above, with the real content. A change to the
   // rules or to content/*.json may move these; update them only after checking why.
-  // full-a ends in a shared win.
+  // `base` is cash minus fines: the same as before the Golden Hook Awards (they
+  // draw from their own RNG stream, so the play is unchanged); `totals` add them.
   it.each([
-    ["full-a", ["ann", "bob", "cy"], { cy: 600, ann: 600, bob: 0 }, ["cy", "ann"]],
-    ["full-b", ["ann", "bob", "cy", "di"], { di: 600, bob: 900, cy: 500, ann: 500 }, ["bob"]],
-    ["full-c", ["ann", "bob"], { bob: -400, ann: 2300 }, ["ann"]],
-  ] as const)("seed %s: pinned totals and winners", (seed, seats, totals, winners) => {
+    [
+      "full-a",
+      ["ann", "bob", "cy"],
+      { cy: 600, ann: 600, bob: 0 },
+      // The awards break the shared win: Ann takes Boot Lord alone.
+      {
+        awards: [
+          ["fully-loaded", ["cy", "ann", "bob"]],
+          ["shark-bait", ["cy", "ann"]],
+          ["boot-lord", ["ann"]],
+        ],
+        totals: { ann: 1100, bob: 200, cy: 1000 },
+        winners: ["ann"],
+      },
+    ],
+    [
+      "full-b",
+      ["ann", "bob", "cy", "di"],
+      { di: 600, bob: 900, cy: 500, ann: 500 },
+      // Landlubber goes to nobody: the fewest Risk cards drawn is 0, and 0 never wins.
+      {
+        awards: [
+          ["landlubber", []],
+          ["fine-print", ["di", "cy"]],
+          ["big-haul", ["bob"]],
+        ],
+        totals: { ann: 500, bob: 1200, cy: 700, di: 800 },
+        winners: ["bob"],
+      },
+    ],
+    [
+      "full-c",
+      ["ann", "bob"],
+      { bob: -400, ann: 2300 },
+      {
+        awards: [
+          ["clean-hands", ["ann"]],
+          ["fully-loaded", ["ann"]],
+        ],
+        totals: { ann: 2700, bob: -400 },
+        winners: ["ann"],
+      },
+    ],
+  ] as const)("seed %s: pinned totals and winners", (seed, seats, base, pinned) => {
     const result = playGame(seed, [...seats]).state.result!;
-    expect(Object.fromEntries(result.scores.map((s) => [s.player, s.total]))).toEqual(totals);
-    expect(result.winners).toEqual(winners);
+    expect(Object.fromEntries(result.scores.map((s) => [s.player, s.total - s.awards]))).toEqual(
+      base,
+    );
+    expect({
+      awards: result.awards.map((a) => [a.award, a.winners]),
+      totals: Object.fromEntries(result.scores.map((s) => [s.player, s.total])),
+      winners: result.winners,
+    }).toEqual(pinned);
   });
 
   it("is deterministic: the same seed and policy give the same result", () => {
@@ -158,6 +213,8 @@ describe("final scores", () => {
     const state = clone(
       withShips(started(players), { 0: tile(3, 18), 1: tile(7, 8), [last]: START_LEFT }),
     );
+    // The base scoring alone: no Golden Hook Awards in play (awards.test.ts has those).
+    state.awards.chosen = [];
     state.round = content.rules.rounds;
     state.turn = { playerIndex: last, helicopterUsed: false };
     state.phase = { kind: "roll", actors: [id(state, last)] };

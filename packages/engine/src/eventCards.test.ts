@@ -168,15 +168,19 @@ describe("event rounds", () => {
     before.goldenFish = { spot: 1, tile: SPOT1, value: 1000 };
     before = withPlayer(before, 0, { cash: 700, fish: [500, 500] });
     before = withPlayer(before, 1, { cash: 0, fineTokens: 2 });
+    // The base scoring alone (awards.test.ts covers the Golden Hook Awards).
+    before.awards.chosen = [];
     const { state, events } = endRound(before);
     const [a, b] = [id(before, 0), id(before, 1)];
     const result = {
       scores: [
-        { player: a, cash: 700, fineTokens: 0, total: 700, removed: false },
-        { player: b, cash: 0, fineTokens: 2, total: -200, removed: false },
+        { player: a, cash: 700, fineTokens: 0, awards: 0, total: 700, removed: false },
+        { player: b, cash: 0, fineTokens: 2, awards: 0, total: -200, removed: false },
       ],
       winners: [a],
       reason: "rounds",
+      awards: [],
+      stats: state.awards.stats,
     };
     expect(types(events)).toEqual([
       "rolled",
