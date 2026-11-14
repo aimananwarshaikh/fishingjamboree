@@ -26,6 +26,9 @@ Settings (environment variables):
 | `PORT`        | `8787`                      | Port for HTTP and WebSocket  |
 | `HOST`        | all interfaces              | Address to listen on         |
 | `CONTENT_DIR` | the repository's `content/` | Folder with the content JSON |
+| `ROOMS_DIR`   | not set (memory only)       | Folder to save rooms in      |
+
+With `ROOMS_DIR` set, every room is saved there (one JSON file per room, after each change) and restored when the server starts, so a restart does not end games: players come back with their saved seat or rejoin link. The files hold seat tokens and game seeds; keep the folder private. A file that cannot be restored is logged and renamed to `….json.bad`. Without it, a restart ends every game.
 
 For example: `PORT=9000 HOST=127.0.0.1 pnpm start:server`.
 

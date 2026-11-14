@@ -8,6 +8,7 @@ A full online game for 2–4 players runs in a browser (desktop and phone width)
 
 - Create a room, others join by code, the host starts, 20 rounds are played to a scored result.
 - A refresh rejoins the seat. A player who closed their tab gets their seat back from the start screen (saved seats in `localStorage`) or from a rejoin link `#rejoin=CODE.TOKEN`. A tab whose seat is taken over goes back to the start screen with a message.
+- Since B1: a room that hits a server error is closed without touching other rooms (P2-4), and with `ROOMS_DIR` set rooms survive a server restart (P2-5).
 - Since B1 (P1-2 and the designer's answers): a turn timer of 90 s per whole turn; a turn that runs out is missed (the server never plays for a player); 3 missed turns in a row removes the player; the host can remove a player; the last player left wins. A disconnected player has up to 60 s to come back (2 minutes per game) before their turns are missed straight away.
 - The engine follows `docs/rulebook.md` with no known rule bug (`docs/review-2026-11-17.md`). 1,000 seeded random games pass in `fuzz.test.ts`.
 - `scripts/playtest-three-tabs.mjs` (Playwright) plays whole games in three tabs by clicking only what a player can click.
@@ -29,12 +30,12 @@ Full detail, evidence and file references are in [`docs/review-2026-11-17.md`](r
 
 ### P2
 
-| Item                                       | What to do                                                                                                                                                                                                                                                            | Model |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| P2-3 Server play for an away player is bad | **Replaced** by the P1-2 follow-up: the server no longer plays for anyone (it misses their turns), and `autoplay.ts` is deleted.                                                                                                                                      |       |
-| P2-4 One room's error stops `tick` for all | Catch per room in `tick`, keep the updates already built, and log. Also reply with an error when `handleMessage` throws, so the client's buttons are not stuck. Add the two-rooms test. `core.ts:172-181`, `:353`, `:442-451`; `transport.ts:138-151`; `App.tsx:206`. | Opus  |
-| P2-5 A server restart ends every game      | Save the replay log (it already holds everything needed) and restore rooms on start. Decide where it is stored (file, database) together with B5. `core.ts:112`, `:207-210`.                                                                                          | Opus  |
-| P2-6 Design points                         | Not code. See "Questions for the designer".                                                                                                                                                                                                                           | —     |
+| Item                                       | What to do                                                                                                                                                                                                                                                                                                                                                | Model |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| P2-3 Server play for an away player is bad | **Replaced** by the P1-2 follow-up: the server no longer plays for anyone (it misses their turns), and `autoplay.ts` is deleted.                                                                                                                                                                                                                          |       |
+| P2-4 One room's error stops `tick` for all | **Done** (B1). `tick` runs each room on its own; a room that throws in its timers is closed (`room-closed` to its players, logged with the code); a message that throws answers the sender `server-error` and the client clears `pending`. Tests: `roomIsolation.test.ts` (two rooms at once, a throwing room in `tick`, `handleMessage` throwing).       |       |
+| P2-5 A server restart ends every game      | **Done** (B1). With `ROOMS_DIR` set, each room is saved as one JSON file after every change and restored on start (everyone disconnected; the log is replayed and checked). Tests: `restore.test.ts`, `persistence.test.ts`. Left for B5: where the folder lives on the host, or a database if the host has no lasting disk or runs more than one server. |       |
+| P2-6 Design points                         | Not code. See "Questions for the designer".                                                                                                                                                                                                                                                                                                               | —     |
 
 ### P3 (the review does not number these; named by section and bullet)
 
@@ -99,7 +100,7 @@ Phases are in `docs/build-plan.md` section 5.
 
 - **B1 (review fixes):**
   - **P1-2 rework: done** (designer answers to questions 3 and 4; rulebook "Online play"; notes log "Online play: missed turns and removal"). Defaults used and not objected to: a removed player's ship leaves the board, they show as "removed" in the results, cannot win and cannot rejoin; an away player's turn is missed after the 2-second delay; with one player left the game ends and they win.
-  - Rooms are in memory only (P2-5).
+  - P2-4 and P2-5: done (2026-11-14). Rooms are saved only with `ROOMS_DIR`; without it a restart still ends every game.
   - P1-2 follow-ups, only if wanted: a host pause; a per-room timer length chosen in the lobby (the room already holds its own `timers`); a bot taking a removed player's place (the designer's option once bots exist, B6).
 - **B1b (Golden Hook Awards):** design decided 2026-11-14 (`docs/bonus-awards.md`). Build the stats, the awards content, the secret draw, the payout, hidden state in client views, the protocol change and the tests. Placeholder amounts.
 - **B2 (real UI):**
@@ -115,12 +116,13 @@ Phases are in `docs/build-plan.md` section 5.
   - Not done in 5b: no `Origin` check, no cap on connections per IP, no backpressure limit on slow sockets (the heartbeat covers dead ones).
   - The server port, `wss` for `https`, and `?server=` (see P3 above).
   - Put `scripts/playtest-three-tabs.mjs` into CI if it can run there.
+  - Saved rooms (P2-5): set `ROOMS_DIR` to a folder on a disk that survives a redeploy, and keep it private (the files hold seat tokens). If the host has no lasting disk, or more than one server process will run, write a `RoomStore` on a database instead (the interface is in `packages/server/src/roomStore.ts`; the core does not change). Content changes between deploys make saved games unrestorable (content hash); they are moved aside as `.bad`.
 - **B6 (bots, balancing):** `packages/sim` is empty. Also tune the Golden Hook Award amounts, the combined budget and the pool (targets in `docs/bonus-awards.md`). Card counts, the upgrade price ($200 default, $300 in simulation) and the design questions 1–2 feed into it.
 - **B7 (playtests):** nothing yet.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2 is done (with the designer's missed-turn rules, which also replace P2-3). Next P2-4 (small, protects other rooms), then P2-5, then **B1b**, the Golden Hook Awards (engine and server). Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
+1. **B1 [OPUS]:** P1-2, P2-4 and P2-5 are done (P2-3 replaced by the missed-turn rules). Next **B1b**, the Golden Hook Awards (engine and server). Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
 

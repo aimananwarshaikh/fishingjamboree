@@ -15,10 +15,12 @@
  * The host can remove a player; the engine removes one who misses too many
  * turns in a row.
  */
-import { applyAction, createGame, redactForClient } from "@fishingjamboree/engine";
+import * as realEngine from "@fishingjamboree/engine";
 import type { Action, Content, GameEvent, GameState, ReplayLog } from "@fishingjamboree/engine";
 import type { IdSource } from "./ids";
 import { parseClientMessage } from "./parse";
+import { parseRoomSnapshot, ROOM_SNAPSHOT_VERSION } from "./snapshot";
+import type { RoomSnapshot } from "./snapshot";
 import { PROTOCOL_VERSION } from "./protocol";
 import type {
   ClientMessage,
@@ -71,12 +73,29 @@ export const DEFAULT_CONFIG: CoreConfig = {
   maxNameLength: 20,
 };
 
+/** The engine functions the core calls. */
+export interface EngineFns {
+  applyAction: typeof realEngine.applyAction;
+  createGame: typeof realEngine.createGame;
+  redactForClient: typeof realEngine.redactForClient;
+  replay: typeof realEngine.replay;
+}
+
 export interface CoreDeps {
   content: Content;
   /** Milliseconds; only differences matter. */
   now: () => number;
   ids: IdSource;
   config?: Partial<CoreConfig>;
+  /** Where the core reports errors it caught (a room that threw). Default: nowhere. */
+  log?: (line: string) => void;
+  /**
+   * Keep track of changed rooms for `takeChanges` (default `true`). Off when
+   * nothing saves rooms, so the record does not grow for ever.
+   */
+  trackChanges?: boolean;
+  /** Tests only: replace engine functions (to make a room throw). Default: the real engine. */
+  engine?: Partial<EngineFns>;
 }
 
 interface Seat {
@@ -134,14 +153,28 @@ export class ServerCore {
   private readonly now: () => number;
   private readonly ids: IdSource;
   private readonly config: CoreConfig;
+  private readonly log: (line: string) => void;
+  private readonly engine: EngineFns;
   private readonly rooms = new Map<string, Room>();
   private readonly conns = new Map<ConnId, { room: Room; seat: Seat }>();
+  /** Codes of rooms that may have changed (or gone) since the last `takeChanges`. */
+  private readonly touched = new Set<string>();
+  private readonly trackChanges: boolean;
 
   constructor(deps: CoreDeps) {
     this.content = deps.content;
     this.now = deps.now;
     this.ids = deps.ids;
     this.config = { ...DEFAULT_CONFIG, ...deps.config };
+    this.log = deps.log ?? (() => {});
+    this.trackChanges = deps.trackChanges ?? true;
+    this.engine = {
+      applyAction: realEngine.applyAction,
+      createGame: realEngine.createGame,
+      redactForClient: realEngine.redactForClient,
+      replay: realEngine.replay,
+      ...deps.engine,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -156,6 +189,23 @@ export class ServerCore {
       return out;
     }
     const message = parsed.message;
+    this.touchConn(conn);
+    try {
+      this.dispatch(out, conn, message);
+      this.touchConn(conn);
+    } catch (error) {
+      // A bug, not the player's fault. Whatever was half-built is dropped; the
+      // sender is told, so their buttons stop waiting (docs/protocol.md §5).
+      const room = this.conns.get(conn)?.room.code ?? "-";
+      this.log(`${conn} (room ${room}): error handling "${message.type}": ${describeError(error)}`);
+      const reply: Outbound[] = [];
+      this.error(reply, conn, "server-error", "the server hit an error; try again");
+      return reply;
+    }
+    return out;
+  }
+
+  private dispatch(out: Outbound[], conn: ConnId, message: ClientMessage) {
     switch (message.type) {
       case "create":
         this.onCreate(out, conn, message);
@@ -182,7 +232,6 @@ export class ServerCore {
         this.onKick(out, conn, message);
         break;
     }
-    return out;
   }
 
   /** The transport calls this when a connection closes for any reason. */
@@ -190,6 +239,7 @@ export class ServerCore {
     const out: Outbound[] = [];
     const bound = this.conns.get(conn);
     if (!bound) return out;
+    this.touch(bound.room.code);
     this.conns.delete(conn);
     this.vacate(bound.room, bound.seat, false);
     this.broadcastRoom(out, bound.room);
@@ -201,8 +251,17 @@ export class ServerCore {
     const out: Outbound[] = [];
     const now = this.now();
     for (const room of [...this.rooms.values()]) {
-      for (let step = this.nextStep(room); step && step.at <= now; step = this.nextStep(room)) {
-        step.run(out);
+      // Each room on its own: one that throws is closed (`closeBroken`) and
+      // the others still run on this tick.
+      const roomOut: Outbound[] = [];
+      try {
+        for (let step = this.nextStep(room); step && step.at <= now; step = this.nextStep(room)) {
+          this.touch(room.code);
+          step.run(roomOut);
+        }
+        out.push(...roomOut);
+      } catch (error) {
+        this.closeBroken(out, room, error);
       }
     }
     return out;
@@ -212,8 +271,14 @@ export class ServerCore {
   nextDeadline(): number | null {
     let earliest: number | null = null;
     for (const room of this.rooms.values()) {
-      const step = this.nextStep(room);
-      if (step && (earliest === null || step.at < earliest)) earliest = step.at;
+      let at: number | null;
+      try {
+        at = this.nextStep(room)?.at ?? null;
+      } catch {
+        // `tick` meets the same error and closes the room.
+        at = this.now();
+      }
+      if (at !== null && (earliest === null || at < earliest)) earliest = at;
     }
     return earliest;
   }
@@ -235,6 +300,145 @@ export class ServerCore {
   replayLog(code: string): ReplayLog | null {
     const log = this.rooms.get(code)?.game?.log;
     return log ? (JSON.parse(JSON.stringify(log)) as ReplayLog) : null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Saving and restoring rooms (review P2-5; src/snapshot.ts)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The rooms that may have changed since the last call, as snapshots to
+   * save, and the codes of rooms that are gone (to delete). Server-side only:
+   * snapshots hold tokens and seeds.
+   */
+  takeChanges(): { save: RoomSnapshot[]; remove: string[] } {
+    const save: RoomSnapshot[] = [];
+    const remove: string[] = [];
+    for (const code of this.touched) {
+      const room = this.rooms.get(code);
+      if (room) save.push(this.snapshotOf(room));
+      else remove.push(code);
+    }
+    this.touched.clear();
+    return { save, remove };
+  }
+
+  /** A snapshot of one room now, or `null`. */
+  snapshotRoom(code: string): RoomSnapshot | null {
+    const room = this.rooms.get(code);
+    return room ? this.snapshotOf(room) : null;
+  }
+
+  /**
+   * Brings back a saved room (read from disk: anything may be in it). The game
+   * is rebuilt by replaying its log and must match the saved state. Everyone
+   * starts disconnected, as if all had just dropped: the empty-room rules
+   * apply (docs/protocol.md §7). Refused, with the reason, if the snapshot is
+   * malformed, its code is taken, its content differs from this server's, or
+   * the replay does not match.
+   */
+  restoreRoom(raw: unknown): { ok: true; code: string } | { ok: false; reason: string } {
+    const parsed = parseRoomSnapshot(raw);
+    if (!parsed.ok) return parsed;
+    const snap = parsed.snapshot;
+    const fail = (reason: string) => ({
+      ok: false as const,
+      reason: `room ${snap.code}: ${reason}`,
+    });
+    if (this.rooms.has(snap.code)) return fail("a room with that code already exists");
+    const seatIds = snap.seats.map((s) => s.id);
+    let game: Game | null = null;
+    if (snap.game) {
+      const { log } = snap.game;
+      if (log.contentHash !== this.content.hash) {
+        return fail(`saved with content ${log.contentHash}, this server has ${this.content.hash}`);
+      }
+      if (JSON.stringify(log.setup.players) !== JSON.stringify(seatIds)) {
+        return fail("the game's players are not the room's seats");
+      }
+      let state: GameState;
+      try {
+        state = this.engine.replay(this.content, log).state;
+      } catch (error) {
+        return fail(`the replay failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      if (JSON.stringify(state) !== JSON.stringify(snap.game.state)) {
+        return fail("the replay does not match the saved state");
+      }
+      if ((state.phase.kind === "gameOver") !== (snap.status === "finished")) {
+        return fail("the status does not match the game");
+      }
+      for (const seat of snap.seats) {
+        if (state.players.find((p) => p.id === seat.id)?.removed !== seat.removed) {
+          return fail(`seat ${seat.id}: removed does not match the game`);
+        }
+      }
+      const now = this.now();
+      game = { state, log, lastActionAt: now, turnStartedAt: now };
+    } else if (snap.seats.some((s) => s.removed || s.left || s.away)) {
+      return fail("a lobby seat cannot be removed, left or away");
+    }
+    const now = this.now();
+    const room: Room = {
+      code: snap.code,
+      status: snap.status,
+      host: snap.host,
+      seats: snap.seats.map((s) => ({
+        id: s.id,
+        name: s.name,
+        token: s.token,
+        conn: null,
+        disconnectedAt: now,
+        left: s.left,
+        away: s.away,
+        graceFrom: null,
+        graceLeftMs: Math.min(s.graceLeftMs, snap.timers.reconnectBudgetMs),
+        removed: s.removed,
+      })),
+      // Above anything a client may hold, so the restored room is taken as newer.
+      rev: snap.rev + 1,
+      game,
+      emptySince: now,
+      resumedAt: now,
+      timers: { ...snap.timers },
+    };
+    this.rooms.set(room.code, room);
+    return { ok: true, code: room.code };
+  }
+
+  private snapshotOf(room: Room): RoomSnapshot {
+    const now = this.now();
+    return {
+      kind: "fishingjamboree-room",
+      version: ROOM_SNAPSHOT_VERSION,
+      code: room.code,
+      status: room.status,
+      host: room.host,
+      rev: room.rev,
+      timers: { ...room.timers },
+      seats: room.seats.map((s) => ({
+        id: s.id,
+        name: s.name,
+        token: s.token,
+        left: s.left,
+        away: s.away,
+        removed: s.removed,
+        // As if a running grace ended now (what `chargeGrace` would leave).
+        graceLeftMs:
+          s.graceFrom === null
+            ? s.graceLeftMs
+            : Math.max(
+                0,
+                s.graceLeftMs - Math.min(now - s.graceFrom, room.timers.reconnectGraceMs),
+              ),
+      })),
+      game: room.game
+        ? (JSON.parse(JSON.stringify({ log: room.game.log, state: room.game.state })) as {
+            log: ReplayLog;
+            state: GameState;
+          })
+        : null,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -263,6 +467,7 @@ export class ServerCore {
       },
     };
     this.rooms.set(code, room);
+    this.touch(code);
     const seat = this.addSeat(room, name, conn);
     this.welcome(out, room, seat);
   }
@@ -349,7 +554,7 @@ export class ServerCore {
       return this.error(out, conn, "players-disconnected", "a player in the room is disconnected");
     }
     const setup = { seed: this.ids.gameSeed(), players: room.seats.map((s) => s.id) };
-    const created = createGame(this.content, setup);
+    const created = this.engine.createGame(this.content, setup);
     room.game = {
       state: created.state,
       log: { schemaVersion: 1, contentHash: this.content.hash, setup, actions: [] },
@@ -392,7 +597,7 @@ export class ServerCore {
     }
     // The seat decides who is acting, never the message.
     const action = { ...message.action, player: seat.id } as Action;
-    const result = applyAction(this.content, game.state, action);
+    const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) return reject(result.error.code, result.error.message);
     this.commit(out, room, game, action, result.state, result.events, false);
   }
@@ -430,7 +635,7 @@ export class ServerCore {
       return this.error(out, conn, "cannot-kick", "the game is over");
     }
     const action: Action = { type: "removePlayer", player: target.id };
-    const result = applyAction(this.content, game.state, action);
+    const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) return this.error(out, conn, "cannot-kick", result.error.message);
     this.commit(out, room, game, action, result.state, result.events, false, seat.id);
   }
@@ -570,7 +775,7 @@ export class ServerCore {
   /** The deciding player is away or out of time: their turn is missed (docs/protocol.md §7). */
   private missTurn(out: Outbound[], room: Room, game: Game, seat: Seat) {
     const action: Action = { type: "missTurn", player: seat.id };
-    const result = applyAction(this.content, game.state, action);
+    const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) {
       // Cannot happen: the deciding player can always miss their turn. Fail loudly rather than spin.
       throw new Error(`room ${room.code}: cannot miss ${seat.id}'s turn: ${result.error.message}`);
@@ -692,6 +897,33 @@ export class ServerCore {
 
   private deleteRoom(room: Room) {
     this.rooms.delete(room.code);
+    this.touch(room.code);
+  }
+
+  private touch(code: string) {
+    if (this.trackChanges) this.touched.add(code);
+  }
+
+  private touchConn(conn: ConnId) {
+    const code = this.conns.get(conn)?.room.code;
+    if (code !== undefined) this.touch(code);
+  }
+
+  /**
+   * A room threw while running its timers: it would throw again on every
+   * tick, so it is closed for good (notes log "Server errors"). Its players
+   * are told and keep their sockets, with no seat; anything the failed tick
+   * had built for the room is dropped.
+   */
+  private closeBroken(out: Outbound[], room: Room, error: unknown) {
+    this.log(`room ${room.code}: error in tick, room closed: ${describeError(error)}`);
+    for (const seat of room.seats) {
+      if (seat.conn === null) continue;
+      this.error(out, seat.conn, "room-closed", "this room hit a server error and was closed");
+      this.conns.delete(seat.conn);
+      seat.conn = null;
+    }
+    this.deleteRoom(room);
   }
 
   // -------------------------------------------------------------------------
@@ -720,7 +952,7 @@ export class ServerCore {
 
   private snapshot(room: Room, seat: Seat): GameSnapshot | null {
     if (!room.game) return null;
-    const view = redactForClient(room.game.state, seat.id);
+    const view = this.engine.redactForClient(room.game.state, seat.id);
     return { seq: view.actionCount, view, turnTimeLeftMs: this.turnTimeLeft(room) };
   }
 
@@ -777,7 +1009,7 @@ export class ServerCore {
     const turnTimeLeftMs = this.turnTimeLeft(room);
     for (const seat of room.seats) {
       if (seat.conn === null) continue;
-      const view = redactForClient(state, seat.id);
+      const view = this.engine.redactForClient(state, seat.id);
       out.push({
         kind: "send",
         to: seat.conn,
@@ -789,4 +1021,8 @@ export class ServerCore {
   private error(out: Outbound[], conn: ConnId, code: ProtocolErrorCode, message: string) {
     out.push({ kind: "send", to: conn, message: { type: "error", code, message } });
   }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }

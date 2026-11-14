@@ -17,6 +17,7 @@ import type { RawData } from "ws";
 import { ServerCore } from "./core";
 import type { ConnId, CoreDeps, Outbound } from "./core";
 import type { ServerMessage } from "./protocol";
+import type { RoomStore } from "./roomStore";
 
 export interface TransportConfig {
   /** Largest client frame accepted; a bigger one closes the socket with 1009. */
@@ -62,6 +63,11 @@ export interface GameServerOptions {
   port?: number;
   host?: string;
   log?: (line: string) => void;
+  /**
+   * Saves rooms after every change and restores them on start (review P2-5).
+   * Without one, rooms live in memory only.
+   */
+  store?: RoomStore;
 }
 
 export interface GameServer {
@@ -91,7 +97,9 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
   const config: TransportConfig = { ...DEFAULT_TRANSPORT_CONFIG, ...options.transport };
   const now = options.core.now ?? Date.now;
   const log = options.log ?? (() => {});
-  const core = new ServerCore({ ...options.core, now });
+  const store = options.store;
+  const core = new ServerCore({ log, trackChanges: store !== undefined, ...options.core, now });
+  if (store) restoreRooms(core, store, log);
 
   const wsOptions = { maxPayload: config.maxMessageBytes };
   const wss = options.server
@@ -134,8 +142,12 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
     }
   };
 
-  /** Runs a core call, carries out its result and re-arms the tick timer. */
-  const run = (what: string, call: () => Outbound[]) => {
+  /**
+   * Runs a core call, carries out its result and re-arms the tick timer. The
+   * core catches its own errors per room and per message (review P2-4); this
+   * is the last line of defence. `onError` builds a reply when it fires.
+   */
+  const run = (what: string, call: () => Outbound[], onError?: () => Outbound[]) => {
     let out: Outbound[] = [];
     let failed = false;
     try {
@@ -145,9 +157,37 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
       log(
         `core error in ${what}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
       );
+      out = onError?.() ?? [];
     }
     carryOut(out);
+    persist();
     schedule(failed);
+  };
+
+  /** Saves what changed. A failed write is logged; the game goes on in memory. */
+  const persist = () => {
+    if (!store) return;
+    let changes: ReturnType<ServerCore["takeChanges"]>;
+    try {
+      changes = core.takeChanges();
+    } catch (error) {
+      log(`core error in takeChanges: ${String(error)}`);
+      return;
+    }
+    for (const snapshot of changes.save) {
+      try {
+        store.save(snapshot);
+      } catch (error) {
+        log(`room ${snapshot.code}: could not save: ${String(error)}`);
+      }
+    }
+    for (const code of changes.remove) {
+      try {
+        store.remove(code);
+      } catch (error) {
+        log(`room ${code}: could not delete the saved room: ${String(error)}`);
+      }
+    }
   };
 
   const schedule = (afterError = false) => {
@@ -210,7 +250,17 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
       });
       return;
     }
-    run("handleMessage", () => core.handleMessage(conn.id, raw));
+    run(
+      "handleMessage",
+      () => core.handleMessage(conn.id, raw),
+      () => [
+        {
+          kind: "send",
+          to: conn.id,
+          message: { type: "error", code: "server-error", message: "the server hit an error" },
+        },
+      ],
+    );
   };
 
   wss.on("connection", (ws) => {
@@ -239,6 +289,9 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
     });
     if (shuttingDown) ws.close(CLOSE_CODES.shutdown, "server shutting down");
   });
+
+  // Restored rooms have timers (lobby seats, idle deletion) from the start.
+  schedule();
 
   const heartbeat = setInterval(() => {
     for (const conn of conns.values()) {
@@ -282,4 +335,43 @@ function rawToString(data: RawData): string {
   if (Buffer.isBuffer(data)) return data.toString("utf8");
   if (Array.isArray(data)) return Buffer.concat(data).toString("utf8");
   return Buffer.from(data).toString("utf8");
+}
+
+/** Loads every saved room into the core. A bad entry is logged and moved aside, never fatal. */
+function restoreRooms(core: ServerCore, store: RoomStore, log: (line: string) => void) {
+  let entries: ReturnType<RoomStore["load"]>;
+  try {
+    entries = store.load();
+  } catch (error) {
+    log(`could not read saved rooms: ${String(error)}`);
+    return;
+  }
+  let restored = 0;
+  for (const entry of entries) {
+    let reason: string;
+    if ("error" in entry) {
+      reason = `unreadable: ${entry.error}`;
+    } else {
+      let result: ReturnType<ServerCore["restoreRoom"]>;
+      try {
+        result = core.restoreRoom(entry.data);
+      } catch (error) {
+        result = { ok: false, reason: `restore threw: ${String(error)}` };
+      }
+      if (result.ok) {
+        restored += 1;
+        continue;
+      }
+      reason = result.reason;
+    }
+    log(`saved room ${entry.file} skipped (${reason}); moved to ${entry.file}.bad`);
+    try {
+      store.discard(entry.file);
+    } catch (error) {
+      log(`could not move ${entry.file} aside: ${String(error)}`);
+    }
+  }
+  // Restoring changes nothing worth writing back.
+  core.takeChanges();
+  if (entries.length > 0) log(`restored ${restored} of ${entries.length} saved rooms`);
 }

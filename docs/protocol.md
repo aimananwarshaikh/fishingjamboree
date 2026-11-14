@@ -103,6 +103,10 @@ Nobody can join a room once the game has started. There are no spectators yet.
 | `server-busy`          | No free room code could be found                                    |
 | `kicked`               | This player was removed from the room; the token no longer works    |
 | `cannot-kick`          | That seat cannot be removed (yourself, unknown, removed, game over) |
+| `server-error`         | The server hit an error handling this message (a bug); try again    |
+| `room-closed`          | The room hit a server error and was closed; the seat is gone        |
+
+A bug in the server never stops other rooms (review P2-4). If handling a message throws, nothing half-built is sent and only the sender gets `server-error`; the room is kept. If a room throws while the server runs its timers (turn timer, grace, lobby seats), it would throw again on every tick, so it is **closed**: each connected player gets `room-closed`, their connection stays open with no seat, the room and its tokens are gone, and the error is logged with the room code. Other rooms are served on the same tick.
 
 `rejected.error.code`: the engine's `game-over`, `unknown-player`, `not-your-turn`, `wrong-phase`, `illegal-action`, plus:
 
@@ -183,6 +187,10 @@ A seat is never freed during a game. The game is not paused for the other player
 - When someone reconnects, every other disconnected player's grace starts again from that moment (unless they had sent `leave`), capped by what is left of their budget; a player with no budget left stays away. The turn timer also counts from that moment.
 - A room nobody has been connected to for **30 minutes** (`roomIdleTtlMs`) is deleted, whatever its status.
 
+### After a server restart
+
+With rooms saved ([section 9](#saving-rooms-review-p2-5)), a restarted server brings every room back with **nobody connected**, as if everyone had just dropped at the moment it started: the rules for an empty room above apply. So nothing happens until someone rejoins; then the turn timer counts a whole turn from then and the others' graces start, from what is left of their budgets (a player who had sent `leave` is away at once). Lobby seats get a fresh 2-minute lobby grace; a room nobody comes back to is deleted after 30 minutes. Players rejoin as after any disconnect (same seat token, `rejoin`, `welcome` with the current view). Nothing new is sent to clients: a restored room's `rev` is one above the saved one.
+
 ### Not covered
 
 The host cannot pause the game; see [section 10](#10-open-items).
@@ -256,6 +264,21 @@ core.nextDeadline(); // → number | null  when tick() next has work
 | 500 rooms exist                                 | `create` is answered `error` `server-busy`          |
 | The server shuts down                           | Socket dropped                                      |
 
+### Saving rooms (review P2-5)
+
+The core stays free of I/O: it hands out snapshots and takes them back; the transport saves them.
+
+```ts
+core.takeChanges(); // → { save: RoomSnapshot[], remove: string[] }  rooms changed or gone since the last call
+core.snapshotRoom(code); // → RoomSnapshot | null
+core.restoreRoom(json); // → { ok: true, code } | { ok: false, reason }   never throws
+```
+
+- `RoomSnapshot` (`src/snapshot.ts`): code, status, host, `rev`, timers, seats (id, name, token, `left`, `away`, `removed`, reconnect budget left) and, once started, the game's `ReplayLog` plus its current `GameState`. No connection ids and no clock times. It holds seat tokens and the seed: **server-side only**.
+- `restoreRoom` checks the shape, refuses a code already in use or a log made with other content (content hash), replays the log and refuses it unless the result equals the saved state (and the status, players and removals agree).
+- `createGameServer({ store })` takes a `RoomStore` (`load`, `save`, `remove`, `discard`). On start it restores every saved room; an unreadable or refused entry is logged with the reason and moved aside (`discard`), and never stops the server. After every core call it saves what changed and deletes what is gone; a failed write is logged and the game goes on in memory.
+- `fileRoomStore(dir)` (`src/roomStore.ts`): one file `<CODE>.json` per room, created `0600` in a `0700` folder, written to a temporary file and renamed (never half a file); an unchanged room is not written again; a bad file becomes `<CODE>.json.bad`. `main.ts` uses it when `ROOMS_DIR` is set.
+
 The web client can import the message types from `packages/server/src/protocol.ts`, which has no Node imports.
 
 ## 10. Open items
@@ -263,5 +286,5 @@ The web client can import the message types from `packages/server/src/protocol.t
 - No pause. A bot taking a removed player's place (the designer's option, once bots exist, B6).
 - No spectators (`redactForClient` already accepts `"spectator"`).
 - No rematch in the same room (Milestone B3).
-- Rooms live in memory: a server restart ends every game. The replay log would be enough to restore one.
+- Rooms are saved only when the server is given a `RoomStore` (`ROOMS_DIR`); without one, a restart ends every game. A store for deployment (a database, if the host has no lasting disk or runs more than one server) is for B5.
 - The replay log is not offered to clients after the game.

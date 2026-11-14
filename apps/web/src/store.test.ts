@@ -10,6 +10,7 @@ import { describeEvent } from "./describe";
 import {
   KICKED_NOTICE,
   REPLACED_NOTICE,
+  ROOM_CLOSED_NOTICE,
   awaySecondsLeft,
   bannerFor,
   initialState,
@@ -370,6 +371,7 @@ describe("store rules for seq and rev", () => {
     view: view(seq),
     turnTimeLeftMs: 60_000,
   });
+  const SESSION = { code: "BCDF", seat: "p1" as const, seatToken: "t" };
   const withGame = (seq: number): ClientState => ({
     ...initialState,
     game: { seq, view: view(seq), turnTimeLeftMs: 60_000 },
@@ -426,6 +428,32 @@ describe("store rules for seq and rev", () => {
       ctx,
     );
     expect(bad.notice).toBe("Not your turn");
+  });
+
+  it("a server error clears pending so the buttons work again (P2-4)", () => {
+    const pending: ClientState = { ...withGame(3), session: SESSION, pending: "c-1" };
+    const after = onServerMessage(
+      pending,
+      { type: "error", code: "server-error", message: "the server hit an error; try again" },
+      ctx,
+    );
+    expect(after.pending).toBeNull();
+    expect(after.game?.seq).toBe(3);
+    expect(after.session).toEqual(SESSION);
+    expect(after.notice).toBe("the server hit an error; try again");
+  });
+
+  it("a closed room sends the tab back to the start screen with a notice (P2-4)", () => {
+    const pending: ClientState = { ...withGame(3), session: SESSION, pending: "c-1" };
+    const after = onServerMessage(
+      pending,
+      { type: "error", code: "room-closed", message: "closed" },
+      ctx,
+    );
+    expect(after.session).toBeNull();
+    expect(after.game).toBeNull();
+    expect(after.pending).toBeNull();
+    expect(after.notice).toBe(ROOM_CLOSED_NOTICE);
   });
 
   it("flags content that differs from the server's", () => {
