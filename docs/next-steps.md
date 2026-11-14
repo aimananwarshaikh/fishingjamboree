@@ -17,7 +17,18 @@ How to run it: see "Running locally" in `README.md`. `pnpm check` and `npx prett
 
 The client is bare: SVG board, no card art, no animation. That is Milestone B2.
 
-## Open items from the review
+## End-of-B1 review (2026-11-14)
+
+[`docs/review-2026-11-14.md`](review-2026-11-14.md) reviews everything merged after `milestone-a` (PRs #17 to #23). No rule bug and no leak of hidden information were found. Nothing was fixed. Open from it, in priority order:
+
+- **P1-1 (designer, before the first playtest):** a player who drops for about a minute and a half is removed for good (measured: 84 s with 2 players, which ends the game; 104 s with 3; 124 s with 4), because an away player's turns are missed after 2 seconds and 3 misses remove them.
+- **P2-2:** with the 2-minute reconnect budget spent, a one-second blip on a player's own turn loses the turn.
+- **P2-3 (designer):** "missed their last turn" takes the awards from a player who played their last turn but let the timer run out in the shop or the Helicopter choice; it can change the winner.
+- **P2-4 (designer, B6):** award numbers: Landlubber and Golden Touch almost never pay; the budget rule halves how often Daredevil and Stripped Down are drawn.
+- **P2-5:** a room closed after a server error deletes its saved file, so the replay log that would reproduce the bug is lost.
+- **P3:** a removed seat becomes "away" after an empty room or a restart; a throw after an action is stored stalls the room for up to 90 s; saved-room and client hardening; missing tests. See the review.
+
+## Open items from the review of 2026-11-17 (Milestone A)
 
 Full detail, evidence and file references are in [`docs/review-2026-11-17.md`](review-2026-11-17.md). Order is priority, then what to do first. Models are suggestions.
 
@@ -116,9 +127,9 @@ Phases are in `docs/build-plan.md` section 5.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2, P2-4, P2-5, B1b (Golden Hook Awards) and the P3 list are done (P2-3 replaced by the missed-turn rules), except the P3 items that belong with B5 (server limits, `Origin` check, the fixed port) and the low-priority lobby name hold. Next: the end-of-B1 review (item 3).
+1. **B1 [OPUS]:** P1-2, P2-4, P2-5, B1b (Golden Hook Awards) and the P3 list are done (P2-3 replaced by the missed-turn rules), except the P3 items that belong with B5 (server limits, `Origin` check, the fixed port) and the low-priority lobby name hold. The end-of-B1 review is done (`docs/review-2026-11-14.md`). Next: put its P1-1, P2-3 and P2-4 to the designer and fix P1-1 and the P2 items before the first playtest.
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
-3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
+3. ~~Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).~~ Done 2026-11-14: `docs/review-2026-11-14.md`.
 
 ## History
 
