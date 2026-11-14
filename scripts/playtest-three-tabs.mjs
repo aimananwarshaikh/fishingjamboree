@@ -20,7 +20,8 @@
  * click on a button is quiet, a 4th player can join a lobby, and a phone-width
  * tab (390 px) has no horizontal scroll and tappable buttons; the host removes
  * the 4th player from the lobby. With GRACE=1 the closed tab's turns are missed
- * and, after three in a row, its player is removed from the game. Rejoining (P1-1):
+ * (away: they do not count towards removal), and after three of them the host
+ * removes that player from the game. Rejoining (P1-1):
  * a closed tab's player opens a new tab and rejoins from the start-screen offer
  * (a new tab never rejoins by itself, so the three tabs stay three players);
  * and a player opens their rejoin link in a fresh browser context, while the

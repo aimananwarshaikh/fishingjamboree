@@ -15,6 +15,7 @@ const TURN = DEFAULT_CONFIG.turnTimeoutMs!;
 const GRACE = DEFAULT_CONFIG.reconnectGraceMs;
 const BUDGET = DEFAULT_CONFIG.reconnectBudgetMs;
 const DELAY = DEFAULT_CONFIG.autoActionDelayMs;
+const FLOOR = DEFAULT_CONFIG.disconnectFloorMs;
 const LOBBY_GRACE = DEFAULT_CONFIG.lobbyGraceMs;
 const LIMIT = content.rules.missedTurnsBeforeRemoval;
 
@@ -46,6 +47,7 @@ const eventTypes = (h: Harness, conn: string) => h.last(conn, "update").events.m
 describe("the defaults", () => {
   it("give a whole turn 90 s, no more than the ~90 s per decision the review measured", () => {
     expect(TURN).toBe(90_000);
+    expect(FLOOR).toBe(10_000);
     expect(GRACE).toBeLessThanOrEqual(BUDGET);
     expect(LIMIT).toBe(3);
   });
@@ -454,6 +456,77 @@ describe("reconnect grace budget", () => {
       connected: false,
       away: true,
       awayInMs: null,
+    });
+  });
+
+  it("with no budget left, a blip on the player's own turn does not lose it (review P2-2)", () => {
+    const h = harness({ reconnectBudgetMs: 0 });
+    const { code, tokens } = h.started(3);
+    const seat = h.actor("c1")!;
+    const watcher = seat === "p1" ? "c2" : "c1";
+    const i = seatIndex(seat);
+    h.advance(5_000); // thinking
+    h.clear();
+    h.drop(connOf(seat));
+    // Away at once (no budget), but the turn is not missed for FLOOR.
+    expect(h.last(watcher, "room").room.seats[i]).toMatchObject({ away: true });
+    expect(h.core.nextDeadline()).toBe(h.now() + FLOOR);
+    h.advance(FLOOR - 1_000);
+    expect(h.got(watcher, "update")).toHaveLength(0);
+    // Back after 9 s: the turn goes on, on the same turn timer (5 + 9 s used).
+    h.send("back", { type: "rejoin", v: V, code, seatToken: tokens[i] });
+    expect(h.last("back", "welcome").game?.turnTimeLeftMs).toBe(TURN - 5_000 - (FLOOR - 1_000));
+    h.advance(60_000);
+    expect(h.got(watcher, "update")).toHaveLength(0);
+    expect(h.actor("back")).toBe(seat);
+    h.intent("back", strip(h.legal("back", seat)[0]!));
+    expect(h.last(watcher, "update")).toMatchObject({ by: seat, auto: false });
+  });
+
+  it("with no budget left, a drop that lasts is missed FLOOR after the disconnect", () => {
+    const h = harness({ reconnectBudgetMs: 0 });
+    const { code } = h.started(3);
+    const seat = h.actor("c1")!;
+    const watcher = seat === "p1" ? "c2" : "c1";
+    h.advance(5_000);
+    h.drop(connOf(seat));
+    h.clear();
+    h.advance(FLOOR - 1);
+    expect(h.got(watcher, "update")).toHaveLength(0);
+    h.advance(1);
+    expect(h.last(watcher, "update").events[0]).toMatchObject({
+      type: "turnMissed",
+      player: seat,
+      reason: "away",
+    });
+    expect(h.core.replayLog(code)?.actions).toHaveLength(1);
+    // Later turns of theirs: the floor has passed, so the short delay applies.
+    for (let guard = 0; h.actor(watcher) !== seat; guard += 1) {
+      if (guard > 50) throw new Error("never their turn again");
+      act(h, watcher);
+    }
+    expect(h.core.nextDeadline()).toBe(h.now() + DELAY);
+  });
+
+  it("the floor is not given after leave, and never holds back the turn timer", () => {
+    const h = harness({ reconnectBudgetMs: 0 });
+    h.started(3);
+    const seat = h.actor("c1")!;
+    h.send(connOf(seat), { type: "leave" });
+    expect(h.core.nextDeadline()).toBe(h.now() + DELAY);
+
+    // A player with budget who drops 2 s before the turn timer runs out: missed on time.
+    const g = harness();
+    g.started(3);
+    const actor = g.actor("c1")!;
+    g.advance(TURN - 2_000);
+    g.drop(connOf(actor));
+    expect(g.core.nextDeadline()).toBe(g.now() + 2_000);
+    g.advance(2_000);
+    const watcher = actor === "p1" ? "c2" : "c1";
+    expect(g.last(watcher, "update").events[0]).toMatchObject({
+      type: "turnMissed",
+      reason: "timeout",
     });
   });
 

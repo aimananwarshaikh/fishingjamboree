@@ -205,7 +205,7 @@ These rules apply to the online game (decided with the designer, 2026-11-13).
 
 - **Turn timer:** you have 90 seconds for your whole turn (rolling, moving and shopping). The screen shows how long you have left.
 - **Missed turn:** if time runs out, nothing more happens that turn. Your ship stays where it is, you draw no card and buy nothing, and play passes to the next player. If you had to place a ship (at setup, entering late, or after a Sinking Boat), it goes on the first free dock.
-- **Disconnected players:** a player who loses their connection has up to 60 seconds to come back (2 minutes in all per game). After that they are **away**: their turns are missed straight away until they return, so the game keeps moving. These missed turns do not count towards removal (below).
+- **Disconnected players:** a player who loses their connection has up to 60 seconds to come back (2 minutes in all per game). After that they are **away**: their turns are missed straight away until they return, so the game keeps moving. A disconnected player's turn is never missed sooner than 10 seconds after they lost their connection, even with no time left, so a short network blip does not cost the turn. These missed turns do not count towards removal (below).
 - **Removed players:** run out of time on 3 turns in a row and you are removed from the game. Only a turn that ran the whole 90 seconds counts; a turn missed while you are away does not count, and does not break the run either. The host can remove a player at any time, away or not. A removed player's ship leaves the board; they get no more turns, cannot win, and cannot rejoin.
 - **Last player left:** if every other player has been removed, the game ends at once and the last player wins.
 

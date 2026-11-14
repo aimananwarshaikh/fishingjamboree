@@ -65,6 +65,12 @@ export interface CoreConfig {
   reconnectBudgetMs: number;
   /** Pause before the server misses an away player's turn, so others can follow. */
   autoActionDelayMs: number;
+  /**
+   * An away player's turn is never missed sooner than this after they
+   * disconnected, even with no reconnect budget left (a blip; review P2-2).
+   * Not after `leave`, and it never holds back the turn timer.
+   */
+  disconnectFloorMs: number;
   /** A room with no connections at all is deleted after this long. */
   roomIdleTtlMs: number;
   maxNameLength: number;
@@ -76,6 +82,7 @@ export const DEFAULT_CONFIG: CoreConfig = {
   reconnectGraceMs: 60_000,
   reconnectBudgetMs: 2 * 60_000,
   autoActionDelayMs: 2_000,
+  disconnectFloorMs: 10_000,
   roomIdleTtlMs: 30 * 60_000,
   maxNameLength: 20,
 };
@@ -747,7 +754,7 @@ export class ServerCore {
       for (const actor of game.state.phase.actors) {
         const seat = room.seats.find((s) => s.id === actor);
         if (!seat) continue;
-        const at = seat.away ? game.lastActionAt + this.config.autoActionDelayMs : turnDeadline;
+        const at = seat.away ? this.awayMissAt(game, seat) : turnDeadline;
         if (at === null) continue;
         const reason = seat.away ? "away" : "timeout";
         steps.push({ at, run: (out) => this.missTurn(out, room, game, seat, reason) });
@@ -760,6 +767,18 @@ export class ServerCore {
   private awayAt(room: Room, seat: Seat): number | null {
     if (room.status !== "playing" || seat.away || seat.graceFrom === null) return null;
     return seat.graceFrom + Math.min(room.timers.reconnectGraceMs, seat.graceLeftMs);
+  }
+
+  /**
+   * When the server misses an away player's turn: the short delay after the
+   * previous action, but never sooner than `disconnectFloorMs` after the
+   * disconnect (unless they sent `leave`), so a blip with no budget left
+   * does not cost the turn (review P2-2).
+   */
+  private awayMissAt(game: Game, seat: Seat): number {
+    const afterAction = game.lastActionAt + this.config.autoActionDelayMs;
+    if (seat.left || seat.disconnectedAt === null) return afterAction;
+    return Math.max(afterAction, seat.disconnectedAt + this.config.disconnectFloorMs);
   }
 
   /** When the turn timer runs out for a deciding player who is not away. */

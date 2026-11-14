@@ -174,7 +174,7 @@ describe("a whole game over WebSockets", () => {
   it("misses the turn of a player who stays away, on the tick timer, until they rejoin", async () => {
     const { connect } = await start(
       { rateBurst: 1e6, ratePerSecond: 1e6 },
-      { reconnectGraceMs: 40, autoActionDelayMs: 5 },
+      { reconnectGraceMs: 40, autoActionDelayMs: 5, disconnectFloorMs: 20 },
     );
     const { code, tokens, seats } = await lobby(connect, 2);
     const [ann, bob] = seats as [TestClient, TestClient];
