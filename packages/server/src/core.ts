@@ -121,7 +121,7 @@ interface Seat {
   disconnectedAt: number | null;
   /** The player sent `leave` during a game: no grace period. */
   left: boolean;
-  /** In a game: the reconnect grace is over (or the player left), so the server plays for them. */
+  /** In a game: the reconnect grace is over (or the player left), so the server misses their turns. */
   away: boolean;
   /** In a game, while disconnected and not away: when the current grace started counting. */
   graceFrom: number | null;
@@ -262,7 +262,7 @@ export class ServerCore {
     return out;
   }
 
-  /** Runs everything that is due: frees lobby seats, plays for away players, deletes idle rooms. */
+  /** Runs everything that is due: frees lobby seats, misses turns that are due, deletes idle rooms. */
   tick(): Outbound[] {
     const out: Outbound[] = [];
     const now = this.now();
@@ -751,7 +751,7 @@ export class ServerCore {
       }
     }
     const game = room.game;
-    // Nobody is played for while nobody is watching.
+    // No turn is missed while nobody is watching.
     if (room.status === "playing" && game && room.emptySince === null) {
       // A disconnected player becomes away when the grace ends; everyone is told.
       for (const seat of room.seats) {

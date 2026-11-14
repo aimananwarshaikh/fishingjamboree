@@ -72,7 +72,7 @@ Nobody can join a room once the game has started. There are no spectators yet.
 - `timers` is the room's time limits, fixed when the room is created: `turnTimeoutMs` (`null` if there is no turn timer), `reconnectGraceMs`, `reconnectBudgetMs` ([section 7](#7-disconnect-policy)).
 - `awayInMs` is, in a game, for a disconnected player who is not yet away: how many milliseconds are left before they are away. Otherwise `null`.
 - `game` is `null` in the lobby, otherwise `{ seq, view, turnTimeLeftMs }`.
-- `turnTimeLeftMs` (in `game` and in `update`) is how many milliseconds the deciding player has left before the server plays for them. It is `null` when no turn timer runs: no timer is set, the deciding player is away (the server acts after the short delay instead), or the game is over.
+- `turnTimeLeftMs` (in `game` and in `update`) is how many milliseconds the deciding player has left before their turn timer runs out and the server ends the turn for them (§7). It is `null` when no turn timer runs: no timer is set, the deciding player is away (the server misses their turn after the short delay instead), or the game is over.
 - **Times are relative.** `awayInMs` and `turnTimeLeftMs` are counted when the message is sent. A client adds them to the time the message arrived on its own clock, so client and server clocks need not agree. They are not resent as time passes; a later message carries fresh values.
 - `view` is the receiver's own `PlayerView` (`view.viewer` is their seat). It is sent whole in every `update`; it is small.
 - `events` are the engine's `GameEvent`s for that action, the same for everyone. They are for animation and the log. The view alone is enough to carry on.

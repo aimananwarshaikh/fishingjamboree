@@ -48,7 +48,7 @@ export interface ClientState {
   pending: string | null;
   /** The latest banner (round start, event card, game over); the UI hides it after a moment. */
   banner: Banner | null;
-  /** When the server will play for the deciding player, on this tab's clock (`ctx.now`); `null`: no turn timer. */
+  /** When the deciding player's turn timer runs out, on this tab's clock (`ctx.now`); `null`: no turn timer. */
   turnDeadline: number | null;
   /** When `room` arrived, on this tab's clock: its seats' `awayInMs` count from here. */
   roomAt: number;
@@ -92,7 +92,7 @@ export function secondsUntil(at: number | null, now: number): number | null {
   return at === null ? null : Math.max(0, Math.ceil((at - now) / 1000));
 }
 
-/** Seconds the deciding player has left before the server plays for them, or `null`. */
+/** Seconds the deciding player has left before their turn timer runs out, or `null`. */
 export function turnSecondsLeft(state: ClientState, now: number): number | null {
   return secondsUntil(state.turnDeadline, now);
 }

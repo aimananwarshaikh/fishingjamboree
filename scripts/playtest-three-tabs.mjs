@@ -426,7 +426,7 @@ while (stats.actions < MAX_ACTIONS) {
       );
     }
     const seqAtClose = Math.max(...(await Promise.all(pages.map(seqOf))));
-    // Keep playing the remaining seats; the server must act for the closed one.
+    // Keep playing the remaining seats; the server must miss the closed one's turns.
     const end = Date.now() + 120000;
     let autoSeen = false;
     while (Date.now() < end && !autoSeen) {

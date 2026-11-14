@@ -187,6 +187,6 @@ export function seatStatus(
 ): string | null {
   if (seat?.removed) return "removed from the game";
   if (!seat || seat.connected) return null;
-  if (seat.away) return "away: the server plays for them";
+  if (seat.away) return "away: their turns are missed until they come back";
   return secondsLeft === null ? "disconnected" : `disconnected: ${secondsLeft} s to come back`;
 }
