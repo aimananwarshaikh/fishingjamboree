@@ -21,6 +21,7 @@ import {
 import type { ClientState, Connection, Context, Session } from "./store";
 import { loadSavedSeats, parseRejoinFragment, removeSeat, saveSeat } from "./savedSeats";
 import type { RejoinTarget, SavedSeat, StorageLike } from "./savedSeats";
+import { parseAllowList, resolveServerUrl } from "./serverUrl";
 
 type Step =
   | { t: "server"; msg: ServerMessage }
@@ -92,11 +93,14 @@ export interface RejoinOffer {
   from: "saved" | "link";
 }
 
+/** The game server: `?server=` only in a dev build or for an allowed server (serverUrl.ts). */
 export function serverUrl(): string {
-  const fromQuery = new URLSearchParams(window.location.search).get("server");
-  if (fromQuery) return fromQuery;
-  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${window.location.hostname || "localhost"}:8787`;
+  const resolved = resolveServerUrl(window.location, {
+    dev: import.meta.env.DEV,
+    allowed: parseAllowList(import.meta.env.VITE_ALLOWED_SERVERS as string | undefined),
+  });
+  if (resolved.ignored) console.warn(resolved.ignored);
+  return resolved.url;
 }
 
 function makeContext(content: Content): Context {

@@ -62,7 +62,7 @@ Small fixes and tests: Sonnet unless noted.
 
 **Web client**
 
-- **`?server=` can send the seat token to another server** (`useGame.ts:50-52`, `:151-160`). **A bit more important since P1-1:** the token now also sits in `localStorage` and in rejoin links, and the client sends `rejoin` with it to whatever `?server=` says. Allow `?server=` in dev builds only, or check it against an allow-list. Do this before any public deploy (B5); Sonnet.
+- **Done (B1):** `?server=` is honoured only in a dev build or for a server on `VITE_ALLOWED_SERVERS` (`serverUrl.ts`, notes log). Was: `?server=` could send the seat token to another server.
 - `leave` while reconnecting is lost, because the pending retry timer reopens the socket (`useGame.ts:186-189`, `:137-146`, `:100`).
 - After errors other than `bad-token` and `room-not-found` during a rejoin (for example `unsupported-version`) the table is dead (`useGame.ts:116-125`).
 - The server port is fixed at 8787 (`useGame.ts:54`) and an `https` page needs `wss`. See B5.
