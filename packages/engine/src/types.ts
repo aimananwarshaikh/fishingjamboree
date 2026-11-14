@@ -212,6 +212,8 @@ export interface RulesConfig {
   fineTokenValue: Money;
   /** Online play: a player who misses this many turns in a row is removed from the game. */
   missedTurnsBeforeRemoval: number;
+  /** Ships placed before round 1, by the first players in turn order (rulebook setup steps 6 and 7). */
+  setupShips: number;
   upgrades: {
     speed: SpeedUpgradeConfig;
     capacity: CapacityUpgradeConfig;

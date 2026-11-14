@@ -98,8 +98,8 @@ Your ship holds 5 fish (8 with the Capacity upgrade). If a catch would take you 
 
 To cash in you must end your move on a free dock. You need a roll that is enough to reach it, not the exact number. You don't need to be carrying fish. Docking takes your turn: you draw no card. While docked:
 
-1. **Pay off fine tokens first** ($100 each) from what you earn.
-2. **Sell your fish.** Return every fish token to the bank and take its value in cash.
+1. **Sell your fish.** Return every fish token to the bank and take its value in cash.
+2. **Pay off fine tokens** ($100 each) from your cash, as many as it covers.
 3. **Buy upgrades** if you want them.
 
 On your next turn, sail out as normal. You can't stay docked turn after turn; if every way out is blocked, you miss that turn and nothing more happens at the dock. While you sit on a dock, no one else can land there.

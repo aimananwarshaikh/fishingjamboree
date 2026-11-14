@@ -366,6 +366,9 @@ function checkRules(raw: unknown, issues: Issues): void {
   issues.int("rules.baseCapacity", r.baseCapacity, 1);
   issues.int("rules.fineTokenValue", r.fineTokenValue, 1);
   issues.int("rules.missedTurnsBeforeRemoval", r.missedTurnsBeforeRemoval, 1);
+  if (issues.int("rules.setupShips", r.setupShips, 1) && isInt(r.minPlayers)) {
+    if (r.setupShips > r.minPlayers) issues.add("rules.setupShips", "must not exceed minPlayers");
+  }
   const up = r.upgrades;
   if (!isObj(up)) return issues.add("rules.upgrades", "must be an object");
   const speed = up.speed;
@@ -452,6 +455,49 @@ function checkAwards(raw: unknown, rules: unknown, issues: Issues): void {
 }
 
 // ---------------------------------------------------------------------------
+// Money in whole fine tokens
+// ---------------------------------------------------------------------------
+
+/** The money fields of each effect kind. */
+const MONEY_FIELDS: Record<string, readonly string[]> = {
+  fish: ["value"],
+  fine: ["amount"],
+  goldenFish: ["value"],
+  catchBonus: ["value"],
+  helicopter: ["fee"],
+};
+
+/**
+ * Every amount that moves cash must be a multiple of `fineTokenValue`. Then
+ * cash is always a whole number of tokens, so a player holding fine tokens has
+ * $0 (architecture §11): docking pays off every token the cash covers, and the
+ * Helicopter fee can never be paid with tokens held (§12 item 28). Award money
+ * goes to the score only and is not checked.
+ */
+function checkMoney(input: Obj, issues: Issues): void {
+  const rules = input.rules;
+  if (!isObj(rules) || !isInt(rules.fineTokenValue) || rules.fineTokenValue < 1) return;
+  const unit = rules.fineTokenValue;
+  const check = (path: string, v: unknown) => {
+    if (isInt(v) && v % unit !== 0)
+      issues.add(path, `must be a multiple of ${unit} (fineTokenValue)`);
+  };
+  check("rules.startingCash", rules.startingCash);
+  if (isObj(rules.upgrades)) {
+    for (const [id, up] of Object.entries(rules.upgrades)) {
+      if (isObj(up)) check(`rules.upgrades.${id}.price`, up.price);
+    }
+  }
+  const cards = isObj(input.cards) && isObj(input.cards.cards) ? input.cards.cards : {};
+  for (const [id, card] of Object.entries(cards)) {
+    const e = isObj(card) && isObj(card.effect) ? card.effect : null;
+    for (const field of (e && MONEY_FIELDS[e.kind as string]) ?? []) {
+      check(`cards.cards.${id}.effect.${field}`, (e as Obj)[field]);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 /** Deep copy of a JSON value, so the compiled content shares nothing with the caller. */
 const copyJson = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -466,6 +512,13 @@ export const compileContent: Engine["compileContent"] = (raw: RawContent) => {
   checkCards(input.cards, issues, summary);
   checkRules(input.rules, issues);
   checkAwards(input.awards, input.rules, issues);
+  if (summary && isObj(input.rules) && isInt(input.rules.setupShips)) {
+    const starting = summary.board.docks.filter((d) => d.kind === "starting").length;
+    if (input.rules.setupShips > starting) {
+      issues.add("rules.setupShips", `must not exceed the ${starting} starting docks`);
+    }
+  }
+  checkMoney(input, issues);
   if (issues.list.length > 0 || !summary) return { ok: false, issues: issues.list };
 
   const content: Content = {

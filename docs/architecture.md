@@ -79,7 +79,7 @@ A player's `position` is `null` while they wait off the board. The bank is unlim
 
 **Automatic steps.** The engine resolves, without a phase, anything with no real choice: placing a ship when one dock is free, skipping a waiting player when none is, a blocked or zero-step move, tile and card resolution, paying fine tokens and selling fish on docking, skipping the shop when nothing is affordable, ending the turn, ending the round, drawing an event. `roll` is always explicit so each player triggers their own dice.
 
-**Helicopter.** A lasting event. While it is active, the current player may use it once per turn (`turn.helicopterUsed`), either before rolling or at the end of the turn after the tile or card has resolved. It is usable when the player has at least one fish and cash of at least the fee. Using it pays the fee from cash, then pays fine tokens from the sale, then banks the rest.
+**Helicopter.** A lasting event. While it is active, the current player may use it once per turn (`turn.helicopterUsed`), either before rolling or at the end of the turn after the tile or card has resolved. It is usable when the player has at least one fish and cash of at least the fee. Using it pays the fee from cash, then sells every fish (as at a dock: sale first, then as many fine tokens as the cash covers). A player holding fine tokens always has $0 cash, so cannot pay the fee (§12 item 28); `compileContent` keeps every money value a multiple of the fine token value so this stays true.
 
 ```mermaid
 stateDiagram-v2
@@ -263,6 +263,8 @@ Terrain characters: `.` off-board, `~` sea, `#` island, `D` dock, `S` Shipwreck 
   "startingCash": 0,
   "baseCapacity": 5,
   "fineTokenValue": 100,
+  "missedTurnsBeforeRemoval": 3,
+  "setupShips": 2,
   "upgrades": {
     "speed": { "price": 200, "rollBonus": 2 },
     "capacity": { "price": 200, "capacity": 8 }

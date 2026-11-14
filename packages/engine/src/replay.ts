@@ -8,6 +8,9 @@ import { createGame } from "./setup";
 import type { Engine, GameEvent } from "./types";
 
 export const replay: Engine["replay"] = (content, log) => {
+  if (log.schemaVersion !== 1) {
+    throw new Error(`replay: schema version ${String(log.schemaVersion)} is not supported (1 is)`);
+  }
   if (log.contentHash !== content.hash) {
     throw new Error(
       `replay: content hash ${content.hash} does not match the log's ${log.contentHash}`,

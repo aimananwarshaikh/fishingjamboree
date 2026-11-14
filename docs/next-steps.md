@@ -43,13 +43,7 @@ Small fixes and tests: Sonnet unless noted.
 
 **Engine**
 
-- Make the impossible branches in `apply.ts:183, 187, 214, 219, 241` throw instead of returning quietly.
-- Make `compileContent` check that fish values, fines and prices are multiples of `fineTokenValue` (`content.ts:240-245`, `:365`), with a test.
-- Redact `players`, `turn` and `phase` field by field in `view.ts:26-29`, or fix the comment.
-- Make `replay` check `schemaVersion` (`replay.ts:10-15`).
-- Remove the dead branch for content with no event cards (`eventCards.ts:80-81`).
-- Move `SETUP_SHIPS = 2` (`apply.ts:32`) into `content/rules.json`. Needed for the 5–6 player variant, which is not planned yet.
-- Fix the three doc drifts: `architecture.md` §4 vs §12 item 28 (Helicopter and fine tokens); `rulebook.md` Docks (sell before pay); the stale "Risk (15)" and "exact landing" rows in the notes log.
+- **Done (B1):** the impossible branches in `apply.ts` throw; `compileContent` checks money values are multiples of `fineTokenValue`; views copy each player field by field (the comment now says what is copied whole); `replay` checks `schemaVersion`; the dead empty-event-deck branch is gone; `setupShips` is in `content/rules.json`; the three doc drifts are fixed. Tests: `packages/engine/src/hardening.test.ts`.
 
 **Server**
 
