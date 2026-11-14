@@ -161,7 +161,7 @@ A seat is never freed during a game. The game is not paused for the other player
 - It runs whether the player is connected or not: a disconnect never extends a turn.
 - Clients see it as `turnTimeLeftMs` ([section 4](#4-server-to-client)). There is no turn timer in the lobby. `turnTimeoutMs: null` switches it off.
 - **The server never plays for a player.** It only misses their turns.
-- **3 missed turns in a row** (`missedTurnsBeforeRemoval` in `content/rules.json`) and the engine removes the player (`playerRemoved`, reason `missed-turns`). Any action of the player's own resets the count.
+- **3 timed-out turns in a row** (`missedTurnsBeforeRemoval` in `content/rules.json`) and the engine removes the player (`playerRemoved`, reason `missed-turns`). Any action of the player's own resets the count. The server sends `missTurn` with `reason: "timeout"` when the turn timer ran out and `reason: "away"` when it misses an away player's turn; only `timeout` counts (`turnMissed.counted`). An away miss neither counts nor resets the run (review P1-1).
 
 **Removing a player** (host kick).
 
@@ -177,7 +177,7 @@ A seat is never freed during a game. The game is not paused for the other player
 - A disconnected player has up to **60 seconds** (`reconnectGraceMs`), counted from the disconnect, to come back. During that time they are not away; if it is their turn, the turn timer still runs.
 - Each player has a **budget** of **2 minutes** (`reconnectBudgetMs`) of grace for the whole game. The time they spend disconnected and not away is taken from it (at most one grace per disconnect; time while nobody in the room is connected does not count). A disconnect with less than 60 seconds of budget left gets only what is left; with nothing left the player is away at once. The budget is full for everyone when the game starts.
 - Clients see what is left of a disconnected player's grace as `awayInMs`.
-- After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message. Whenever it is an away player's turn, the server misses it **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens. So an away player is removed after three of their turns.
+- After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message. Whenever it is an away player's turn, the server misses it **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens. These misses do not count towards removal, so the server never removes an away player; the host can (`kick`).
 - Reconnecting ends this immediately (`away` goes back to `false`). A later disconnect starts a new grace period, from what is left of the budget.
 - `leave` during a game means away at once, with no grace and no budget used. The seat is kept and the player can still `rejoin` (until they are removed).
 - A missed turn or a removal is an ordinary action: it goes through `applyAction`, is added to the replay log, and is sent as an `update`. Clients can never send these actions (`parse.ts` refuses them).

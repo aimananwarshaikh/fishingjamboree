@@ -181,7 +181,7 @@ export function statValue(stat: AwardStat, player: PlayerState, stats: PlayerSta
  * they hold the best value, the award goes unpaid (no second place).
  */
 export function eligibleForAwards(player: PlayerState): boolean {
-  return !player.removed && player.missedTurns === 0;
+  return !player.removed && !player.missedLastTurn;
 }
 
 export function resolveAward(

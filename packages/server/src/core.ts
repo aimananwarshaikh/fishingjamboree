@@ -16,7 +16,14 @@
  * turns in a row.
  */
 import * as realEngine from "@fishingjamboree/engine";
-import type { Action, Content, GameEvent, GameState, ReplayLog } from "@fishingjamboree/engine";
+import type {
+  Action,
+  Content,
+  GameEvent,
+  GameState,
+  MissReason,
+  ReplayLog,
+} from "@fishingjamboree/engine";
 import type { IdSource } from "./ids";
 import { parseClientMessage } from "./parse";
 import { parseRoomSnapshot, ROOM_SNAPSHOT_VERSION } from "./snapshot";
@@ -742,7 +749,8 @@ export class ServerCore {
         if (!seat) continue;
         const at = seat.away ? game.lastActionAt + this.config.autoActionDelayMs : turnDeadline;
         if (at === null) continue;
-        steps.push({ at, run: (out) => this.missTurn(out, room, game, seat) });
+        const reason = seat.away ? "away" : "timeout";
+        steps.push({ at, run: (out) => this.missTurn(out, room, game, seat, reason) });
       }
     }
     return steps.reduce<Step | null>((a, b) => (a === null || b.at < a.at ? b : a), null);
@@ -777,9 +785,13 @@ export class ServerCore {
     this.broadcastRoom(out, room);
   }
 
-  /** The deciding player is away or out of time: their turn is missed (docs/protocol.md §7). */
-  private missTurn(out: Outbound[], room: Room, game: Game, seat: Seat) {
-    const action: Action = { type: "missTurn", player: seat.id };
+  /**
+   * The deciding player is away or out of time: their turn is missed
+   * (docs/protocol.md §7). Only a turn that ran the whole timer counts
+   * towards removal.
+   */
+  private missTurn(out: Outbound[], room: Room, game: Game, seat: Seat, reason: MissReason) {
+    const action: Action = { type: "missTurn", player: seat.id, reason };
     const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) {
       // Cannot happen: the deciding player can always miss their turn. Fail loudly rather than spin.

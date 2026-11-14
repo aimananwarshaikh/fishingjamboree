@@ -352,7 +352,7 @@ describe("resolution", () => {
       qualified: ["p1", "p2"],
       winners: ["p2"],
     });
-    ps[1]!.missedTurns = 1;
+    ps[1]!.missedLastTurn = true;
     expect(resolveAward(award({}), ps, s)).toMatchObject({
       value: 5,
       qualified: ["p1", "p2"],

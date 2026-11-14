@@ -29,6 +29,7 @@ import type {
   PhaseKind,
   PlaceShipReason,
   PlayerState,
+  MissReason,
   RemovalReason,
 } from "./types";
 
@@ -200,15 +201,18 @@ function finishTurn(ctx: Ctx): void {
 }
 
 /**
- * The deciding player ran out of time (online play). Nothing more happens in
- * the turn; a ship that has to be placed goes on the first dock offered.
- * Too many misses in a row remove the player.
+ * The deciding player ran out of time or is away (online play). Nothing more
+ * happens in the turn; a ship that has to be placed goes on the first dock
+ * offered. Only a turn that ran the whole timer counts towards removal; too
+ * many of those in a row remove the player.
  */
-function missTurn(ctx: Ctx, player: PlayerState): void {
+function missTurn(ctx: Ctx, player: PlayerState, reason: MissReason): void {
   const { state, content } = ctx;
   const phase = state.phase;
-  ctx.events.push({ type: "turnMissed", player: player.id });
-  player.missedTurns += 1;
+  const counted = reason === "timeout";
+  ctx.events.push({ type: "turnMissed", player: player.id, reason, counted });
+  player.missedLastTurn = true;
+  if (counted) player.missedTurns += 1;
   if (phase.kind === "placeShip") {
     const dockId = phase.docks[0] as DockId;
     if (phase.reason === "sinking-boat") {
@@ -219,7 +223,7 @@ function missTurn(ctx: Ctx, player: PlayerState): void {
       placeOnDock(ctx, player, dockId, phase.reason);
     }
   }
-  if (player.missedTurns >= content.rules.missedTurnsBeforeRemoval) {
+  if (counted && player.missedTurns >= content.rules.missedTurnsBeforeRemoval) {
     removePlayer(ctx, player, "missed-turns");
   } else if (phase.kind === "placeShip" && phase.reason === "setup") {
     continueSetup(ctx);
@@ -252,10 +256,13 @@ function removePlayer(ctx: Ctx, player: PlayerState, reason: RemovalReason): voi
 function applyLegal(ctx: Ctx, action: Action, player: PlayerState): void {
   const { state, content } = ctx;
   const phase = state.phase;
-  if (action.type !== "missTurn" && action.type !== "removePlayer") player.missedTurns = 0;
+  if (action.type !== "missTurn" && action.type !== "removePlayer") {
+    player.missedTurns = 0;
+    player.missedLastTurn = false;
+  }
   switch (action.type) {
     case "missTurn":
-      missTurn(ctx, player);
+      missTurn(ctx, player, action.reason);
       return;
     case "removePlayer":
       removePlayer(ctx, player, "kicked");
@@ -352,7 +359,11 @@ export const applyAction: Engine["applyAction"] = (content, state, action) => {
     }
   } else if (!phase.actors.includes(action.player)) {
     return fail("not-your-turn", `it is not ${action.player}'s decision`);
-  } else if (action.type !== "missTurn") {
+  } else if (action.type === "missTurn") {
+    if (action.reason !== "timeout" && action.reason !== "away") {
+      return fail("illegal-action", `"missTurn" needs a reason ("timeout" or "away")`);
+    }
+  } else {
     if (!PHASE_ACTIONS[phase.kind].includes(action.type)) {
       return fail("wrong-phase", `"${action.type}" is not possible in the ${phase.kind} phase`);
     }

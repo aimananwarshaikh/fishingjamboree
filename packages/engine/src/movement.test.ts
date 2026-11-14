@@ -184,6 +184,7 @@ describe("reachableDestinations: other ships", () => {
       upgrades: { speed: false, capacity: false },
       position,
       missedTurns: 0,
+      missedLastTurn: false,
       removed: false,
     });
     const players = [player("a", START_LEFT), player("b", tile(3, 18)), player("c", null)];

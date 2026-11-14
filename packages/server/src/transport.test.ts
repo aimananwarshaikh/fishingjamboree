@@ -197,7 +197,12 @@ describe("a whole game over WebSockets", () => {
     }
     const auto = ann.messages.find((m) => m.type === "update" && m.auto);
     expect(auto).toMatchObject({ by: "p2", auto: true });
-    expect(auto?.type === "update" && auto.events[0]).toEqual({ type: "turnMissed", player: "p2" });
+    expect(auto?.type === "update" && auto.events[0]).toEqual({
+      type: "turnMissed",
+      player: "p2",
+      reason: "away",
+      counted: false,
+    });
 
     // Bob rejoins and gets the current game.
     const back = await connect();

@@ -439,13 +439,27 @@ while (stats.actions < MAX_ACTIONS) {
       }
     }
     check(autoSeen, `after the grace ${seat}'s turns are missed and the game goes on`);
-    // Three missed turns in a row: the seat is removed. Keep playing meanwhile,
-    // or the others' turn timers would run out too.
+    // An away player's missed turns do not count towards removal (review
+    // P1-1): play three more of their turns, then the host removes them.
     const removedCount = () => pages[0].locator(".players small.removed").count();
-    for (let i = 0; i < 400 && (await removedCount()) === 0; i++) {
+    const awayMisses = async () =>
+      (await pages[0].locator(".log li").allInnerTexts()).filter((l) =>
+        l.includes("is away and misses the turn"),
+      ).length;
+    for (let i = 0; i < 400 && (await awayMisses()) < 3; i++) {
       if (!(await step(pages))) await new Promise((r) => setTimeout(r, 250));
     }
-    check((await removedCount()) === 1, `after 3 missed turns ${seat} is shown as removed`);
+    check(
+      (await awayMisses()) >= 3 && (await removedCount()) === 0,
+      `after 3 away turns ${seat} is still in the game`,
+    );
+    // pages[0] is the host's tab, which is never the one closed.
+    const host = pages[0];
+    const goneName = names[Number(seat.slice(1)) - 1];
+    host.once("dialog", (d) => d.accept());
+    await host.locator(`button[title="Remove ${goneName}"]`).click();
+    for (let i = 0; i < 40 && (await removedCount()) === 0; i++) await host.waitForTimeout(250);
+    check((await removedCount()) === 1, `the host removes ${seat}; shown as removed`);
     continue;
   }
 

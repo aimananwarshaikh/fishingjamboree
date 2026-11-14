@@ -218,7 +218,12 @@ describe("disconnect policy: in a game", () => {
     expect(h.view(watcher).actionCount).toBe(1);
     h.advance(1);
     expect(h.last(watcher, "update")).toMatchObject({ seq: 2, by: seat, auto: true });
-    expect(h.last(watcher, "update").events[0]).toEqual({ type: "turnMissed", player: seat });
+    expect(h.last(watcher, "update").events[0]).toEqual({
+      type: "turnMissed",
+      player: seat,
+      reason: "away",
+      counted: false,
+    });
   });
 
   it("takes one automatic action per delay, however late the tick is", () => {
@@ -415,7 +420,7 @@ describe("disconnect policy: in a game", () => {
     expect(h.core.roomCodes()).toEqual([code]);
   });
 
-  it("finishes a game for players who never come back: their turns are missed, then they are removed", () => {
+  it("finishes a game for players who never come back: their turns are missed but never remove them", () => {
     const h = harness(NO_TIMER);
     const { code } = h.started(3);
     h.send("c2", { type: "leave" });
@@ -442,8 +447,11 @@ describe("disconnect policy: in a game", () => {
     for (const never of ["rolled", "moved", "upgradeBought", "helicopterUsed", "cardDrawn"]) {
       expect(kinds.has(never as GameEvent["type"])).toBe(false);
     }
-    expect(autoEvents.filter((e) => e.type === "playerRemoved")).toHaveLength(2);
-    expect(h.view("c1").result).toMatchObject({ winners: ["p1"], reason: "last-player" });
+    // An away player's missed turns do not count towards removal (review P1-1):
+    // the game runs its 20 rounds, and only the host could remove them.
+    expect(autoEvents.filter((e) => e.type === "playerRemoved")).toHaveLength(0);
+    expect(autoEvents.filter((e) => e.type === "turnMissed").length).toBeGreaterThan(30);
+    expect(h.view("c1").result).toMatchObject({ reason: "rounds" });
 
     // Missed turns and removals are ordinary logged actions: the replay matches.
     const replayed = replay(content, h.core.replayLog(code)!);

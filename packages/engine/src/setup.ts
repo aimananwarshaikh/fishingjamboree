@@ -67,6 +67,7 @@ function newPlayer(id: PlayerId, content: Content): PlayerState {
     upgrades: { speed: false, capacity: false },
     position: null,
     missedTurns: 0,
+    missedLastTurn: false,
     removed: false,
   };
 }
