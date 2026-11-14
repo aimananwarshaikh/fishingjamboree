@@ -8,3 +8,7 @@ export { DEFAULT_CONFIG, ServerCore } from "./core";
 export type { ConnId, CoreConfig, CoreDeps, Outbound } from "./core";
 export { CLOSE_CODES, createGameServer, DEFAULT_TRANSPORT_CONFIG } from "./transport";
 export type { GameServer, GameServerOptions, TransportConfig } from "./transport";
+export { fileRoomStore } from "./roomStore";
+export type { RoomStore, StoredRoom } from "./roomStore";
+export { parseRoomSnapshot, ROOM_SNAPSHOT_VERSION } from "./snapshot";
+export type { RoomSnapshot, SeatSnapshot } from "./snapshot";

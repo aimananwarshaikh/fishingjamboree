@@ -19,6 +19,8 @@ import * as realEngine from "@fishingjamboree/engine";
 import type { Action, Content, GameEvent, GameState, ReplayLog } from "@fishingjamboree/engine";
 import type { IdSource } from "./ids";
 import { parseClientMessage } from "./parse";
+import { parseRoomSnapshot, ROOM_SNAPSHOT_VERSION } from "./snapshot";
+import type { RoomSnapshot } from "./snapshot";
 import { PROTOCOL_VERSION } from "./protocol";
 import type {
   ClientMessage,
@@ -87,6 +89,11 @@ export interface CoreDeps {
   config?: Partial<CoreConfig>;
   /** Where the core reports errors it caught (a room that threw). Default: nowhere. */
   log?: (line: string) => void;
+  /**
+   * Keep track of changed rooms for `takeChanges` (default `true`). Off when
+   * nothing saves rooms, so the record does not grow for ever.
+   */
+  trackChanges?: boolean;
   /** Tests only: replace engine functions (to make a room throw). Default: the real engine. */
   engine?: Partial<EngineFns>;
 }
@@ -150,6 +157,9 @@ export class ServerCore {
   private readonly engine: EngineFns;
   private readonly rooms = new Map<string, Room>();
   private readonly conns = new Map<ConnId, { room: Room; seat: Seat }>();
+  /** Codes of rooms that may have changed (or gone) since the last `takeChanges`. */
+  private readonly touched = new Set<string>();
+  private readonly trackChanges: boolean;
 
   constructor(deps: CoreDeps) {
     this.content = deps.content;
@@ -157,6 +167,7 @@ export class ServerCore {
     this.ids = deps.ids;
     this.config = { ...DEFAULT_CONFIG, ...deps.config };
     this.log = deps.log ?? (() => {});
+    this.trackChanges = deps.trackChanges ?? true;
     this.engine = {
       applyAction: realEngine.applyAction,
       createGame: realEngine.createGame,
@@ -178,8 +189,10 @@ export class ServerCore {
       return out;
     }
     const message = parsed.message;
+    this.touchConn(conn);
     try {
       this.dispatch(out, conn, message);
+      this.touchConn(conn);
     } catch (error) {
       // A bug, not the player's fault. Whatever was half-built is dropped; the
       // sender is told, so their buttons stop waiting (docs/protocol.md §5).
@@ -226,6 +239,7 @@ export class ServerCore {
     const out: Outbound[] = [];
     const bound = this.conns.get(conn);
     if (!bound) return out;
+    this.touch(bound.room.code);
     this.conns.delete(conn);
     this.vacate(bound.room, bound.seat, false);
     this.broadcastRoom(out, bound.room);
@@ -242,6 +256,7 @@ export class ServerCore {
       const roomOut: Outbound[] = [];
       try {
         for (let step = this.nextStep(room); step && step.at <= now; step = this.nextStep(room)) {
+          this.touch(room.code);
           step.run(roomOut);
         }
         out.push(...roomOut);
@@ -288,6 +303,145 @@ export class ServerCore {
   }
 
   // -------------------------------------------------------------------------
+  // Saving and restoring rooms (review P2-5; src/snapshot.ts)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The rooms that may have changed since the last call, as snapshots to
+   * save, and the codes of rooms that are gone (to delete). Server-side only:
+   * snapshots hold tokens and seeds.
+   */
+  takeChanges(): { save: RoomSnapshot[]; remove: string[] } {
+    const save: RoomSnapshot[] = [];
+    const remove: string[] = [];
+    for (const code of this.touched) {
+      const room = this.rooms.get(code);
+      if (room) save.push(this.snapshotOf(room));
+      else remove.push(code);
+    }
+    this.touched.clear();
+    return { save, remove };
+  }
+
+  /** A snapshot of one room now, or `null`. */
+  snapshotRoom(code: string): RoomSnapshot | null {
+    const room = this.rooms.get(code);
+    return room ? this.snapshotOf(room) : null;
+  }
+
+  /**
+   * Brings back a saved room (read from disk: anything may be in it). The game
+   * is rebuilt by replaying its log and must match the saved state. Everyone
+   * starts disconnected, as if all had just dropped: the empty-room rules
+   * apply (docs/protocol.md §7). Refused, with the reason, if the snapshot is
+   * malformed, its code is taken, its content differs from this server's, or
+   * the replay does not match.
+   */
+  restoreRoom(raw: unknown): { ok: true; code: string } | { ok: false; reason: string } {
+    const parsed = parseRoomSnapshot(raw);
+    if (!parsed.ok) return parsed;
+    const snap = parsed.snapshot;
+    const fail = (reason: string) => ({
+      ok: false as const,
+      reason: `room ${snap.code}: ${reason}`,
+    });
+    if (this.rooms.has(snap.code)) return fail("a room with that code already exists");
+    const seatIds = snap.seats.map((s) => s.id);
+    let game: Game | null = null;
+    if (snap.game) {
+      const { log } = snap.game;
+      if (log.contentHash !== this.content.hash) {
+        return fail(`saved with content ${log.contentHash}, this server has ${this.content.hash}`);
+      }
+      if (JSON.stringify(log.setup.players) !== JSON.stringify(seatIds)) {
+        return fail("the game's players are not the room's seats");
+      }
+      let state: GameState;
+      try {
+        state = this.engine.replay(this.content, log).state;
+      } catch (error) {
+        return fail(`the replay failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      if (JSON.stringify(state) !== JSON.stringify(snap.game.state)) {
+        return fail("the replay does not match the saved state");
+      }
+      if ((state.phase.kind === "gameOver") !== (snap.status === "finished")) {
+        return fail("the status does not match the game");
+      }
+      for (const seat of snap.seats) {
+        if (state.players.find((p) => p.id === seat.id)?.removed !== seat.removed) {
+          return fail(`seat ${seat.id}: removed does not match the game`);
+        }
+      }
+      const now = this.now();
+      game = { state, log, lastActionAt: now, turnStartedAt: now };
+    } else if (snap.seats.some((s) => s.removed || s.left || s.away)) {
+      return fail("a lobby seat cannot be removed, left or away");
+    }
+    const now = this.now();
+    const room: Room = {
+      code: snap.code,
+      status: snap.status,
+      host: snap.host,
+      seats: snap.seats.map((s) => ({
+        id: s.id,
+        name: s.name,
+        token: s.token,
+        conn: null,
+        disconnectedAt: now,
+        left: s.left,
+        away: s.away,
+        graceFrom: null,
+        graceLeftMs: Math.min(s.graceLeftMs, snap.timers.reconnectBudgetMs),
+        removed: s.removed,
+      })),
+      // Above anything a client may hold, so the restored room is taken as newer.
+      rev: snap.rev + 1,
+      game,
+      emptySince: now,
+      resumedAt: now,
+      timers: { ...snap.timers },
+    };
+    this.rooms.set(room.code, room);
+    return { ok: true, code: room.code };
+  }
+
+  private snapshotOf(room: Room): RoomSnapshot {
+    const now = this.now();
+    return {
+      kind: "fishingjamboree-room",
+      version: ROOM_SNAPSHOT_VERSION,
+      code: room.code,
+      status: room.status,
+      host: room.host,
+      rev: room.rev,
+      timers: { ...room.timers },
+      seats: room.seats.map((s) => ({
+        id: s.id,
+        name: s.name,
+        token: s.token,
+        left: s.left,
+        away: s.away,
+        removed: s.removed,
+        // As if a running grace ended now (what `chargeGrace` would leave).
+        graceLeftMs:
+          s.graceFrom === null
+            ? s.graceLeftMs
+            : Math.max(
+                0,
+                s.graceLeftMs - Math.min(now - s.graceFrom, room.timers.reconnectGraceMs),
+              ),
+      })),
+      game: room.game
+        ? (JSON.parse(JSON.stringify({ log: room.game.log, state: room.game.state })) as {
+            log: ReplayLog;
+            state: GameState;
+          })
+        : null,
+    };
+  }
+
+  // -------------------------------------------------------------------------
   // Lobby
   // -------------------------------------------------------------------------
 
@@ -313,6 +467,7 @@ export class ServerCore {
       },
     };
     this.rooms.set(code, room);
+    this.touch(code);
     const seat = this.addSeat(room, name, conn);
     this.welcome(out, room, seat);
   }
@@ -742,6 +897,16 @@ export class ServerCore {
 
   private deleteRoom(room: Room) {
     this.rooms.delete(room.code);
+    this.touch(room.code);
+  }
+
+  private touch(code: string) {
+    if (this.trackChanges) this.touched.add(code);
+  }
+
+  private touchConn(conn: ConnId) {
+    const code = this.conns.get(conn)?.room.code;
+    if (code !== undefined) this.touch(code);
   }
 
   /**
