@@ -93,7 +93,9 @@ Phases are in `docs/build-plan.md` section 5.
   - No turn timer for connected players (P1-2).
   - Rooms are in memory only (P2-5).
   - The "offline" tag says "60 s to come back" from the server default; the client does not know `reconnectGraceMs`. Send it in the protocol when P1-2 changes the grace.
+- **B1b (Golden Hook Awards):** design decided 2026-11-14 (`docs/bonus-awards.md`). Build the stats, the awards content, the secret draw, the payout, hidden state in client views, the protocol change and the tests. Placeholder amounts.
 - **B2 (real UI):**
+  - Golden Hook Awards reveal after round 20, one award at a time.
   - The log is per tab; a refresh restarts it from "Joined room …" (the protocol sends no event history on rejoin, by design). Decide if the real UI needs history; if so, it is a protocol change.
   - Round banner and "Round N/20" progress bar with the three event marks (decided 2026-11-12; the bare client only has the bar). Needs the PNG from the designer.
   - Animation, a layout for the shop and Helicopter, touch tuning (6a notes).
@@ -105,12 +107,12 @@ Phases are in `docs/build-plan.md` section 5.
   - Not done in 5b: no `Origin` check, no cap on connections per IP, no backpressure limit on slow sockets (the heartbeat covers dead ones).
   - The server port, `wss` for `https`, and `?server=` (see P3 above).
   - Put `scripts/playtest-three-tabs.mjs` into CI if it can run there.
-- **B6 (bots, balancing):** `packages/sim` is empty. Card counts, the upgrade price ($200 default, $300 in simulation) and the design questions 1–2 feed into it.
+- **B6 (bots, balancing):** `packages/sim` is empty. Also tune the Golden Hook Award amounts, the combined budget and the pool (targets in `docs/bonus-awards.md`). Card counts, the upgrade price ($200 default, $300 in simulation) and the design questions 1–2 feed into it.
 - **B7 (playtests):** nothing yet.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2 first, then P2-4 (small, protects other rooms), P2-3 once the designer answers question 3, then P2-5. Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
+1. **B1 [OPUS]:** P1-2 first, then P2-4 (small, protects other rooms), P2-3 once the designer answers question 3, then P2-5. Then **B1b**, the Golden Hook Awards (engine and server). Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
 

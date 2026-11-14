@@ -129,7 +129,7 @@ The ending should be exciting: anything could happen, and a close game can be de
 
 ## Plan
 
-1. ~~Decide the open questions~~ done 2026-11-14 (see Decisions).
+1. ~~Decide the open questions~~ done 2026-11-14 (see Decisions). Build is phase **B1b** in `docs/build-plan.md`, after B1 and before the UI (B2); amounts are tuned in B6.
 2. Track the stats in the engine (small, no rule change, useful for the simulator). This can happen in B1 or B6 without waiting for the awards.
 3. Add the pool and the resolution at the end of the game, hidden state, protocol, tests.
 4. Tune amounts with the balance simulator (B6): median winning total, how often a bonus flips the winner (aim for a minority of games, perhaps 15% to 30%), how often one player takes all three.
