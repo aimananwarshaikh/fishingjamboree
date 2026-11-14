@@ -186,7 +186,7 @@ A seat is never freed during a game. The game is not paused for the other player
 ### When nobody is connected
 
 - The server misses nobody's turn. The game stands still.
-- When someone reconnects, every other disconnected player's grace starts again from that moment (unless they had sent `leave`), capped by what is left of their budget; a player with no budget left stays away. The turn timer also counts from that moment.
+- When someone reconnects, every other disconnected player's grace starts again from that moment (unless they had sent `leave`), capped by what is left of their budget; a player with no budget left stays away. A removed seat is skipped: it never gets a grace and never becomes away (also after a restart). The turn timer also counts from that moment.
 - A room nobody has been connected to for **30 minutes** (`roomIdleTtlMs`) is deleted, whatever its status.
 
 ### After a server restart

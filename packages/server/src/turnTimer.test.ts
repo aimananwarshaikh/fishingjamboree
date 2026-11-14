@@ -359,6 +359,29 @@ describe("a dropout (designer, 2026-11-14: review P1-1)", () => {
   });
 });
 
+describe("a removed seat after an empty room (review P3)", () => {
+  it("gets no grace and never becomes away when the room is rejoined", () => {
+    const h = harness();
+    const { code, tokens } = h.started(3);
+    h.send("c1", { type: "kick", seat: "p3" });
+    h.drop("c1");
+    h.drop("c2");
+    h.advance(5_000);
+    h.send("back", { type: "rejoin", v: V, code, seatToken: tokens[0] });
+    expect(h.last("back", "welcome").room.seats[2]).toMatchObject({
+      removed: true,
+      away: false,
+      awayInMs: null,
+    });
+    const rev = h.room(code).rev;
+    h.clear();
+    h.advance(GRACE);
+    expect(h.got("back", "room")).toHaveLength(1); // p2's grace only
+    expect(h.room(code).seats[2]).toMatchObject({ removed: true, away: false });
+    expect(h.room(code).rev).toBe(rev + 1);
+  });
+});
+
 describe("the host removes a player", () => {
   it("who is not deciding: the turn goes on, everyone is told, the player loses the seat", () => {
     const h = harness();

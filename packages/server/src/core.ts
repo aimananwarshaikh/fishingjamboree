@@ -415,7 +415,7 @@ export class ServerCore {
         conn: null,
         disconnectedAt: now,
         left: s.left,
-        away: s.away,
+        away: s.away && !s.removed,
         graceFrom: null,
         graceLeftMs: Math.min(s.graceLeftMs, snap.timers.reconnectBudgetMs),
         removed: s.removed,
@@ -908,7 +908,8 @@ export class ServerCore {
     // Every other disconnected player's grace starts again (docs/protocol.md §7),
     // as far as their budget allows.
     for (const seat of room.seats) {
-      if (seat.left || seat.conn !== null || seat.graceLeftMs <= 0) continue;
+      // A removed seat has no timers: never a grace, never away (review P3).
+      if (seat.removed || seat.left || seat.conn !== null || seat.graceLeftMs <= 0) continue;
       seat.away = false;
       seat.graceFrom = room.resumedAt;
     }
