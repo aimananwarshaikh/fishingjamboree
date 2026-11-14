@@ -174,9 +174,7 @@ describe("handleMessage throwing", () => {
       B.filter((c) => c !== conn),
     );
     nothingFor(h, A);
-    expect(f.lines.some((l) => l.includes(conn) && l.includes(b) && l.includes("boom"))).toBe(
-      true,
-    );
+    expect(f.lines.some((l) => l.includes(conn) && l.includes(b) && l.includes("boom"))).toBe(true);
     expect(h.core.roomCodes().sort()).toEqual([a, b].sort());
     // Once the fault is gone, the same choice is accepted.
     f.fault.on = false;
