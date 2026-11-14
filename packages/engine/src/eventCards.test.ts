@@ -172,10 +172,11 @@ describe("event rounds", () => {
     const [a, b] = [id(before, 0), id(before, 1)];
     const result = {
       scores: [
-        { player: a, cash: 700, fineTokens: 0, total: 700 },
-        { player: b, cash: 0, fineTokens: 2, total: -200 },
+        { player: a, cash: 700, fineTokens: 0, total: 700, removed: false },
+        { player: b, cash: 0, fineTokens: 2, total: -200, removed: false },
       ],
       winners: [a],
+      reason: "rounds",
     };
     expect(types(events)).toEqual([
       "rolled",

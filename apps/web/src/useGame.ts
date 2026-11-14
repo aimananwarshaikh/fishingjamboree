@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION } from "../../../packages/server/src/protocol";
 import type {
   ClientAction,
   ClientMessage,
+  SeatId,
   ServerMessage,
 } from "../../../packages/server/src/protocol";
 import { describeEvent } from "./describe";
@@ -103,6 +104,7 @@ function makeContext(content: Content): Context {
     contentHash: content.hash,
     cardName: (card) => content.cards.cards[card]?.name ?? card,
     rounds: content.rules.rounds,
+    now: () => Date.now(),
     describe: (events, room) => {
       const name = (p: string) => room?.seats.find((s) => s.seat === p)?.name ?? p;
       return events
@@ -164,6 +166,14 @@ export function useGame(content: Content) {
         return;
       }
       if (msg.type === "error") {
+        if (msg.code === "kicked") {
+          // Removed from the room for good: forget the seat and do not retry.
+          saveSession(null);
+          const store = shared();
+          const s = stateRef.current.session ?? attempt.current;
+          if (s && store) setSaved(removeSeat(store, s.code, s.seatToken, Date.now()));
+          retry.current.stop = true;
+        }
         if (msg.code === "bad-token" || msg.code === "room-not-found") {
           // The saved seat is gone (room deleted or seat freed): start over,
           // and stop offering it.
@@ -296,6 +306,8 @@ export function useGame(content: Content) {
     create: (name: string) => open({ type: "create", v: PROTOCOL_VERSION, name }),
     join: (code: string, name: string) => open({ type: "join", v: PROTOCOL_VERSION, code, name }),
     start: () => send({ type: "start" }),
+    /** Host only: removes a player from the room (for good, in a game). */
+    kick: (seat: SeatId) => send({ type: "kick", seat }),
     leave: () => {
       retry.current.stop = true;
       send({ type: "leave" });

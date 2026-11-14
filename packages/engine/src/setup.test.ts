@@ -98,6 +98,8 @@ describe("createGame", () => {
         fineTokens: 0,
         upgrades: { speed: false, capacity: false },
         position: null,
+        missedTurns: 0,
+        removed: false,
       });
     }
   });

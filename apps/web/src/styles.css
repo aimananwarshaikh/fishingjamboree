@@ -275,6 +275,20 @@ button.helicopter {
 .players small.disconnected {
   background: #8a7a2a;
 }
+.players small.removed {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  color: #fff;
+  background: #555;
+}
+button.kick {
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  min-height: 44px;
+}
 .rejoin-offers ul {
   list-style: none;
   padding: 0;

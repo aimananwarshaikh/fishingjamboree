@@ -8,6 +8,7 @@ import { loadBundledContent } from "./content";
 import { useGame } from "./useGame";
 import type { RejoinOffer } from "./useGame";
 import { rejoinLink } from "./savedSeats";
+import { awaySecondsLeft, turnSecondsLeft } from "./store";
 import type { Banner, ClientState } from "./store";
 
 const content = loadBundledContent();
@@ -44,11 +45,41 @@ export function App() {
           onJoin={game.join}
         />
       ) : state.room.status === "lobby" || !state.game ? (
-        <Lobby state={state} room={state.room} onStart={game.start} onLeave={game.leave} />
+        <Lobby
+          state={state}
+          room={state.room}
+          onStart={game.start}
+          onLeave={game.leave}
+          onKick={game.kick}
+        />
       ) : (
-        <Table state={state} room={state.room} act={game.act} onLeave={game.leave} />
+        <Table
+          state={state}
+          room={state.room}
+          act={game.act}
+          onLeave={game.leave}
+          onKick={game.kick}
+        />
       )}
     </main>
+  );
+}
+
+/** The host's button to remove a player (after a confirmation). */
+function KickButton(props: { name: string; inGame: boolean; onKick: () => void }) {
+  const warning = props.inGame
+    ? `Remove ${props.name} from the game? They cannot come back, and cannot win.`
+    : `Remove ${props.name} from the room?`;
+  return (
+    <button
+      className="secondary kick"
+      title={`Remove ${props.name}`}
+      onClick={() => {
+        if (window.confirm(warning)) props.onKick();
+      }}
+    >
+      Remove
+    </button>
   );
 }
 
@@ -176,6 +207,7 @@ function Lobby(props: {
   room: RoomInfo;
   onStart: () => void;
   onLeave: () => void;
+  onKick: (seat: string) => void;
 }) {
   const { room, state } = props;
   const isHost = state.session?.seat === room.host;
@@ -196,6 +228,9 @@ function Lobby(props: {
             {s.seat === room.host && " (host)"}
             {s.seat === state.session?.seat && " (you)"}
             {!s.connected && " – disconnected"}
+            {isHost && s.seat !== state.session?.seat && (
+              <KickButton name={s.name} inGame={false} onKick={() => props.onKick(s.seat)} />
+            )}
           </li>
         ))}
       </ul>
@@ -225,16 +260,29 @@ function Lobby(props: {
   );
 }
 
+/** The time now, updated every second while a component that shows a countdown is mounted. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
 function TurnStatus(props: {
+  state: ClientState;
   view: PlayerView;
   me: string;
   name: (p: string) => string;
   seats: SeatInfo[];
 }) {
-  const { view, me, name } = props;
+  const { state, view, me, name } = props;
+  const now = useNow();
   if (view.phase.kind === "gameOver") return <p className="turn">Game over.</p>;
   const actor = view.phase.actors[0];
   if (!actor) return <p className="turn">…</p>;
+  const left = turnSecondsLeft(state, now);
   if (actor === me) {
     const hint =
       view.phase.kind === "move"
@@ -245,14 +293,19 @@ function TurnStatus(props: {
     return (
       <p className="turn mine">
         Your turn: {phaseTask(view)}.{hint}
+        {left !== null && <span className="timer"> {left} s left.</span>}
       </p>
     );
   }
-  const status = seatStatus(props.seats.find((s) => s.seat === actor));
+  const status = seatStatus(
+    props.seats.find((s) => s.seat === actor),
+    awaySecondsLeft(state, actor, now),
+  );
   return (
     <p className="turn waiting">
       Waiting for <b>{name(actor)}</b> to {phaseTask(view)}
-      {status ? ` (${status})` : ""}…
+      {status ? ` (${status})` : ""}
+      {left !== null && <span className="timer"> {left} s left</span>}…
     </p>
   );
 }
@@ -262,8 +315,10 @@ function Table(props: {
   room: RoomInfo;
   act: (a: Action) => void;
   onLeave: () => void;
+  onKick: (seat: string) => void;
 }) {
   const { state, room } = props;
+  const isHost = state.session?.seat === room.host;
   const view = state.game!.view;
   const me = state.session!.seat;
   const names = useMemo(
@@ -304,7 +359,7 @@ function Table(props: {
             ))}
           </div>
         </div>
-        <TurnStatus view={view} me={me} name={name} seats={room.seats} />
+        <TurnStatus state={state} view={view} me={me} name={name} seats={room.seats} />
         {event && (
           <p className="event">
             Event: <b>{event.name}</b>
@@ -381,13 +436,25 @@ function Table(props: {
                       <span className="dot" style={{ background: playerColor(p.id) }} />
                       {name(p.id)}
                       {p.id === me && " (you)"}
-                      {seat && !seat.connected && (
-                        <small
-                          className={seat.away ? "away" : "disconnected"}
-                          title={seatStatus(seat) ?? ""}
-                        >
-                          {seat.away ? "away" : "offline"}
+                      {seat?.removed ? (
+                        <small className="removed" title={seatStatus(seat) ?? ""}>
+                          removed
                         </small>
+                      ) : (
+                        seat &&
+                        !seat.connected && (
+                          <small
+                            className={seat.away ? "away" : "disconnected"}
+                            title={
+                              seatStatus(seat, awaySecondsLeft(state, seat.seat, Date.now())) ?? ""
+                            }
+                          >
+                            {seat.away ? "away" : "offline"}
+                          </small>
+                        )
+                      )}
+                      {isHost && p.id !== me && !p.removed && room.status === "playing" && (
+                        <KickButton name={name(p.id)} inGame onKick={() => props.onKick(p.id)} />
                       )}
                     </td>
                     <td>${p.cash}</td>
@@ -415,6 +482,7 @@ function Table(props: {
                 .map((s) => (
                   <li key={s.player}>
                     {name(s.player)}: ${s.total} (cash ${s.cash}, {s.fineTokens} fine token(s))
+                    {s.removed ? " (removed)" : ""}
                     {view.result?.winners.includes(s.player) ? " 🏆" : ""}
                   </li>
                 ))}

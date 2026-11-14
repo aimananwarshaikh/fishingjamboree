@@ -110,6 +110,7 @@ describe("a full 20-round game", () => {
         cash: p.cash,
         fineTokens: p.fineTokens,
         total: p.cash - 100 * p.fineTokens,
+        removed: false,
       });
       expect(p.cash).toBe(cashFromEvents(events, p.id));
     }

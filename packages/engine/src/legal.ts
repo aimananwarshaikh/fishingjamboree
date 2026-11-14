@@ -4,7 +4,7 @@
  */
 import { affordableUpgrades, helicopterUsable } from "./modifiers";
 import { destinationsFor } from "./movement";
-import type { Action, Engine } from "./types";
+import type { Engine, PlayerAction as Action } from "./types";
 
 export const getActors: Engine["getActors"] = (state) => [...state.phase.actors];
 
