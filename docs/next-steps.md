@@ -83,7 +83,7 @@ Small fixes and tests: Sonnet unless noted.
 6. **Final zone names.** The board art's zone labels all read "SAFE ZONE 3" (placeholder).
 7. **PNG of the board with the round-track layer hidden**, ideally 2× (2756×3938). Until it arrives the client can crop or cover the left-hand track strip. Needed for B2.
 
-8. **Bonus awards** (proposal 2026-11-14, `docs/bonus-awards.md`): secret end-of-game cash awards for meta goals. Nine open questions are at the end of that doc (secret or partly revealed, ties, pool, amounts, away players). Tracking the per-player stats can start before they are answered; tune amounts in B6.
+8. **Golden Hook Awards** (decided 2026-11-14, `docs/bonus-awards.md`, not built): three secret end-of-game cash awards (two in a 2-player game), per-award amounts from $100 to $500 tuned in B6 with a combined budget on the three drawn. All nine questions are answered in the doc; only amounts, budget, pool size and the UI reveal are left. Tracking the per-player stats can start now.
 
 ## Known issues and gaps, by Milestone B phase
 

@@ -12,7 +12,7 @@ A digital version of the Fishing Jamboree board game. The target is an online ga
 - `docs/architecture.md`: engine contract and structure (from Session 1).
 - `docs/protocol.md`: online protocol (from Session 5).
 - `docs/next-steps.md`: where Milestone A ended, open review items, questions for the designer, plan for Milestone B (read this before starting Milestone B).
-- `docs/bonus-awards.md`: proposal (2026-11-14, not decided or built) for secret end-of-game bonus awards, with the stats the engine would track and open questions for the designer.
+- `docs/bonus-awards.md`: "Golden Hook Awards" (design decided 2026-11-14, not built): three secret end-of-game cash awards for meta goals, the stats the engine would track, and the decisions log.
 - `docs/session-1b-kickoff.md`: decisions so far and the brief for stage 1b (read this at the start of Session 1b).
 
 ## Non-negotiables
