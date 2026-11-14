@@ -92,6 +92,8 @@ Answers received 2026-11-13 are recorded under each question (also in the notes 
 7. **PNG of the board with the round-track layer hidden**, ideally 2× (2756×3938). Until it arrives the client can crop or cover the left-hand track strip. Needed for B2.
    - **Answer:** coming later. **Reminder:** ask the designer for it again at the start of B2.
 
+8. **Golden Hook Awards** (decided 2026-11-14, `docs/bonus-awards.md`, not built): three secret end-of-game cash awards (two in a 2-player game), per-award amounts from $100 to $500 tuned in B6 with a combined budget on the three drawn. All nine questions are answered in the doc; only amounts, budget, pool size and the UI reveal are left. Tracking the per-player stats can start now.
+
 ## Known issues and gaps, by Milestone B phase
 
 Phases are in `docs/build-plan.md` section 5.
@@ -100,7 +102,9 @@ Phases are in `docs/build-plan.md` section 5.
   - **P1-2 rework: done** (designer answers to questions 3 and 4; rulebook "Online play"; notes log "Online play: missed turns and removal"). Defaults used and not objected to: a removed player's ship leaves the board, they show as "removed" in the results, cannot win and cannot rejoin; an away player's turn is missed after the 2-second delay; with one player left the game ends and they win.
   - P2-4 and P2-5: done (2026-11-14). Rooms are saved only with `ROOMS_DIR`; without it a restart still ends every game.
   - P1-2 follow-ups, only if wanted: a host pause; a per-room timer length chosen in the lobby (the room already holds its own `timers`); a bot taking a removed player's place (the designer's option once bots exist, B6).
+- **B1b (Golden Hook Awards):** design decided 2026-11-14 (`docs/bonus-awards.md`). Build the stats, the awards content, the secret draw, the payout, hidden state in client views, the protocol change and the tests. Placeholder amounts.
 - **B2 (real UI):**
+  - Golden Hook Awards reveal after round 20, one award at a time.
   - The log is per tab; a refresh restarts it from "Joined room …" (the protocol sends no event history on rejoin, by design). Decide if the real UI needs history; if so, it is a protocol change.
   - Round banner and "Round N/20" progress bar with the three event marks (decided 2026-11-12; the bare client only has the bar). Needs the PNG from the designer.
   - Animation, a layout for the shop and Helicopter, touch tuning (6a notes).
@@ -113,12 +117,12 @@ Phases are in `docs/build-plan.md` section 5.
   - The server port, `wss` for `https`, and `?server=` (see P3 above).
   - Put `scripts/playtest-three-tabs.mjs` into CI if it can run there.
   - Saved rooms (P2-5): set `ROOMS_DIR` to a folder on a disk that survives a redeploy, and keep it private (the files hold seat tokens). If the host has no lasting disk, or more than one server process will run, write a `RoomStore` on a database instead (the interface is in `packages/server/src/roomStore.ts`; the core does not change). Content changes between deploys make saved games unrestorable (content hash); they are moved aside as `.bad`.
-- **B6 (bots, balancing):** `packages/sim` is empty. Card counts, the upgrade price ($200 default, $300 in simulation) and the design questions 1–2 feed into it.
+- **B6 (bots, balancing):** `packages/sim` is empty. Also tune the Golden Hook Award amounts, the combined budget and the pool (targets in `docs/bonus-awards.md`). Card counts, the upgrade price ($200 default, $300 in simulation) and the design questions 1–2 feed into it.
 - **B7 (playtests):** nothing yet.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2, P2-4 and P2-5 are done (P2-3 replaced by the missed-turn rules). What is left of B1 is the P3 list: Sonnet can do the `?server=` restriction and the small P3 fixes and tests. Then the end-of-B1 review (item 3).
+1. **B1 [OPUS]:** P1-2, P2-4 and P2-5 are done (P2-3 replaced by the missed-turn rules). Next **B1b**, the Golden Hook Awards (engine and server). Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
 
