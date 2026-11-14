@@ -709,6 +709,13 @@ export type GameEvent =
    * removal (only a turn that ran the whole turn timer does).
    */
   | { type: "turnMissed"; player: PlayerId; reason: MissReason; counted: boolean }
+  /**
+   * The server ended the turn after the move (online play: time ran out or
+   * the player is away in the shop, the end-of-turn choice or a Sinking Boat
+   * dock choice). Not a missed turn: what was done stands, nothing more
+   * happens, and it counts for nothing (removal, awards).
+   */
+  | { type: "turnTimedOut"; player: PlayerId; reason: MissReason }
   /** The player is out of the game; their ship has left the board. */
   | { type: "playerRemoved"; player: PlayerId; reason: RemovalReason }
   | { type: "rolled"; player: PlayerId; roll: RollResult }

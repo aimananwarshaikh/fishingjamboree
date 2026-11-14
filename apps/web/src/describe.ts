@@ -53,6 +53,10 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
       return ev.reason === "away"
         ? `${name(ev.player)} is away and misses the turn.`
         : `${name(ev.player)} ran out of time and misses the turn.`;
+    case "turnTimedOut":
+      return ev.reason === "away"
+        ? `${name(ev.player)} is away; the turn ends.`
+        : `${name(ev.player)} ran out of time; the turn ends.`;
     case "playerRemoved":
       return ev.reason === "kicked"
         ? `${name(ev.player)} is removed from the game by the host.`

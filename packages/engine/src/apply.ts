@@ -201,27 +201,27 @@ function finishTurn(ctx: Ctx): void {
 }
 
 /**
- * The deciding player ran out of time or is away (online play). Nothing more
- * happens in the turn; a ship that has to be placed goes on the first dock
+ * The deciding player ran out of time or is away (online play). After the
+ * move the turn just ends (`endAfterTheMove`). Before it, the turn is missed:
+ * nothing more happens; a ship that has to be placed goes on the first dock
  * offered. Only a turn that ran the whole timer counts towards removal; too
  * many of those in a row remove the player.
  */
 function missTurn(ctx: Ctx, player: PlayerState, reason: MissReason): void {
   const { state, content } = ctx;
   const phase = state.phase;
+  if (afterTheMove(phase)) {
+    endAfterTheMove(ctx, player, reason);
+    return;
+  }
   const counted = reason === "timeout";
   ctx.events.push({ type: "turnMissed", player: player.id, reason, counted });
   player.missedLastTurn = true;
   if (counted) player.missedTurns += 1;
   if (phase.kind === "placeShip") {
-    const dockId = phase.docks[0] as DockId;
-    if (phase.reason === "sinking-boat") {
-      const dock = content.board.docks.find((d) => d.id === dockId);
-      if (!dock) throw new Error(`missTurn: unknown dock ${dockId}`);
-      relocateTo(ctx, player, dock); // the shop it may open is closed by the miss
-    } else {
-      placeOnDock(ctx, player, dockId, phase.reason);
-    }
+    // Setup or late entry (a Sinking Boat dock is after the move, above).
+    if (phase.reason === "sinking-boat") throw impossible("missTurn on a Sinking Boat dock");
+    placeOnDock(ctx, player, phase.docks[0] as DockId, phase.reason);
   }
   if (counted && player.missedTurns >= content.rules.missedTurnsBeforeRemoval) {
     removePlayer(ctx, player, "missed-turns");
@@ -230,6 +230,37 @@ function missTurn(ctx: Ctx, player: PlayerState, reason: MissReason): void {
   } else {
     closeTurn(ctx);
   }
+}
+
+/**
+ * The decisions left once the ship has moved (or tried to): the dock shop,
+ * the end-of-turn Helicopter choice, and the dock after a Sinking Boat.
+ * Running out of time there is not a missed turn (designer, 2026-11-14).
+ */
+function afterTheMove(phase: GameState["phase"]): boolean {
+  return (
+    phase.kind === "dockShop" ||
+    phase.kind === "turnEnd" ||
+    (phase.kind === "placeShip" && phase.reason === "sinking-boat")
+  );
+}
+
+/**
+ * The server ends a turn after the move: everything done so far stands,
+ * nothing more is bought or used, and the turn ends as if the player had
+ * ended it (a Sinking Boat ship goes on the first dock offered, no shop).
+ * It is not a missed turn: it counts towards neither removal nor the awards.
+ */
+function endAfterTheMove(ctx: Ctx, player: PlayerState, reason: MissReason): void {
+  const { state, content } = ctx;
+  const phase = state.phase;
+  ctx.events.push({ type: "turnTimedOut", player: player.id, reason });
+  if (phase.kind === "placeShip") {
+    const dock = content.board.docks.find((d) => d.id === phase.docks[0]);
+    if (!dock) throw impossible(`turnTimedOut: unknown dock ${String(phase.docks[0])}`);
+    relocateTo(ctx, player, dock); // the shop it may open is closed at once
+  }
+  closeTurn(ctx);
 }
 
 /**

@@ -84,28 +84,88 @@ describe("a missed turn", () => {
     expect(player(next, p).position).toBe(START_LEFT);
     expect(next.decks).toEqual(rolled.decks);
   });
+});
 
-  it("in the shop: nothing is bought and the shop closes", () => {
-    const state = clone(withPlayer(started(2), 0, { cash: 1000 }));
-    const p = id(state, 0);
-    state.phase = { kind: "dockShop", reason: "docked", dock: "start-left", actors: [p] };
-    const { state: next, events } = miss(state);
-    expect(types(events)).not.toContain("upgradeBought");
-    expect(player(next, p)).toMatchObject({ cash: 1000, upgrades: { speed: false } });
-    expect(actor(next)).toBe(id(state, 1));
-  });
+describe("time running out after the move (designer, 2026-11-14: review P2-3)", () => {
+  /** The player has played this turn, so their run of misses is already 0; give them one to see it kept. */
+  const afterOneMiss = (state: GameState, p: PlayerId) => {
+    const s = clone(state);
+    s.players.find((x) => x.id === p)!.missedTurns = 1;
+    return s;
+  };
 
-  it("at the end of the turn: the Helicopter is not used", () => {
+  for (const reason of ["timeout", "away"] as const) {
+    it(`in the shop (${reason}): nothing is bought, the turn ends normally, not a missed turn`, () => {
+      const state = clone(withPlayer(started(2), 0, { cash: 1000 }));
+      const p = id(state, 0);
+      state.phase = { kind: "dockShop", reason: "docked", dock: "start-left", actors: [p] };
+      const { state: next, events } = act(afterOneMiss(state, p), {
+        type: "missTurn",
+        player: p,
+        reason,
+      });
+      expect(types(events).slice(0, 3)).toEqual(["turnTimedOut", "turnEnded", "turnStarted"]);
+      expect(events[0]).toEqual({ type: "turnTimedOut", player: p, reason });
+      expect(player(next, p)).toMatchObject({
+        cash: 1000,
+        upgrades: { speed: false },
+        missedTurns: 1,
+        missedLastTurn: false,
+      });
+      expect(actor(next)).toBe(id(state, 1));
+    });
+  }
+
+  it("at the end of the turn: the Helicopter is not used, the turn ends normally", () => {
     const state = clone(withPlayer(started(2), 0, { cash: 500, fish: [100, 100] }));
     state.activeEvent = { card: "helicopter", drawnAfterRound: 5 };
     const p = id(state, 0);
     state.phase = { kind: "turnEnd", actors: [p] };
     const { state: next, events } = miss(state);
+    expect(types(events).slice(0, 2)).toEqual(["turnTimedOut", "turnEnded"]);
     expect(types(events)).not.toContain("helicopterUsed");
-    expect(player(next, p)).toMatchObject({ cash: 500, fish: [100, 100] });
+    expect(player(next, p)).toMatchObject({
+      cash: 500,
+      fish: [100, 100],
+      missedTurns: 0,
+      missedLastTurn: false,
+    });
     expect(actor(next)).toBe(id(state, 1));
   });
 
+  it("after a Sinking Boat: the ship goes to the first dock offered, no shop, not a missed turn", () => {
+    const state = clone(
+      withPlayer(withShips(started(2), { 0: SEA, 1: tile(4, 15) }), 0, { cash: 1000 }),
+    );
+    const p = id(state, 0);
+    state.phase = {
+      kind: "placeShip",
+      reason: "sinking-boat",
+      docks: ["start-left", "start-right"],
+      actors: [p],
+    };
+    const { state: next, events } = miss(state);
+    expect(events[0]).toEqual({ type: "turnTimedOut", player: p, reason: "timeout" });
+    expect(types(events)).toContain("shipRelocated");
+    expect(types(events)).not.toContain("turnMissed");
+    expect(player(next, p)).toMatchObject({ position: START_LEFT, missedLastTurn: false });
+    expect(next.phase.kind).not.toBe("dockShop");
+    expect(actor(next)).toBe(id(state, 1));
+  });
+
+  it("is never removal: three in a row after the move remove nobody", () => {
+    let state = started(2);
+    const p = actor(state);
+    for (let n = 0; n < LIMIT + 1; n += 1) {
+      const s = clone(state);
+      s.phase = { kind: "dockShop", reason: "docked", dock: "start-left", actors: [p] };
+      state = playOn(miss(s).state);
+      expect(player(state, p).removed).toBe(false);
+    }
+  });
+});
+
+describe("a missed turn: placing a ship, and who may miss", () => {
   it("when placing a ship at setup: placed on the first dock offered, and it counts", () => {
     const { state } = createGame(content, { seed: "miss", players: ["a", "b", "c"] });
     const p = actor(state);
@@ -133,24 +193,6 @@ describe("a missed turn", () => {
     expect(player(next, p).position).toBe(START_LEFT);
     expect(next.phase.kind).toBe("roll");
     expect(actor(next)).toBe(id(state, 0));
-  });
-
-  it("after a Sinking Boat: the ship goes to the first dock offered, no shop, the turn ends", () => {
-    const state = clone(
-      withPlayer(withShips(started(2), { 0: SEA, 1: tile(4, 15) }), 0, { cash: 1000 }),
-    );
-    const p = id(state, 0);
-    state.phase = {
-      kind: "placeShip",
-      reason: "sinking-boat",
-      docks: ["start-left", "start-right"],
-      actors: [p],
-    };
-    const { state: next, events } = miss(state);
-    expect(types(events)).toContain("shipRelocated");
-    expect(player(next, p).position).toBe(START_LEFT);
-    expect(next.phase.kind).not.toBe("dockShop");
-    expect(actor(next)).toBe(id(state, 1));
   });
 
   it("is a system action: only for the deciding player, and never offered as a legal action", () => {

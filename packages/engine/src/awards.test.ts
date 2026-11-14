@@ -26,8 +26,10 @@ import {
   land,
   roll,
   START_LEFT,
+  START_RIGHT,
   started,
   tile,
+  withActiveEvent,
   withEvent,
   withPlayer,
   withShips,
@@ -35,6 +37,7 @@ import {
 } from "./testHelpers";
 import { redactForClient } from "./view";
 import type {
+  Action,
   AwardDef,
   Content,
   GameEvent,
@@ -437,6 +440,77 @@ describe("the payout at the end of the game", () => {
     const end = act(withTopCard(moves.state, "safe", "boot"), to);
     expect(end.state.phase.kind).toBe("gameOver");
     expect(end.state.result!.awards[0]).toMatchObject({ value: 2, winners: [id(s, 1)] });
+  });
+
+  describe("a last turn the server ends after the move (designer, 2026-11-14: review P2-3)", () => {
+    /**
+     * Round 20, the last player: a real turn (roll, sail, card or dock) that
+     * stops at a prompt. "Stripped Down" ($500) goes only to the last player,
+     * and decides the game: $700 + $500 beats $1,000.
+     */
+    function lastTurn(to: "dock" | "sea"): GameState {
+      let s = clone(withShips(started(2), { 0: START_RIGHT, 1: tile(3, 17) }));
+      s.round = content.rules.rounds;
+      s.turn = { playerIndex: 1, helicopterUsed: false };
+      s.phase = { kind: "roll", actors: [id(s, 1)] };
+      s.awards.chosen = ["stripped-down"];
+      s = withPlayer(s, 0, { cash: 1000, upgrades: { speed: true, capacity: false } });
+      s = withPlayer(s, 1, { cash: 700, fish: [100] });
+      if (to === "sea") s = withActiveEvent(s, "helicopter", 15);
+      s = withTopCard(withTopCard(s, "safe", "boot"), "risk", "boot");
+      const rolled = roll(s, 2).state;
+      const moves = getLegalActions(content, rolled, id(s, 1));
+      const move = moves.find(
+        (a) => a.type === "move" && (a.to === START_LEFT) === (to === "dock"),
+      )!;
+      return act(rolled, move).state;
+    }
+
+    const finish = (s: GameState, action: Action) => {
+      const { state, events } = act(s, action);
+      expect(state.phase.kind).toBe("gameOver");
+      return { result: state.result!, events };
+    };
+
+    for (const where of ["dock", "sea"] as const) {
+      const prompt = where === "dock" ? "the shop" : "the Helicopter choice";
+      it(`times out in ${prompt}: ends normally, awards paid, the same winner as End turn`, () => {
+        const s = lastTurn(where);
+        expect(s.phase.kind).toBe(where === "dock" ? "dockShop" : "turnEnd");
+        const p = id(s, 1);
+        const ended = finish(s, { type: "endTurn", player: p });
+        for (const reason of ["timeout", "away"] as const) {
+          const timedOut = finish(s, { type: "missTurn", player: p, reason });
+          expect(timedOut.events[0]).toEqual({ type: "turnTimedOut", player: p, reason });
+          expect(timedOut.events.map((e) => e.type)).not.toContain("turnMissed");
+          expect(timedOut.events.map((e) => e.type)).not.toContain("helicopterUsed");
+          expect(timedOut.events.map((e) => e.type)).not.toContain("upgradeBought");
+          expect(timedOut.result.awards[0]).toMatchObject({ winners: [p] });
+          expect(timedOut.result).toEqual(ended.result);
+          expect(timedOut.result.winners).toEqual([p]);
+        }
+      });
+    }
+
+    it("times out before the move: a missed turn, the awards are not paid", () => {
+      let s = clone(withShips(started(2), { 0: START_RIGHT, 1: tile(3, 17) }));
+      s.round = content.rules.rounds;
+      s.turn = { playerIndex: 1, helicopterUsed: false };
+      s.phase = { kind: "roll", actors: [id(s, 1)] };
+      s.awards.chosen = ["stripped-down"];
+      s = withPlayer(s, 0, { cash: 1000, upgrades: { speed: true, capacity: false } });
+      s = withPlayer(s, 1, { cash: 700 });
+      const p = id(s, 1);
+      const before = finish(s, { type: "missTurn", player: p, reason: "timeout" });
+      expect(before.events[0]).toMatchObject({ type: "turnMissed", counted: true });
+      expect(before.result.awards[0]).toMatchObject({ qualified: [p], winners: [] });
+      expect(before.result.winners).toEqual([id(s, 0)]);
+      // After the roll, before the move: still a missed turn.
+      const rolled = roll(s, 2).state;
+      const moved = finish(rolled, { type: "missTurn", player: p, reason: "away" });
+      expect(moved.events[0]).toMatchObject({ type: "turnMissed", counted: false });
+      expect(moved.result.awards[0]).toMatchObject({ winners: [] });
+    });
   });
 
   it("the last player left also gets the awards they qualify for", () => {

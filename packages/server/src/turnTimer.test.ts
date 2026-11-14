@@ -6,6 +6,7 @@
  * budget). docs/protocol.md §7.
  */
 import { describe, expect, it } from "vitest";
+import * as engine from "@fishingjamboree/engine";
 import { redactForClient, replay } from "@fishingjamboree/engine";
 import { DEFAULT_CONFIG } from "./core";
 import { connOf, content, harness, SEED, strip, V } from "./testHarness";
@@ -183,6 +184,44 @@ describe("turn timer", () => {
     expect(h.core.replayLog(code)?.actions).toEqual([]);
     h.advance(1);
     expect(h.last("back", "update")).toMatchObject({ seq: 1, by: seat, auto: true });
+  });
+});
+
+describe("time running out after the move (review P2-3)", () => {
+  it("in the shop or the Helicopter choice: the turn ends, not missed, and the next turn starts", () => {
+    // Everyone starts rich, so docking opens the shop.
+    const createGame: typeof engine.createGame = (c, setup) => {
+      const created = engine.createGame(c, setup);
+      for (const p of created.state.players) p.cash = 5_000;
+      return created;
+    };
+    const h = harness({}, [], { engine: { createGame } });
+    const { code } = h.started(3);
+    // First legal choices, but never buy or fly: wait for a prompt after the move.
+    for (let guard = 0; !["dockShop", "turnEnd"].includes(h.view("c1").phase.kind); guard += 1) {
+      if (guard > 3_000) throw new Error("never reached a prompt after the move");
+      const seat = h.actor("c1")!;
+      const legal = h.legal(connOf(seat), seat);
+      const choice = legal.find((a) => a.type !== "buyUpgrade" && a.type !== "useHelicopter");
+      h.intent(connOf(seat), strip(choice!));
+    }
+    const seat = h.actor("c1")!;
+    const left = h.last("c1", "update").turnTimeLeftMs!;
+    expect(left).toBeGreaterThan(0);
+    h.clear();
+    h.advance(left);
+    expect(h.got("c1", "update").length).toBeGreaterThan(0);
+    const update = h.last("c1", "update");
+    expect(update.events[0]).toEqual({ type: "turnTimedOut", player: seat, reason: "timeout" });
+    expect(update.view.players.find((p) => p.id === seat)).toMatchObject({
+      missedTurns: 0,
+      missedLastTurn: false,
+    });
+    expect(h.core.replayLog(code)!.actions.at(-1)).toEqual({
+      type: "missTurn",
+      player: seat,
+      reason: "timeout",
+    });
   });
 });
 
