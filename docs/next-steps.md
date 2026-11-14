@@ -9,7 +9,7 @@ A full online game for 2–4 players runs in a browser (desktop and phone width)
 - Create a room, others join by code, the host starts, 20 rounds are played to a scored result.
 - A refresh rejoins the seat. A player who closed their tab gets their seat back from the start screen (saved seats in `localStorage`) or from a rejoin link `#rejoin=CODE.TOKEN`. A tab whose seat is taken over goes back to the start screen with a message.
 - Since B1: a room that hits a server error is closed without touching other rooms (P2-4), and with `ROOMS_DIR` set rooms survive a server restart (P2-5).
-- Since B1 (P1-2 and the designer's answers): a turn timer of 90 s per whole turn; a turn that runs out is missed (the server never plays for a player); 3 missed turns in a row removes the player; the host can remove a player; the last player left wins. A disconnected player has up to 60 s to come back (2 minutes per game) before their turns are missed straight away.
+- Since B1 (P1-2 and the designer's answers): a turn timer of 90 s per whole turn; a turn that runs out before the move is missed (the server never plays for a player), one that runs out after the move just ends; 3 timed-out turns in a row removes the player; the host can remove a player; the last player left wins. A disconnected player has up to 60 s to come back (2 minutes per game); after that they are away and their turns are missed (never within 10 s of the disconnect), which does not count towards removal.
 - The engine follows `docs/rulebook.md` with no known rule bug (`docs/review-2026-11-17.md`). 1,000 seeded random games pass in `fuzz.test.ts`.
 - `scripts/playtest-three-tabs.mjs` (Playwright) plays whole games in three tabs by clicking only what a player can click.
 
@@ -19,14 +19,15 @@ The client is bare: SVG board, no card art, no animation. That is Milestone B2.
 
 ## End-of-B1 review (2026-11-14)
 
-[`docs/review-2026-11-14.md`](review-2026-11-14.md) reviews everything merged after `milestone-a` (PRs #17 to #23). No rule bug and no leak of hidden information were found. Nothing was fixed. Open from it, in priority order:
+[`docs/review-2026-11-14.md`](review-2026-11-14.md) reviews everything merged after `milestone-a` (PRs #17 to #23). No rule bug and no leak of hidden information were found. The designer answered P1-1, P2-2, P2-3, P2-4 and P2-5 on 2026-11-14 (plus three follow-ups: an away miss neither counts nor breaks a run; a Sinking Boat dock choice is after the move; the 10 s floor never holds back the turn timer). Status:
 
-- **P1-1 (designer, before the first playtest):** a player who drops for about a minute and a half is removed for good (measured: 84 s with 2 players, which ends the game; 104 s with 3; 124 s with 4), because an away player's turns are missed after 2 seconds and 3 misses remove them.
-- **P2-2:** with the 2-minute reconnect budget spent, a one-second blip on a player's own turn loses the turn.
-- **P2-3 (designer):** "missed their last turn" takes the awards from a player who played their last turn but let the timer run out in the shop or the Helicopter choice; it can change the winner.
-- **P2-4 (designer, B6):** award numbers: Landlubber and Golden Touch almost never pay; the budget rule halves how often Daredevil and Stripped Down are drawn.
-- **P2-5:** a room closed after a server error deletes its saved file, so the replay log that would reproduce the bug is lost.
-- **P3:** a removed seat becomes "away" after an empty room or a restart; a throw after an action is stored stalls the room for up to 90 s; saved-room and client hardening; missing tests. See the review.
+- **P1-1: done.** Only a turn that ran the whole 90 s timer counts towards "3 missed turns in a row"; an away player's turn is still missed after 2 s but neither counts nor breaks the run (`missTurn.reason`, `turnMissed.counted`). The server never removes an away player; the host can. Re-measured (one player drops, the others take 5 s per action): before, removed after 84 s (2 players, which ended the game), 104 s (3), 124 s (4); now never removed (away at 60 s, every turn missed, the game runs its 20 rounds; rejoin works at any time). A connected player who lets every turn run out is still removed, after 305 s (2 players), 335 s (3), 370 s (4).
+- **P2-2: done.** An away player's turn is never missed sooner than `disconnectFloorMs` (10 s) after the disconnect, even with no budget left; not after `leave`; the turn timer is not held back.
+- **P2-3: done.** A timeout in the shop, the end-of-turn Helicopter choice or the Sinking Boat dock choice ends the turn normally (`turnTimedOut`): not missed, no count towards removal, the awards are kept. Before the move it is still a missed turn. `PlayerState.missedLastTurn` is the engine's "away at the end".
+- **P2-4: no change (designer).** Waits for the simulator; listed under B6 below.
+- **P2-5: done.** A room closed after a server error logs its replay log and keeps its file as `<CODE>.json.bad`.
+- **P3, done:** a removed seat gets no grace and is never away after an empty room or a restore; the stale "the server plays for them" wording.
+- **P3, open:** a throw after an action is stored stalls the room for up to 90 s (the client should `sync` after `stale`); the only connected player can restart their own turn timer by rejoining; a player who rolls and walks away is never removed automatically (as specified); a missed setup placement counts as a missed turn (reading for the designer); a lobby kick has no ban; names drop the zero-width joiners; saved-room hardening (save before send, `fsync`, `.bad` files never cleaned, file name vs code, content hash covers display text, idle time reset by restarts, failed saves); client hardening (backoff after a refused rejoin on an open socket, `leave` waiting for `left`, `?server=` with a fragment, the countdown not refreshed by `room`); docs drifts (Big Haul and the Golden Fish, old names in `docs/bonus-awards.md`); missing tests for these. See the review.
 
 ## Open items from the review of 2026-11-17 (Milestone A)
 
@@ -123,11 +124,12 @@ Phases are in `docs/build-plan.md` section 5.
   - Put `scripts/playtest-three-tabs.mjs` into CI if it can run there.
   - Saved rooms (P2-5): set `ROOMS_DIR` to a folder on a disk that survives a redeploy, and keep it private (the files hold seat tokens). If the host has no lasting disk, or more than one server process will run, write a `RoomStore` on a database instead (the interface is in `packages/server/src/roomStore.ts`; the core does not change). Content changes between deploys make saved games unrestorable (content hash); they are moved aside as `.bad`.
 - **B6 (bots, balancing):** `packages/sim` is empty. Also tune the Golden Hook Award amounts, the combined budget and the pool (targets in `docs/bonus-awards.md`). Card counts, the upgrade price ($200 default, $300 in simulation) and the design questions 1–2 feed into it.
+  - From the end-of-B1 review P2-4 (designer, 2026-11-14: no change until the simulator): Landlubber almost never pays (0 never wins, and the cautious player it is meant for has 0 Risk draws); a removed player still counts in "fewest" awards (Homebody, Landlubber); Golden Touch paid in about 2% of games it was drawn in (no Golden Fish event in 34% of games); the budget rule draws Daredevil and Stripped Down about half as often as the others; Daredevil and Shark Bait pay nobody with cautious players; the placeholder amounts are large (mean $535–$605 paid per game). Numbers in `docs/review-2026-11-14.md`.
 - **B7 (playtests):** nothing yet.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2, P2-4, P2-5, B1b (Golden Hook Awards) and the P3 list are done (P2-3 replaced by the missed-turn rules), except the P3 items that belong with B5 (server limits, `Origin` check, the fixed port) and the low-priority lobby name hold. The end-of-B1 review is done (`docs/review-2026-11-14.md`). Next: put its P1-1, P2-3 and P2-4 to the designer and fix P1-1 and the P2 items before the first playtest.
+1. **B1 [OPUS]: done.** P1-2, P2-4, P2-5, B1b (Golden Hook Awards) and the P3 list of the first review; the end-of-B1 review (`docs/review-2026-11-14.md`) and its P1-1, P2-2, P2-3 and P2-5 fixes (P2-4 waits for B6). Left: the P3 items that belong with B5 (server limits, `Origin` check, the fixed port), the low-priority lobby name hold, and the end-of-B1 review's open P3 items (above).
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. ~~Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).~~ Done 2026-11-14: `docs/review-2026-11-14.md`.
 
