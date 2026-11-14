@@ -54,11 +54,11 @@ Small fixes and tests: Sonnet unless noted.
 **Server**
 
 - Per-IP connection limit, `Origin` check, backpressure limit, idle limit for sockets with no seat; room codes can be walked and the host cannot remove a stranger from the lobby (`transport.ts:205-211`, `:243-254`; `core.ts:241-245`). These belong with B5 (deploy); a kick button belongs with B3.
-- Clean player names (control, zero-width and right-to-left characters; Unicode normalisation) (`core.ts:496-499`).
+- **Done (B1):** player names cleaned (NFC; control, zero-width and direction characters dropped; compared as NFKC lower case; length in characters). `cleanName`/`nameKey` in `core.ts`, `hardening.test.ts`.
 - A disconnected lobby seat holds its name for 2 minutes (`core.ts:249-251`); a rejoin link now covers most cases, so it is low priority.
-- Clear `away` when a game finishes (`core.ts:530-535`).
-- Replace `localeCompare` in seat ordering (`core.ts:515`): wrong from `p10`.
-- Validate `PORT` and make shutdown not wait on keep-alive connections (`main.ts:15`, `:43-49`).
+- **Done (B1):** `away` is cleared when a game finishes.
+- **Done (B1):** seats sort by number (`seatNumber`).
+- **Done (B1):** `PORT` is validated (`config.ts`) and shutdown closes idle keep-alive connections (at most 5 s).
 
 **Web client**
 

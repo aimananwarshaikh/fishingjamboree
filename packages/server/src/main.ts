@@ -10,13 +10,19 @@
  *                 The files hold seat tokens: keep the folder private.
  */
 import { createServer } from "node:http";
+import { parsePort } from "./config";
 import { fileURLToPath } from "node:url";
 import { loadContent } from "./content";
 import { cryptoIds } from "./ids";
 import { fileRoomStore } from "./roomStore";
 import { createGameServer } from "./transport";
 
-const port = Number(process.env.PORT ?? 8787);
+const parsedPort = parsePort(process.env.PORT);
+if (!parsedPort.ok) {
+  console.error(parsedPort.reason);
+  process.exit(1);
+}
+const port = parsedPort.port;
 const host = process.env.HOST;
 const contentDir =
   process.env.CONTENT_DIR ?? fileURLToPath(new URL("../../../content", import.meta.url));
@@ -53,7 +59,13 @@ const stop = async (signal: string) => {
   stopping = true;
   log(`${signal}: closing ${server.connectionCount()} connections`);
   await server.close();
+  // Idle keep-alive connections would hold `close` open; a stuck one gets 5 s.
   http.close(() => process.exit(0));
+  http.closeIdleConnections();
+  setTimeout(() => {
+    http.closeAllConnections();
+    process.exit(0);
+  }, 5_000).unref();
 };
 process.on("SIGINT", () => void stop("SIGINT"));
 process.on("SIGTERM", () => void stop("SIGTERM"));

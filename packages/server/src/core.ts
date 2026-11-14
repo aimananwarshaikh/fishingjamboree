@@ -484,7 +484,7 @@ export class ServerCore {
     if (room.seats.length >= this.content.rules.maxPlayers) {
       return this.error(out, conn, "room-full", "that room is full");
     }
-    if (room.seats.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+    if (room.seats.some((s) => nameKey(s.name) === nameKey(name))) {
       return this.error(out, conn, "name-taken", "someone in that room already has that name");
     }
     this.occupy(room);
@@ -680,6 +680,11 @@ export class ServerCore {
     }
     if (state.phase.kind === "gameOver") {
       room.status = "finished";
+      // Nobody is away once the game is over: there are no more turns to miss.
+      for (const s of room.seats) {
+        s.away = false;
+        s.graceFrom = null;
+      }
       changed = true;
     }
     if (changed) {
@@ -827,8 +832,7 @@ export class ServerCore {
   }
 
   private cleanName(raw: string): string | null {
-    const name = raw.replace(/\s+/g, " ").trim();
-    return name.length >= 1 && name.length <= this.config.maxNameLength ? name : null;
+    return cleanName(raw, this.config.maxNameLength);
   }
 
   /** Takes the lowest free seat number. */
@@ -848,7 +852,7 @@ export class ServerCore {
       removed: false,
     };
     room.seats.push(seat);
-    room.seats.sort((a, b) => a.id.localeCompare(b.id));
+    room.seats.sort((a, b) => seatNumber(a.id) - seatNumber(b.id));
     this.conns.set(conn, { room, seat });
     return seat;
   }
@@ -1025,4 +1029,30 @@ export class ServerCore {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? (error.stack ?? error.message) : String(error);
+}
+
+/**
+ * A player name as shown to everyone: Unicode NFC; control, format (zero-width,
+ * direction overrides and isolates) and other invisible characters dropped;
+ * any run of spaces made one space. `null` unless 1 to `max` characters
+ * (code points) are left.
+ */
+export function cleanName(raw: string, max: number): string | null {
+  const name = raw
+    .normalize("NFC")
+    .replace(/[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Zl}\p{Zp}]/gu, (c) => (/\s/.test(c) ? " " : ""))
+    .replace(/\s+/gu, " ")
+    .trim();
+  const length = [...name].length;
+  return length >= 1 && length <= max ? name : null;
+}
+
+/** Two names are the same in a room when these match (compatibility forms and case folded). */
+export function nameKey(name: string): string {
+  return name.normalize("NFKC").toLowerCase();
+}
+
+/** "p10" -> 10. Seats sort by this, not as text. */
+export function seatNumber(seat: string): number {
+  return Number(seat.slice(1));
 }
