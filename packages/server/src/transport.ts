@@ -188,6 +188,17 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
         log(`room ${code}: could not delete the saved room: ${String(error)}`);
       }
     }
+    // A room closed after an error: its latest state is written, then the
+    // file is moved aside (`<CODE>.json.bad`) to reproduce the bug (review P2-5).
+    for (const { code, snapshot } of changes.broken) {
+      try {
+        if (snapshot) store.save(snapshot);
+        store.discard(`${code}.json`);
+        log(`room ${code}: closed after an error; its saved file is kept as ${code}.json.bad`);
+      } catch (error) {
+        log(`room ${code}: could not keep the closed room's file: ${String(error)}`);
+      }
+    }
   };
 
   const schedule = (afterError = false) => {

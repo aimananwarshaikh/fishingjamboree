@@ -59,11 +59,11 @@ describe("takeChanges", () => {
     const first = h.core.takeChanges();
     expect(first.save.map((s) => s.code)).toEqual([code]);
     expect(first.remove).toEqual([]);
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [], broken: [] });
     h.send("c2", { type: "leave" });
     expect(h.core.takeChanges().save[0]!.seats.map((s) => s.id)).toEqual(["p1"]);
     h.send("c1", { type: "leave" });
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code], broken: [] });
   });
 
   it("covers timers: a turn missed by the timer and an idle room deleted", () => {
@@ -77,7 +77,7 @@ describe("takeChanges", () => {
     h.drop("c2");
     h.core.takeChanges();
     h.advance(IDLE);
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code], broken: [] });
   });
 
   it("a snapshot holds no connection ids or clock times", () => {
@@ -351,7 +351,7 @@ describe("a restored room is like any other", () => {
     const h1 = harness();
     const { code, tokens } = h1.started(2);
     const h = restart(saved(h1, code));
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [], broken: [] });
     h.send("r1", { type: "rejoin", v: V, code, seatToken: tokens[0] });
     expect(h.core.takeChanges().save.map((s) => s.code)).toEqual([code]);
   });

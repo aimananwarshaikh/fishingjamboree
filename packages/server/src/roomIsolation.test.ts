@@ -137,6 +137,32 @@ describe("a room that throws in tick", () => {
     expect(h.core.replayLog(a)!.actions).toHaveLength(2);
   });
 
+  it("keeps what reproduces the bug: the replay log is logged, the room is marked broken, not removed (review P2-5)", () => {
+    const f = faulty();
+    const h = harness({}, [], { engine: f.engine, log: f.log });
+    const { a, b } = twoLobbies(h);
+    h.send("b1", { type: "start" });
+    h.clear();
+    for (let i = 0; i < 4; i += 1) act(h, B);
+    const log = h.core.replayLog(b)!;
+    h.core.takeChanges();
+    f.fault.on = true;
+    h.advance(TURN);
+    expect(h.core.roomCodes()).toEqual([a]);
+    const line = f.lines.find((l) => l.startsWith(`room ${b}: replay log: `))!;
+    expect(JSON.parse(line.slice(`room ${b}: replay log: `.length))).toEqual(log);
+    // The log line has the seed and the actions, and no seat token.
+    expect(line).not.toMatch(/"token"|seatToken/);
+    const changes = h.core.takeChanges();
+    expect(changes.remove).not.toContain(b);
+    expect(changes.save.map((x) => x.code)).not.toContain(b);
+    expect(changes.broken).toHaveLength(1);
+    expect(changes.broken[0]!.code).toBe(b);
+    expect(changes.broken[0]!.snapshot!.game!.log).toEqual(log);
+    // Reported once.
+    expect(h.core.takeChanges().broken).toEqual([]);
+  });
+
   it("after a room is closed, players in the other room keep playing", () => {
     const f = faulty();
     const h = harness({}, [], { engine: f.engine, log: f.log });

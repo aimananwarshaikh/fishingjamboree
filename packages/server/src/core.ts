@@ -173,6 +173,8 @@ export class ServerCore {
   private readonly conns = new Map<ConnId, { room: Room; seat: Seat }>();
   /** Codes of rooms that may have changed (or gone) since the last `takeChanges`. */
   private readonly touched = new Set<string>();
+  /** Rooms closed after an error since the last `takeChanges`, with their last snapshot if one could be made. */
+  private readonly broken = new Map<string, RoomSnapshot | null>();
   private readonly trackChanges: boolean;
 
   constructor(deps: CoreDeps) {
@@ -322,19 +324,28 @@ export class ServerCore {
 
   /**
    * The rooms that may have changed since the last call, as snapshots to
-   * save, and the codes of rooms that are gone (to delete). Server-side only:
-   * snapshots hold tokens and seeds.
+   * save; the codes of rooms that are gone (to delete); and rooms closed
+   * after an error (review P2-5), whose saved file is kept aside for
+   * debugging, with their last snapshot (`null` if none could be made) to
+   * write first. Server-side only: snapshots hold tokens and seeds.
    */
-  takeChanges(): { save: RoomSnapshot[]; remove: string[] } {
+  takeChanges(): {
+    save: RoomSnapshot[];
+    remove: string[];
+    broken: { code: string; snapshot: RoomSnapshot | null }[];
+  } {
     const save: RoomSnapshot[] = [];
     const remove: string[] = [];
+    const broken = [...this.broken].map(([code, snapshot]) => ({ code, snapshot }));
     for (const code of this.touched) {
+      if (this.broken.has(code)) continue;
       const room = this.rooms.get(code);
       if (room) save.push(this.snapshotOf(room));
       else remove.push(code);
     }
     this.touched.clear();
-    return { save, remove };
+    this.broken.clear();
+    return { save, remove, broken };
   }
 
   /** A snapshot of one room now, or `null`. */
@@ -952,6 +963,20 @@ export class ServerCore {
    */
   private closeBroken(out: Outbound[], room: Room, error: unknown) {
     this.log(`room ${room.code}: error in tick, room closed: ${describeError(error)}`);
+    // Keep what reproduces the bug (review P2-5): the replay log (seed and
+    // actions; no seat tokens) in the log, and the room's file set aside.
+    if (room.game) {
+      this.log(`room ${room.code}: replay log: ${JSON.stringify(room.game.log)}`);
+    }
+    if (this.trackChanges) {
+      let snapshot: RoomSnapshot | null = null;
+      try {
+        snapshot = this.snapshotOf(room);
+      } catch (snapError) {
+        this.log(`room ${room.code}: no snapshot of the closed room: ${describeError(snapError)}`);
+      }
+      this.broken.set(room.code, snapshot);
+    }
     for (const seat of room.seats) {
       if (seat.conn === null) continue;
       this.error(out, seat.conn, "room-closed", "this room hit a server error and was closed");

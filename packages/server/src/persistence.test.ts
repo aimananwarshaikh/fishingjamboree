@@ -6,7 +6,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { getLegalActions, redactForClient, replay } from "@fishingjamboree/engine";
+import { applyAction, getLegalActions, redactForClient, replay } from "@fishingjamboree/engine";
 import type { Action } from "@fishingjamboree/engine";
 import { cryptoIds } from "./ids";
 import { PROTOCOL_VERSION as V } from "./protocol";
@@ -185,6 +185,56 @@ describe("a server restarted on the same folder", () => {
     c.send({ type: "create", v: V, name: "Cy" });
     const w = await c.waitFor("welcome");
     expect(readdirSync(dir)).toContain(`${w.room.code}.json`);
+  });
+
+  it("a room closed after a server error keeps its file as <CODE>.json.bad (review P2-5)", async () => {
+    const dir = tempDir();
+    const fault = { on: false };
+    const lines: string[] = [];
+    const server = await createGameServer({
+      core: {
+        content,
+        ids: cryptoIds(),
+        config: { turnTimeoutMs: 200 },
+        engine: {
+          applyAction: (c, state, action) => {
+            if (fault.on && action.type === "missTurn") throw new Error("boom: stubbed");
+            return applyAction(c, state, action);
+          },
+        },
+      },
+      transport: { rateBurst: 1e6, ratePerSecond: 1e6 },
+      host: "127.0.0.1",
+      store: fileRoomStore(dir),
+      log: (line) => lines.push(line),
+    });
+    servers.push(server);
+    const url = `ws://127.0.0.1:${server.port()}`;
+    const host = await TestClient.connect(url);
+    const guest = await TestClient.connect(url);
+    clients.push(host, guest);
+    host.send({ type: "create", v: V, name: "Ann" });
+    const code = (await host.waitFor("welcome")).room.code;
+    guest.send({ type: "join", v: V, code, name: "Bob" });
+    await guest.waitFor("welcome");
+    fault.on = true;
+    host.send({ type: "start" });
+    await host.waitFor("update", (m) => m.seq === 0);
+    const log = server.core.replayLog(code)!;
+    // The turn timer runs out; missTurn throws; the room is closed.
+    await host.waitFor("error", (m) => m.code === "room-closed");
+    expect(server.core.roomCodes()).toEqual([]);
+    expect(readdirSync(dir)).toEqual([`${code}.json.bad`]);
+    const kept = JSON.parse(readFileSync(join(dir, `${code}.json.bad`), "utf8")) as RoomSnapshot;
+    expect(kept.game!.log).toEqual(log);
+    expect(lines.some((l) => l.startsWith(`room ${code}: replay log: {`))).toBe(true);
+    expect(lines.some((l) => l.includes(`kept as ${code}.json.bad`))).toBe(true);
+    // A restart does not load it again.
+    await server.close();
+    servers = servers.filter((s) => s !== server);
+    const again = await start(dir);
+    expect(again.server.core.roomCodes()).toEqual([]);
+    expect(readdirSync(dir)).toEqual([`${code}.json.bad`]);
   });
 
   it("deletes the file when the room goes", async () => {
