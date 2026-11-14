@@ -45,6 +45,8 @@ describe("redactForClient", () => {
     state.decks.safe.discard = [state.decks.safe.draw.pop()!];
     const view = redactForClient(state, p0);
     expect(view).not.toHaveProperty("rng");
+    // The Golden Hook Awards and the stats are secret until the result.
+    expect(view).not.toHaveProperty("awards");
     expect(view.decks).toEqual({
       safe: { drawCount: state.decks.safe.draw.length, discard: state.decks.safe.discard },
       risk: { drawCount: 16, discard: [] },
@@ -53,7 +55,7 @@ describe("redactForClient", () => {
     for (const deck of Object.values(view.decks)) expect(deck).not.toHaveProperty("draw");
     const omit = (o: object, keys: string[]) =>
       Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
-    expect(omit(view, ["viewer", "decks"])).toEqual(omit(state, ["rng", "decks"]));
+    expect(omit(view, ["viewer", "decks"])).toEqual(omit(state, ["rng", "decks", "awards"]));
     expect(view.viewer).toBe(p0);
   });
 
@@ -84,7 +86,7 @@ describe("redactForClient", () => {
   it("shows the result once the game is over", () => {
     const over = clone(base);
     over.phase = { kind: "gameOver", actors: [] };
-    over.result = { scores: [], winners: [], reason: "rounds" };
+    over.result = { scores: [], winners: [], reason: "rounds", awards: [], stats: {} };
     expect(redactForClient(over, p0).result).toEqual(over.result);
   });
 });

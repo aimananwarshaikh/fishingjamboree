@@ -1,10 +1,12 @@
 /**
- * compileContent: validates the three content files and builds the indexed
+ * compileContent: validates the four content files and builds the indexed
  * board (docs/architecture.md section 7). Never throws on bad content; every
  * problem found is reported as a `ContentIssue`.
  */
+import { AWARD_STATS, validAwardSets } from "./awards";
 import { hashJson } from "./hash";
 import type {
+  AwardsContent,
   Board,
   CardsContent,
   Content,
@@ -383,6 +385,73 @@ function checkRules(raw: unknown, issues: Issues): void {
 }
 
 // ---------------------------------------------------------------------------
+// Golden Hook Awards
+// ---------------------------------------------------------------------------
+
+const AWARD_KINDS = new Set(["most", "least", "condition"]);
+
+function checkAwards(raw: unknown, rules: unknown, issues: Issues): void {
+  if (!isObj(raw)) return issues.add("awards", "must be an object");
+  const before = issues.list.length;
+  const budgetOk = issues.int("awards.budget", raw.budget, 0);
+  if (!Array.isArray(raw.awards)) return issues.add("awards.awards", "must be an array");
+  const ids = new Set<string>();
+  raw.awards.forEach((a: unknown, i) => {
+    const path = `awards.awards[${i}]`;
+    if (!isObj(a)) return issues.add(path, "must be an object");
+    if (!isNonEmptyString(a.id)) issues.add(`${path}.id`, "must be a non-empty string");
+    else if (ids.has(a.id)) issues.add(`${path}.id`, `"${a.id}" is used twice`);
+    else ids.add(a.id);
+    if (!isNonEmptyString(a.name)) issues.add(`${path}.name`, "must be a non-empty string");
+    if (!isNonEmptyString(a.text)) issues.add(`${path}.text`, "must be a non-empty string");
+    if (!AWARD_KINDS.has(a.kind as string)) {
+      issues.add(`${path}.kind`, `must be one of ${[...AWARD_KINDS].join(", ")}`);
+    }
+    if (!AWARD_STATS.includes(a.stat as never)) {
+      issues.add(`${path}.stat`, `must be one of ${AWARD_STATS.join(", ")}`);
+    }
+    issues.int(`${path}.amount`, a.amount, 0);
+    if (a.kind === "condition") {
+      if (a.min === undefined && a.max === undefined) {
+        issues.add(path, "a condition needs min or max");
+      }
+      const minOk = a.min === undefined || issues.int(`${path}.min`, a.min);
+      const maxOk = a.max === undefined || issues.int(`${path}.max`, a.max);
+      if (minOk && maxOk && isInt(a.min) && isInt(a.max) && a.min > a.max) {
+        issues.add(path, "min must not exceed max");
+      }
+    } else if (a.min !== undefined || a.max !== undefined) {
+      issues.add(path, "only a condition has min or max");
+    }
+    if (a.conflicts !== undefined && !Array.isArray(a.conflicts)) {
+      issues.add(`${path}.conflicts`, "must be an array of award ids");
+    }
+  });
+  raw.awards.forEach((a: unknown, i) => {
+    if (!isObj(a) || !Array.isArray(a.conflicts)) return;
+    a.conflicts.forEach((c: unknown, j) => {
+      const path = `awards.awards[${i}].conflicts[${j}]`;
+      if (typeof c !== "string" || !ids.has(c)) issues.add(path, `unknown award ${String(c)}`);
+      else if (c === a.id) issues.add(path, "an award cannot conflict with itself");
+    });
+  });
+  const perGame = raw.perGame;
+  if (!isObj(perGame)) return issues.add("awards.perGame", "must be an object");
+  if (!isObj(rules) || !isInt(rules.minPlayers) || !isInt(rules.maxPlayers)) return;
+  for (let n = rules.minPlayers; n <= rules.maxPlayers; n += 1) {
+    const path = `awards.perGame.${n}`;
+    const count = perGame[String(n)];
+    if (!issues.int(path, count, 0)) continue;
+    // Only check that a draw is possible when everything else is sound.
+    if (issues.list.length > before || !budgetOk || count === 0) continue;
+    const content = { awards: raw as unknown as AwardsContent } as Content;
+    if (validAwardSets(content, count).length === 0) {
+      issues.add(path, `no ${count} awards fit the budget without a conflict`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 /** Deep copy of a JSON value, so the compiled content shares nothing with the caller. */
 const copyJson = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -396,13 +465,20 @@ export const compileContent: Engine["compileContent"] = (raw: RawContent) => {
   const summary = compileBoard(input.board, issues);
   checkCards(input.cards, issues, summary);
   checkRules(input.rules, issues);
+  checkAwards(input.awards, input.rules, issues);
   if (issues.list.length > 0 || !summary) return { ok: false, issues: issues.list };
 
   const content: Content = {
-    hash: hashJson({ board: input.board, cards: input.cards, rules: input.rules }),
+    hash: hashJson({
+      board: input.board,
+      cards: input.cards,
+      rules: input.rules,
+      awards: input.awards,
+    }),
     board: summary.board,
     cards: copyJson(input.cards) as CardsContent,
     rules: copyJson(input.rules) as RulesConfig,
+    awards: copyJson(input.awards) as AwardsContent,
   };
   return { ok: true, content };
 };

@@ -9,9 +9,10 @@ import type { Content, RawContent } from "@fishingjamboree/engine";
 import board from "../../../content/board.json";
 import cards from "../../../content/cards.json";
 import rules from "../../../content/rules.json";
+import awards from "../../../content/awards.json";
 
 export function loadBundledContent(): Content {
-  const result = compileContent({ board, cards, rules } as unknown as RawContent);
+  const result = compileContent({ board, cards, rules, awards } as unknown as RawContent);
   if (!result.ok) {
     throw new Error(
       `bundled content is not valid: ${result.issues.map((i) => `${i.path}: ${i.message}`).join("; ")}`,

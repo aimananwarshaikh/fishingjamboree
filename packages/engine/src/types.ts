@@ -219,14 +219,77 @@ export interface RulesConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Content: Golden Hook Awards (content/awards.json, docs/bonus-awards.md)
+// ---------------------------------------------------------------------------
+
+/** Key into `AwardsContent.awards` (by `id`). */
+export type AwardId = string;
+
+/** Counted by the engine during play, from the events (see `stats.ts`). */
+export interface PlayerStats {
+  /** Fish that went onto the ship from fish cards, event bonus fish included (not the Golden Fish). */
+  fishCaught: number;
+  /** Fish that did not fit (a full ship), the Golden Fish included. */
+  fishLostToCapacity: number;
+  fishLostToShark: number;
+  /** Tiles actually moved. */
+  tilesMoved: number;
+  riskDraws: number;
+  /** Shark cards drawn, repelled or not. */
+  sharkDraws: number;
+  /** Boots drawn, from either deck. */
+  bootDraws: number;
+  /** Chosen dockings only (not a Sinking Boat arrival, not a Helicopter sale). */
+  dockVisits: number;
+  /** Money fined, fine tokens included. */
+  finesPaid: Money;
+  goldenFishTaken: number;
+  /** Turns the ship could not move (`blocked`) or could not enter the board (`turnSkipped`). For the simulator. */
+  turnsBlocked: number;
+}
+
+/** What an award looks at: a counted stat, or one read from the player at the end. */
+export type AwardStat = keyof PlayerStats | "upgradesBought" | "fineTokens";
+
+/**
+ * `most` / `least`: every player on the highest / lowest value qualifies, unless that value is 0.
+ * `condition`: every player whose value is within `min`..`max` qualifies.
+ */
+export type AwardKind = "most" | "least" | "condition";
+
+export interface AwardDef {
+  id: AwardId;
+  name: string;
+  /** One line for the reveal, e.g. "Most Risk cards drawn". */
+  text: string;
+  kind: AwardKind;
+  stat: AwardStat;
+  /** `condition` only; at least one of the two. */
+  min?: number;
+  max?: number;
+  amount: Money;
+  /** Awards never drawn in the same game as this one (either side may list the pair). */
+  conflicts?: AwardId[];
+}
+
+export interface AwardsContent {
+  /** How many awards are drawn, by number of players ("2", "3", "4"). */
+  perGame: Record<string, number>;
+  /** The drawn awards' amounts add up to at most this. */
+  budget: Money;
+  awards: AwardDef[];
+}
+
+// ---------------------------------------------------------------------------
 // Content: bundles
 // ---------------------------------------------------------------------------
 
-/** The three JSON files as loaded, before validation. */
+/** The four JSON files as loaded, before validation. */
 export interface RawContent {
   board: BoardContent;
   cards: CardsContent;
   rules: RulesConfig;
+  awards: AwardsContent;
 }
 
 interface TileBase {
@@ -291,6 +354,7 @@ export interface Content {
   board: Board;
   cards: CardsContent;
   rules: RulesConfig;
+  awards: AwardsContent;
 }
 
 export interface ContentIssue {
@@ -422,12 +486,27 @@ export type PhaseKind = Phase["kind"];
 
 export interface PlayerScore {
   player: PlayerId;
+  /** Cash at the end of play, before any award. */
   cash: Money;
   fineTokens: number;
-  /** `cash - fineTokens * fineTokenValue`. May be negative. */
+  /** Golden Hook Award money won. */
+  awards: Money;
+  /** `cash - fineTokens * fineTokenValue + awards`. May be negative. */
   total: Money;
   /** The player was removed from the game, so cannot win. */
   removed: boolean;
+}
+
+/** How one drawn Golden Hook Award went (revealed with the result). */
+export interface AwardResult {
+  award: AwardId;
+  amount: Money;
+  /** `most`/`least`: the winning value (`null` when nobody qualified). `condition`: `null`. */
+  value: number | null;
+  /** Players whose stat won or who met the condition, eligible or not. */
+  qualified: PlayerId[];
+  /** Qualified players who are paid: not removed, and did not miss their last turn. */
+  winners: PlayerId[];
 }
 
 /** `rounds`: the last round was played. `last-player`: every other player was removed. */
@@ -439,6 +518,10 @@ export interface GameResult {
   /** Highest total among players not removed. More than one player means a shared win. */
   winners: PlayerId[];
   reason: GameEndReason;
+  /** The Golden Hook Awards that were in play, in the order drawn. */
+  awards: AwardResult[];
+  /** Every player's counted stats, revealed at the end. */
+  stats: Record<PlayerId, PlayerStats>;
 }
 
 // --- State and view -------------------------------------------------------
@@ -461,14 +544,22 @@ export interface PublicState<TDeck> {
   result: GameResult | null;
 }
 
+/** The Golden Hook Awards while the game is played: secret, never in a client view. */
+export interface HiddenAwards {
+  /** Drawn at setup, in draw order. */
+  chosen: AwardId[];
+  stats: Record<PlayerId, PlayerStats>;
+}
+
 /** The authoritative state. Lives on the server and in the simulator only. */
 export interface GameState extends PublicState<Deck> {
   rng: RngState;
+  awards: HiddenAwards;
 }
 
 export type Viewer = PlayerId | "spectator";
 
-/** What a client receives: no deck order and no RNG state. */
+/** What a client receives: no deck order, no RNG state, no awards or stats (they are in `result` at the end). */
 export interface PlayerView extends PublicState<DeckView> {
   viewer: Viewer;
 }
@@ -627,6 +718,8 @@ export type GameEvent =
   | { type: "eventExpired"; card: CardId }
   | { type: "eventDrawn"; card: CardId; afterRound: number }
   | { type: "deckReshuffled"; deck: DeckId; reason: ReshuffleReason; drawCount: number }
+  /** End of the game, one per drawn award, before `gameEnded`: the reveal. */
+  | ({ type: "awardGiven" } & AwardResult)
   | { type: "gameEnded"; result: GameResult };
 
 export type GameEventType = GameEvent["type"];

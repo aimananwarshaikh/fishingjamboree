@@ -228,3 +228,39 @@ describe("a whole game over the protocol", () => {
     expect(h.last("c2", "snapshot").game?.view.result).toEqual(final.result);
   });
 });
+
+describe("Golden Hook Awards over the protocol", () => {
+  it("no message before the end names an award or carries the stats; the result reveals them", () => {
+    const h = harness();
+    const { code, tokens } = h.started(3);
+    // A rejoin mid-game too: welcome must not carry them either.
+    for (let i = 0; i < 40; i += 1) playOne(h, i);
+    h.drop("c2");
+    h.send("c2b", { type: "rejoin", v: 1, code, seatToken: tokens[1] });
+    h.send("c3", { type: "sync" });
+    const chosen = h.core.snapshotRoom(code)!.game!.state.awards.chosen;
+    expect(chosen).toHaveLength(3);
+    const conns = ["c1", "c2b", "c3"];
+    for (let guard = 0; h.room(code).status === "playing"; guard += 1) {
+      if (guard > 5_000) throw new Error("the game never ended");
+      const actor = h.actor("c1")!;
+      const conn = actor === "p2" ? "c2b" : connOf(actor);
+      h.intent(conn, strip(h.legal(conn, actor)[0]!));
+    }
+    const messages = h.sent.flatMap((o) => (o.kind === "send" ? [o.message] : []));
+    const final = messages.findIndex((m) => m.type === "update" && m.view.result !== null);
+    expect(final).toBeGreaterThan(0);
+    const before = JSON.stringify(messages.slice(0, final));
+    for (const id of chosen) expect(before).not.toContain(`"${id}"`);
+    expect(before).not.toContain("fishCaught");
+    expect(before).not.toContain("awardGiven");
+    for (const c of conns) {
+      const last = h.last(c, "update");
+      expect(last.events.filter((e) => e.type === "awardGiven").map((e) => e.award)).toEqual(
+        chosen,
+      );
+      expect(last.view.result!.awards.map((a) => a.award)).toEqual(chosen);
+      expect(last.view).not.toHaveProperty("awards");
+    }
+  });
+});

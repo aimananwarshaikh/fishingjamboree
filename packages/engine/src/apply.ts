@@ -7,6 +7,7 @@
  * `landing.ts`; event cards are in `eventCards.ts`. Online play adds two
  * system actions the server decides: a missed turn and removing a player.
  */
+import { resolveAwards, syncStats } from "./awards";
 import type { Ctx } from "./ctx";
 import { relocateTo } from "./dock";
 import { scoreGame, sellFish } from "./economy";
@@ -97,8 +98,9 @@ function continueSetup(ctx: Ctx): void {
 
 /**
  * After the last turn of the last round: an unclaimed Golden Fish is removed,
- * the scores are counted and the game is over. The last event card stays
- * active (it lasts until the end of the game) and is not discarded.
+ * the Golden Hook Awards are revealed and paid (one `awardGiven` each), the
+ * scores are counted and the game is over. The last event card stays active
+ * (it lasts until the end of the game) and is not discarded.
  */
 function endGame(ctx: Ctx, reason: GameEndReason = "rounds"): void {
   const { state, content } = ctx;
@@ -106,7 +108,11 @@ function endGame(ctx: Ctx, reason: GameEndReason = "rounds"): void {
     ctx.events.push({ type: "goldenFishRemoved", spot: state.goldenFish.spot, reason: "game-end" });
     state.goldenFish = null;
   }
-  state.result = scoreGame(content, state.players, reason);
+  syncStats(ctx); // the last turn counts
+  const stats = JSON.parse(JSON.stringify(state.awards.stats)) as typeof state.awards.stats;
+  const awards = resolveAwards(content, state.awards.chosen, state.players, stats);
+  for (const award of awards) ctx.events.push({ type: "awardGiven", ...award });
+  state.result = scoreGame(content, state.players, reason, awards, stats);
   state.phase = { kind: "gameOver", actors: [] };
   ctx.events.push({ type: "gameEnded", result: state.result });
 }
@@ -353,6 +359,7 @@ export const applyAction: Engine["applyAction"] = (content, state, action) => {
   const ctx: Ctx = { content, state: draft, events: [] };
   const player = draft.players.find((p) => p.id === action.player) as PlayerState;
   applyLegal(ctx, action, player);
+  syncStats(ctx);
   draft.actionCount += 1;
   return { ok: true, state: draft, events: ctx.events };
 };

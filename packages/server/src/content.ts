@@ -10,6 +10,7 @@ export function loadContent(dir: string): Content {
     board: read("board.json"),
     cards: read("cards.json"),
     rules: read("rules.json"),
+    awards: read("awards.json"),
   } as RawContent;
   const result = compileContent(raw);
   if (!result.ok) {

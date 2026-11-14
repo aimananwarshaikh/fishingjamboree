@@ -135,7 +135,12 @@ describe("compileContent: the real content", () => {
     const raw = rawContent();
     expect(content.hash).toBe(hashJson(raw));
     expect(content.hash).toMatch(/^[0-9a-f]{32}$/);
-    const reordered = { rules: raw.rules, cards: raw.cards, board: raw.board } as RawContent;
+    const reordered = {
+      awards: raw.awards,
+      rules: raw.rules,
+      cards: raw.cards,
+      board: raw.board,
+    } as RawContent;
     expect(compiledContent(reordered).hash).toBe(content.hash);
     raw.rules.upgrades.speed.price = 300;
     expect(compiledContent(raw).hash).not.toBe(content.hash);

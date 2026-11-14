@@ -481,8 +481,8 @@ function Table(props: {
                 .sort((a, b) => b.total - a.total)
                 .map((s) => (
                   <li key={s.player}>
-                    {name(s.player)}: ${s.total} (cash ${s.cash}, {s.fineTokens} fine token(s))
-                    {s.removed ? " (removed)" : ""}
+                    {name(s.player)}: ${s.total} (cash ${s.cash}, {s.fineTokens} fine token(s)
+                    {s.awards > 0 ? `, awards $${s.awards}` : ""}){s.removed ? " (removed)" : ""}
                     {view.result?.winners.includes(s.player) ? " 🏆" : ""}
                   </li>
                 ))}

@@ -9,6 +9,8 @@ export interface Ctx {
   /** A private copy of the state; handlers mutate it freely. */
   state: GameState;
   events: GameEvent[];
+  /** How many of `events` are already in the award stats (`syncStats`). */
+  statsCounted?: number;
 }
 
 /** The player whose turn it is. */

@@ -1,6 +1,6 @@
 # Golden Hook Awards (design, decided 2026-11-14)
 
-Status: **design decided by the designer on 2026-11-14; not built.** See "Decisions" below. `docs/rulebook.md` changes when the build starts (the "End of the game" section). Until then "bonus awards" and "bonuses" in this doc mean the same thing as Golden Hook Awards.
+Status: **design decided by the designer on 2026-11-14; built in B1b (engine and server; amounts are placeholders until B6; the reveal UI is B2).** See "Decisions" below and "Built (B1b)" at the end. `docs/rulebook.md` "End of the game" has the rules as built. Until then "bonus awards" and "bonuses" in this doc mean the same thing as Golden Hook Awards.
 
 ## The idea
 
@@ -149,6 +149,18 @@ The ending should be exciting: anything could happen, and a close game can be de
 9. **Name: Golden Hook Awards.** Chosen because it sounds like a trophy at a fishing contest, and it doesn't clash with the Golden Fish ($1000 token). In the UI, each award is "the Golden Hook for Daredevil" and so on. The content file is `content/awards.json` and the engine event is `awardGiven`. (The designer asked for a name that works for the project; change it if it doesn't feel right.)
 
 The two choices the designer left to me, for the record: the budget rule instead of a cap (8), and Homebody kept small while Light Catch is dropped (4).
+
+## Built (B1b, 2026-11-14)
+
+What the build decided where this doc left room (all in `docs/rulebook-engine-notes.md`):
+
+- **Stats are counted from the engine's own events** (`awards.ts`, `countStats`), after every action and once more at the end before scoring, so the last turn counts. They live in `state.awards.stats`, not on the public player state. `turnsMissed` is named `turnsBlocked` (it counts `blocked` and `turnSkipped`), so it is not confused with the online play missed turns. `fishCaught` does not include the Golden Fish (that is `goldenFishTaken`); a Golden Fish lost to a full ship counts in `fishLostToCapacity`.
+- **The draw** picks uniformly among every valid set (no conflicting pair, within the budget), then shuffles it for the reveal order. It uses its own RNG stream, so the dice and decks are the same with or without awards.
+- **"Away at the end"** (decision 6): the engine does not know who is connected, so it reads it as "missed their last turn" (`missedTurns > 0` at the end). An away player's turns are always missed, so they are covered; a connected player whose last turn ran out of time is also not paid.
+- **Payout:** award money goes into the score (`PlayerScore.awards`, added to `total`), not into `cash`, so it does not pay off fine tokens and `cash` stays what was earned.
+- **Golden Touch** is a condition (took at least one Golden Fish). **Fully Loaded** was not in the tier table: placed at $200 (standard).
+- **Budget:** $900 for 2 and 3 awards alike. **Conflicts:** Daredevil/Landlubber, Sea Legs/Homebody, Stripped Down/Fully Loaded.
+- **The last player left** (everyone else removed) is still paid the awards they qualify for; they win anyway.
 
 ## Still open (small, for the build)
 

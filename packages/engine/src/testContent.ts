@@ -5,12 +5,13 @@
 import board from "../../../content/board.json";
 import cards from "../../../content/cards.json";
 import rules from "../../../content/rules.json";
+import awards from "../../../content/awards.json";
 import { compileContent } from "./content";
 import type { Content, RawContent } from "./types";
 
 /** A fresh deep copy each call, so tests can mutate it freely. */
 export function rawContent(): RawContent {
-  return JSON.parse(JSON.stringify({ board, cards, rules })) as RawContent;
+  return JSON.parse(JSON.stringify({ board, cards, rules, awards })) as RawContent;
 }
 
 export function compiledContent(raw: RawContent = rawContent()): Content {

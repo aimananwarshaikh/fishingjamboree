@@ -102,7 +102,7 @@ Phases are in `docs/build-plan.md` section 5.
   - **P1-2 rework: done** (designer answers to questions 3 and 4; rulebook "Online play"; notes log "Online play: missed turns and removal"). Defaults used and not objected to: a removed player's ship leaves the board, they show as "removed" in the results, cannot win and cannot rejoin; an away player's turn is missed after the 2-second delay; with one player left the game ends and they win.
   - P2-4 and P2-5: done (2026-11-14). Rooms are saved only with `ROOMS_DIR`; without it a restart still ends every game.
   - P1-2 follow-ups, only if wanted: a host pause; a per-room timer length chosen in the lobby (the room already holds its own `timers`); a bot taking a removed player's place (the designer's option once bots exist, B6).
-- **B1b (Golden Hook Awards):** design decided 2026-11-14 (`docs/bonus-awards.md`). Build the stats, the awards content, the secret draw, the payout, hidden state in client views, the protocol change and the tests. Placeholder amounts.
+- **B1b (Golden Hook Awards): done** (2026-11-14). Stats, `content/awards.json`, the secret draw, the payout, hidden state, protocol and tests; rulebook "End of the game". Placeholder amounts. For the designer: Landlubber pays nobody when the fewest Risk draws is 0 (decision 3, "a stat of 0 never wins"), which happens often (seed `full-b`); and "away at the end" is read as "missed their last turn". See `docs/bonus-awards.md` "Built (B1b)".
 - **B2 (real UI):**
   - Golden Hook Awards reveal after round 20, one award at a time.
   - The log is per tab; a refresh restarts it from "Joined room …" (the protocol sends no event history on rejoin, by design). Decide if the real UI needs history; if so, it is a protocol change.
@@ -122,7 +122,7 @@ Phases are in `docs/build-plan.md` section 5.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2, P2-4 and P2-5 are done (P2-3 replaced by the missed-turn rules). Next **B1b**, the Golden Hook Awards (engine and server). Sonnet can do the `?server=` restriction and the small P3 fixes and tests alongside.
+1. **B1 [OPUS]:** P1-2, P2-4, P2-5 and B1b (Golden Hook Awards) are done (P2-3 replaced by the missed-turn rules). Left: the P3 list (Sonnet; the `?server=` restriction first), then the end-of-B1 review (item 3).
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
 

@@ -108,6 +108,18 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
       return `Event after round ${ev.afterRound}: ${card(ev.card)}.`;
     case "deckReshuffled":
       return `The ${ev.deck} deck is reshuffled.`;
+    case "awardGiven": {
+      // The reveal as a log line; B2 builds the real one, one award at a time.
+      const def = content.awards.awards.find((a) => a.id === ev.award);
+      const title = `Golden Hook for ${def?.name ?? ev.award} (${def?.text.toLowerCase() ?? ""})`;
+      if (ev.winners.length > 0) {
+        return `${title}: ${ev.winners.map(name).join(" and ")}, +${money(ev.amount)}.`;
+      }
+      if (ev.qualified.length > 0) {
+        return `${title}: ${ev.qualified.map(name).join(" and ")}, not paid (not in the game at the end).`;
+      }
+      return `${title}: nobody.`;
+    }
     case "gameEnded":
       return ev.result.reason === "last-player"
         ? `Game over. ${ev.result.winners.map(name).join(" and ")} is the last player left and wins.`

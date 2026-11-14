@@ -79,6 +79,7 @@ Nobody can join a room once the game has started. There are no spectators yet.
 - `by` is the seat that acted (`null` for the start of the game; the host for a kick). `auto` is `true` when the server missed a turn, for an away player or because the turn timer ran out ([section 7](#7-disconnect-policy)).
 - `contentHash` lets a client check, before the game starts, that the content it bundles matches the server's.
 - When the game ends, the last `update` carries `view.result`, and a `room` message with status `finished` follows it.
+- **Golden Hook Awards** (B1b; rulebook "End of the game"): which awards are in play and the players' stats are never in a view, an event or any other message before the game ends. The last `update` reveals them: one `awardGiven` event per award (in draw order, just before `gameEnded`: `award`, `amount`, `value`, `qualified`, `winners`), and `view.result` carries `awards` (the same list), `stats` (every player's counted stats) and, for each score, `awards` (money won), with `total = cash - fine tokens × $100 + awards`. No new message type; the protocol version stays 1.
 
 ### Error codes
 

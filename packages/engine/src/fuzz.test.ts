@@ -127,7 +127,11 @@ function fuzzGame(seed: string, playerCount: number): void {
   }
   for (const s of result.scores) {
     const p = state.players.find((q) => q.id === s.player)!;
-    if (s.total !== p.cash - 100 * p.fineTokens)
+    // The sum rule: final = cash - fines + Golden Hook Awards won.
+    const won = result.awards
+      .filter((a) => a.winners.includes(s.player))
+      .reduce((sum, a) => sum + a.amount, 0);
+    if (s.awards !== won || s.total !== p.cash - 100 * p.fineTokens + won)
       throw new FuzzFailure(seed, playerCount, n, `bad total for ${s.player}`);
   }
 

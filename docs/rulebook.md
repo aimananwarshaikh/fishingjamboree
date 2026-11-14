@@ -166,7 +166,38 @@ An event's effect lasts until the next event is drawn. The round 15 event lasts 
 
 ## End of the game
 
-The game ends after round 20. Each player counts their cash and subtracts $100 for every fine token they still hold. Fish still on your ship are worth nothing. Most cash wins. If tied, it's a tie. A player removed from the game (see Online play) cannot win.
+The game ends after round 20. Each player counts their cash and subtracts $100 for every fine token they still hold. Fish still on your ship are worth nothing. Then the Golden Hook Awards are revealed and paid (below). Most money wins. If tied, it's a tie. A player removed from the game (see Online play) cannot win.
+
+### Golden Hook Awards
+
+At setup, without telling anyone, the game draws secret awards: **3** with 3 or 4 players, **2** with 2 players. Nobody knows which awards are in play, or how many, until the end. Two opposite awards (such as Daredevil and Landlubber) are never in the same game, and the awards in one game are worth $900 at most together.
+
+After round 20 each award is revealed in turn and paid:
+
+- **"Most" and "fewest" awards** go to the player with the highest (or lowest) count. Every tied player gets the full amount. A count of 0 never wins: nobody is the Boot Lord with no Boots, and nobody wins Landlubber with no Risk cards drawn.
+- **Condition awards** go to every player who meets the condition.
+- A player removed from the game, or one who missed their last turn (online play: away at the end), cannot be paid. If they had the winning count, that award goes unpaid: there is no second place.
+- Award money is added to the final total. It does not pay off fine tokens.
+
+| Award         | Goes to                                                        | Amount |
+| ------------- | -------------------------------------------------------------- | ------ |
+| Big Haul      | Most fish caught (each fish token that went onto the ship)     | $300   |
+| Sea Legs      | Most tiles sailed                                              | $200   |
+| Daredevil     | Most Risk cards drawn                                          | $500   |
+| Shark Bait    | Most Sharks drawn (Shark Repellent or not)                     | $200   |
+| Boot Lord     | Most Boots drawn, from either deck                             | $100   |
+| Overstuffed   | Most fish lost to a full ship (the Golden Fish included)       | $200   |
+| Dock Regular  | Most times docked (not a Sinking Boat arrival or a Helicopter) | $200   |
+| Fine Print    | Most money fined (fine tokens included)                        | $200   |
+| Golden Touch  | Took a Golden Fish                                             | $200   |
+| Landlubber    | Fewest Risk cards drawn                                        | $300   |
+| Homebody      | Fewest tiles sailed                                            | $100   |
+| Stripped Down | Bought no upgrades                                             | $500   |
+| One of Each?  | Bought exactly one upgrade                                     | $300   |
+| Fully Loaded  | Bought both upgrades                                           | $200   |
+| Clean Hands   | No fine tokens left at the end                                 | $200   |
+
+The amounts are placeholders until the balance simulation (Milestone B6). The awards live in `content/awards.json`.
 
 ## Online play
 
