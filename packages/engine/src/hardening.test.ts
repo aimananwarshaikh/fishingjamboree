@@ -8,7 +8,27 @@ import { compileContent } from "./content";
 import { replay } from "./replay";
 import { createGame } from "./setup";
 import { compiledContent, rawContent } from "./testContent";
-import { act, actor, content } from "./testHelpers";
+import { applyAction } from "./apply";
+import { getLegalActions } from "./legal";
+import {
+  act,
+  actor,
+  content,
+  id,
+  land,
+  playTurn,
+  START_LEFT,
+  started,
+  tile,
+  withActiveEvent,
+  withPlayer,
+  withShips,
+  withTopCard,
+} from "./testHelpers";
+
+const SEA = [tile(3, 17), tile(3, 16)] as const;
+const FEE = (content.cards.cards.helicopter!.effect as { fee: number }).fee;
+const LOCKER = [tile(2, 2), tile(3, 2)] as const;
 import type { RawContent, ReplayLog } from "./types";
 import { redactForClient } from "./view";
 
@@ -133,5 +153,95 @@ describe("views copy each player field by field", () => {
     const view = redactForClient(state, "a");
     expect(view.players[0]).not.toHaveProperty("secret");
     expect(view.players[0]).toEqual({ ...state.players[0], secret: undefined });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Missing tests from the review (P3)
+// ---------------------------------------------------------------------------
+
+describe("the Helicopter at the end of an event", () => {
+  /** Player 1's turn, the last of `round`, Helicopter active since round 5; player 1 at sea with a catch. */
+  function lastTurnOf(round: number) {
+    let s = withActiveEvent(withShips(started(2), { 0: tile(7, 8), 1: SEA[0] }), "helicopter", 5);
+    s.round = round;
+    s.turn = { playerIndex: 1, helicopterUsed: false };
+    s.phase = { kind: "roll", actors: [id(s, 1)] };
+    s = withPlayer(s, 1, { fish: [300], cash: 200 });
+    s = withPlayer(s, 0, { fish: [100], cash: 500 });
+    // A Boot: the turn reaches its end with the catch still on board.
+    return land(withTopCard(s, "safe", "boot"), SEA[0], SEA[1]).state;
+  }
+
+  it("round 10: still usable at the end of the last turn; gone for the next player", () => {
+    const atEnd = lastTurnOf(10);
+    const p1 = id(atEnd, 1);
+    expect(atEnd.phase).toEqual({ kind: "turnEnd", actors: [p1] });
+    const { state, events } = act(atEnd, { type: "useHelicopter", player: p1 });
+    const order = events.map((e) => e.type);
+    expect(order.slice(0, 3)).toEqual(["helicopterUsed", "fishSold", "turnEnded"]);
+    expect(order.indexOf("eventExpired")).toBeGreaterThan(order.indexOf("roundEnded"));
+    expect(events).toContainEqual({ type: "eventExpired", card: "helicopter" });
+    expect(state.players[1]).toMatchObject({ cash: 200 - FEE + 300, fish: [] });
+    expect(state.round).toBe(11);
+    // The next player cannot call it any more, though they have a fish and the fee.
+    const next = getLegalActions(content, state, id(state, 0));
+    expect(next.some((a) => a.type === "useHelicopter")).toBe(false);
+  });
+
+  it("round 20: usable on the very last turn, and the sale counts in the score", () => {
+    const atEnd = lastTurnOf(20);
+    const p1 = id(atEnd, 1);
+    const { state, events } = act(atEnd, { type: "useHelicopter", player: p1 });
+    expect(events.map((e) => e.type)).toContain("gameEnded");
+    expect(state.phase.kind).toBe("gameOver");
+    expect(state.result!.scores.find((s) => s.player === p1)!.cash).toBe(200 - FEE + 300);
+  });
+});
+
+describe("a Sinking Boat and a late entrant", () => {
+  it("the victim takes the last free starting dock, so the entrant waits", () => {
+    // 4 players: player 0 on the left dock, player 1 in Davy Jones' Locker; 2 and 3 not yet on the board.
+    const before = withShips(playTurn(started(4), 2), { 0: START_LEFT, 1: LOCKER[0] });
+    const [, b, c, d] = before.players.map((p) => p.id);
+    expect(before.players[2]!.position).toBeNull();
+    const { state, events } = land(
+      withTopCard(before, "risk", "sinking-boat"),
+      LOCKER[0],
+      LOCKER[1],
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "shipRelocated", player: b, dock: "start-right" }),
+    );
+    expect(events).toContainEqual({
+      type: "turnSkipped",
+      player: c,
+      reason: "no-free-starting-dock",
+    });
+    expect(events).toContainEqual({
+      type: "turnSkipped",
+      player: d,
+      reason: "no-free-starting-dock",
+    });
+    expect(state.players[2]!.position).toBeNull();
+  });
+});
+
+describe("applyAction leaves its input untouched", () => {
+  it("over every kind of action of a whole game", () => {
+    let state = createGame(content, { seed: "untouched", players: ["a", "b", "c"] }).state;
+    const kinds = new Set<string>();
+    for (let guard = 0; state.phase.kind !== "gameOver" && guard < 5_000; guard += 1) {
+      const actions = getLegalActions(content, state, state.phase.actors[0]!);
+      const action = actions[guard % actions.length]!;
+      const before = JSON.stringify(state);
+      const result = applyAction(content, state, action);
+      expect(JSON.stringify(state)).toBe(before);
+      if (!result.ok) throw new Error(result.error.message);
+      kinds.add(action.type);
+      state = result.state;
+    }
+    expect(state.phase.kind).toBe("gameOver");
+    expect(kinds.size).toBeGreaterThanOrEqual(4);
   });
 });

@@ -313,3 +313,25 @@ describe("transport", () => {
     expect(lastRoom(ann)).toMatchObject({ room: { seats: [{ seat: "p1" }] } });
   });
 });
+
+describe("closing the server during a game", () => {
+  it("drops every socket, disconnects each once from the core, and resolves", async () => {
+    const { server, disconnects, connect } = await start();
+    const { code, seats } = await lobby(connect, 3);
+    seats[0]!.send({ type: "start" });
+    await Promise.all(seats.map((c) => c.waitFor("update", (m) => m.seq === 0)));
+    expect(server.connectionCount()).toBe(3);
+    await server.close();
+    servers = servers.filter((s) => s !== server);
+    await Promise.all(seats.map((c) => c.closed));
+    expect(server.connectionCount()).toBe(0);
+    expect(disconnects).toHaveBeenCalledTimes(3);
+    expect(new Set(disconnects.mock.calls.map((c) => c[0])).size).toBe(3);
+    // The room is still there, everyone disconnected: a store would save it so.
+    const info = server.core.roomInfo(code)!;
+    expect(info.status).toBe("playing");
+    expect(info.seats.every((s) => !s.connected)).toBe(true);
+    // A second close is harmless.
+    await expect(server.close()).resolves.toBeUndefined();
+  });
+});

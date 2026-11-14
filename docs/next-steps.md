@@ -64,9 +64,9 @@ Small fixes and tests: Sonnet unless noted.
 **Missing tests** (Sonnet)
 
 - **Done (B1):** the connection logic moved to `connection.ts` and is tested (`connection.test.ts`: backoff, saved session, each refusal, `leave`). Still open: `scripts/playtest-three-tabs.mjs` is not in `pnpm check` or CI (`.github/workflows/ci.yml`).
-- `fuzz.test.ts`: count the event types reached and fail if an expected one never appears (`turnSkipped`, `relocationFailed`, Sinking Boat to the cruise dock); read the token value from content (`fuzz.test.ts:130`).
-- Engine: Helicopter expiring between start and end of a turn, and use on the last turn of round 20; a Sinking Boat victim taking a late entrant's dock; `applyAction` leaves its input untouched.
-- Server: two rooms at once; the transport's `close()` during a game; unusual Unicode names.
+- **Done (B1):** `fuzz.test.ts` requires every event type a random bot can reach (a table that does not compile until a new event type is listed; the five it cannot reach name the test that covers them) and reads the token value from content.
+- **Done (B1):** engine: the Helicopter on the last turn of an event round and of round 20; a Sinking Boat victim taking a late entrant's dock; `applyAction` leaves its input untouched (`hardening.test.ts`).
+- **Done (B1):** server: two rooms at once (`roomIsolation.test.ts`, P2-4); the transport's `close()` during a game (`transport.test.ts`); unusual Unicode names (`hardening.test.ts`).
 
 ## Questions for the designer
 
@@ -116,7 +116,7 @@ Phases are in `docs/build-plan.md` section 5.
 
 ## Recommended order
 
-1. **B1 [OPUS]:** P1-2, P2-4, P2-5 and B1b (Golden Hook Awards) are done (P2-3 replaced by the missed-turn rules). Left: the P3 list (Sonnet; the `?server=` restriction first), then the end-of-B1 review (item 3).
+1. **B1 [OPUS]:** P1-2, P2-4, P2-5, B1b (Golden Hook Awards) and the P3 list are done (P2-3 replaced by the missed-turn rules), except the P3 items that belong with B5 (server limits, `Origin` check, the fixed port) and the low-priority lobby name hold. Next: the end-of-B1 review (item 3).
 2. **B2 onwards** as in `docs/build-plan.md`: B2 UI, B3 lobby, B4 mobile, B5 deploy, B6 bots and balancing, B7 playtests. Do the P3 server hardening with B5 and the host kick with B3.
 3. Start a fresh Opus session for a review pass at the end of B1 (build plan section 6, item 3).
 
