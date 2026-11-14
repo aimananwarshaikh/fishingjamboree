@@ -91,7 +91,7 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
   const config: TransportConfig = { ...DEFAULT_TRANSPORT_CONFIG, ...options.transport };
   const now = options.core.now ?? Date.now;
   const log = options.log ?? (() => {});
-  const core = new ServerCore({ ...options.core, now });
+  const core = new ServerCore({ log, ...options.core, now });
 
   const wsOptions = { maxPayload: config.maxMessageBytes };
   const wss = options.server
@@ -134,8 +134,12 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
     }
   };
 
-  /** Runs a core call, carries out its result and re-arms the tick timer. */
-  const run = (what: string, call: () => Outbound[]) => {
+  /**
+   * Runs a core call, carries out its result and re-arms the tick timer. The
+   * core catches its own errors per room and per message (review P2-4); this
+   * is the last line of defence. `onError` builds a reply when it fires.
+   */
+  const run = (what: string, call: () => Outbound[], onError?: () => Outbound[]) => {
     let out: Outbound[] = [];
     let failed = false;
     try {
@@ -145,6 +149,7 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
       log(
         `core error in ${what}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
       );
+      out = onError?.() ?? [];
     }
     carryOut(out);
     schedule(failed);
@@ -210,7 +215,17 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
       });
       return;
     }
-    run("handleMessage", () => core.handleMessage(conn.id, raw));
+    run(
+      "handleMessage",
+      () => core.handleMessage(conn.id, raw),
+      () => [
+        {
+          kind: "send",
+          to: conn.id,
+          message: { type: "error", code: "server-error", message: "the server hit an error" },
+        },
+      ],
+    );
   };
 
   wss.on("connection", (ws) => {

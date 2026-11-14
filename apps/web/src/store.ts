@@ -169,6 +169,10 @@ export const REPLACED_NOTICE =
 /** What a tab shows when its player was removed from the room (`kicked`). */
 export const KICKED_NOTICE = "You have been removed from this room.";
 
+/** What a tab shows when its room was closed after a server error (`room-closed`). */
+export const ROOM_CLOSED_NOTICE =
+  "Sorry, this room hit a server error and was closed. Start a new room to play on.";
+
 /** The player left, or the saved seat no longer works: back to the start screen. */
 export function resetSession(state: ClientState, notice: string | null = null): ClientState {
   return { ...initialState, connection: state.connection, notice };
@@ -242,6 +246,10 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       if (msg.code === "replaced") return resetSession(state, REPLACED_NOTICE);
       // Removed by the host or after missed turns: the seat is gone for good.
       if (msg.code === "kicked") return resetSession(state, KICKED_NOTICE);
+      // The room hit a server error and is gone (review P2-4).
+      if (msg.code === "room-closed") return resetSession(state, ROOM_CLOSED_NOTICE);
+      // Any other error, `server-error` included, clears `pending` so the
+      // buttons work again.
       return {
         ...state,
         notice: msg.message,

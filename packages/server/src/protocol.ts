@@ -127,7 +127,11 @@ export type ProtocolErrorCode =
   | "replaced"
   | "server-busy"
   | "kicked"
-  | "cannot-kick";
+  | "cannot-kick"
+  /** The server hit an error handling the message (a bug); nothing was changed. Try again. */
+  | "server-error"
+  /** The room hit a server error and was closed; the connection has no seat any more. */
+  | "room-closed";
 
 /** Why an intent was refused: the engine's reasons plus two of the server's. */
 export type RejectionCode = ActionErrorCode | "stale" | "no-game";

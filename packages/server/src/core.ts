@@ -15,7 +15,7 @@
  * The host can remove a player; the engine removes one who misses too many
  * turns in a row.
  */
-import { applyAction, createGame, redactForClient } from "@fishingjamboree/engine";
+import * as realEngine from "@fishingjamboree/engine";
 import type { Action, Content, GameEvent, GameState, ReplayLog } from "@fishingjamboree/engine";
 import type { IdSource } from "./ids";
 import { parseClientMessage } from "./parse";
@@ -71,12 +71,24 @@ export const DEFAULT_CONFIG: CoreConfig = {
   maxNameLength: 20,
 };
 
+/** The engine functions the core calls. */
+export interface EngineFns {
+  applyAction: typeof realEngine.applyAction;
+  createGame: typeof realEngine.createGame;
+  redactForClient: typeof realEngine.redactForClient;
+  replay: typeof realEngine.replay;
+}
+
 export interface CoreDeps {
   content: Content;
   /** Milliseconds; only differences matter. */
   now: () => number;
   ids: IdSource;
   config?: Partial<CoreConfig>;
+  /** Where the core reports errors it caught (a room that threw). Default: nowhere. */
+  log?: (line: string) => void;
+  /** Tests only: replace engine functions (to make a room throw). Default: the real engine. */
+  engine?: Partial<EngineFns>;
 }
 
 interface Seat {
@@ -134,6 +146,8 @@ export class ServerCore {
   private readonly now: () => number;
   private readonly ids: IdSource;
   private readonly config: CoreConfig;
+  private readonly log: (line: string) => void;
+  private readonly engine: EngineFns;
   private readonly rooms = new Map<string, Room>();
   private readonly conns = new Map<ConnId, { room: Room; seat: Seat }>();
 
@@ -142,6 +156,14 @@ export class ServerCore {
     this.now = deps.now;
     this.ids = deps.ids;
     this.config = { ...DEFAULT_CONFIG, ...deps.config };
+    this.log = deps.log ?? (() => {});
+    this.engine = {
+      applyAction: realEngine.applyAction,
+      createGame: realEngine.createGame,
+      redactForClient: realEngine.redactForClient,
+      replay: realEngine.replay,
+      ...deps.engine,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -156,6 +178,21 @@ export class ServerCore {
       return out;
     }
     const message = parsed.message;
+    try {
+      this.dispatch(out, conn, message);
+    } catch (error) {
+      // A bug, not the player's fault. Whatever was half-built is dropped; the
+      // sender is told, so their buttons stop waiting (docs/protocol.md §5).
+      const room = this.conns.get(conn)?.room.code ?? "-";
+      this.log(`${conn} (room ${room}): error handling "${message.type}": ${describeError(error)}`);
+      const reply: Outbound[] = [];
+      this.error(reply, conn, "server-error", "the server hit an error; try again");
+      return reply;
+    }
+    return out;
+  }
+
+  private dispatch(out: Outbound[], conn: ConnId, message: ClientMessage) {
     switch (message.type) {
       case "create":
         this.onCreate(out, conn, message);
@@ -182,7 +219,6 @@ export class ServerCore {
         this.onKick(out, conn, message);
         break;
     }
-    return out;
   }
 
   /** The transport calls this when a connection closes for any reason. */
@@ -201,8 +237,16 @@ export class ServerCore {
     const out: Outbound[] = [];
     const now = this.now();
     for (const room of [...this.rooms.values()]) {
-      for (let step = this.nextStep(room); step && step.at <= now; step = this.nextStep(room)) {
-        step.run(out);
+      // Each room on its own: one that throws is closed (`closeBroken`) and
+      // the others still run on this tick.
+      const roomOut: Outbound[] = [];
+      try {
+        for (let step = this.nextStep(room); step && step.at <= now; step = this.nextStep(room)) {
+          step.run(roomOut);
+        }
+        out.push(...roomOut);
+      } catch (error) {
+        this.closeBroken(out, room, error);
       }
     }
     return out;
@@ -212,8 +256,14 @@ export class ServerCore {
   nextDeadline(): number | null {
     let earliest: number | null = null;
     for (const room of this.rooms.values()) {
-      const step = this.nextStep(room);
-      if (step && (earliest === null || step.at < earliest)) earliest = step.at;
+      let at: number | null;
+      try {
+        at = this.nextStep(room)?.at ?? null;
+      } catch {
+        // `tick` meets the same error and closes the room.
+        at = this.now();
+      }
+      if (at !== null && (earliest === null || at < earliest)) earliest = at;
     }
     return earliest;
   }
@@ -349,7 +399,7 @@ export class ServerCore {
       return this.error(out, conn, "players-disconnected", "a player in the room is disconnected");
     }
     const setup = { seed: this.ids.gameSeed(), players: room.seats.map((s) => s.id) };
-    const created = createGame(this.content, setup);
+    const created = this.engine.createGame(this.content, setup);
     room.game = {
       state: created.state,
       log: { schemaVersion: 1, contentHash: this.content.hash, setup, actions: [] },
@@ -392,7 +442,7 @@ export class ServerCore {
     }
     // The seat decides who is acting, never the message.
     const action = { ...message.action, player: seat.id } as Action;
-    const result = applyAction(this.content, game.state, action);
+    const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) return reject(result.error.code, result.error.message);
     this.commit(out, room, game, action, result.state, result.events, false);
   }
@@ -430,7 +480,7 @@ export class ServerCore {
       return this.error(out, conn, "cannot-kick", "the game is over");
     }
     const action: Action = { type: "removePlayer", player: target.id };
-    const result = applyAction(this.content, game.state, action);
+    const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) return this.error(out, conn, "cannot-kick", result.error.message);
     this.commit(out, room, game, action, result.state, result.events, false, seat.id);
   }
@@ -570,7 +620,7 @@ export class ServerCore {
   /** The deciding player is away or out of time: their turn is missed (docs/protocol.md §7). */
   private missTurn(out: Outbound[], room: Room, game: Game, seat: Seat) {
     const action: Action = { type: "missTurn", player: seat.id };
-    const result = applyAction(this.content, game.state, action);
+    const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) {
       // Cannot happen: the deciding player can always miss their turn. Fail loudly rather than spin.
       throw new Error(`room ${room.code}: cannot miss ${seat.id}'s turn: ${result.error.message}`);
@@ -694,6 +744,23 @@ export class ServerCore {
     this.rooms.delete(room.code);
   }
 
+  /**
+   * A room threw while running its timers: it would throw again on every
+   * tick, so it is closed for good (notes log "Server errors"). Its players
+   * are told and keep their sockets, with no seat; anything the failed tick
+   * had built for the room is dropped.
+   */
+  private closeBroken(out: Outbound[], room: Room, error: unknown) {
+    this.log(`room ${room.code}: error in tick, room closed: ${describeError(error)}`);
+    for (const seat of room.seats) {
+      if (seat.conn === null) continue;
+      this.error(out, seat.conn, "room-closed", "this room hit a server error and was closed");
+      this.conns.delete(seat.conn);
+      seat.conn = null;
+    }
+    this.deleteRoom(room);
+  }
+
   // -------------------------------------------------------------------------
   // Outgoing messages
   // -------------------------------------------------------------------------
@@ -720,7 +787,7 @@ export class ServerCore {
 
   private snapshot(room: Room, seat: Seat): GameSnapshot | null {
     if (!room.game) return null;
-    const view = redactForClient(room.game.state, seat.id);
+    const view = this.engine.redactForClient(room.game.state, seat.id);
     return { seq: view.actionCount, view, turnTimeLeftMs: this.turnTimeLeft(room) };
   }
 
@@ -777,7 +844,7 @@ export class ServerCore {
     const turnTimeLeftMs = this.turnTimeLeft(room);
     for (const seat of room.seats) {
       if (seat.conn === null) continue;
-      const view = redactForClient(state, seat.id);
+      const view = this.engine.redactForClient(state, seat.id);
       out.push({
         kind: "send",
         to: seat.conn,
@@ -789,4 +856,8 @@ export class ServerCore {
   private error(out: Outbound[], conn: ConnId, code: ProtocolErrorCode, message: string) {
     out.push({ kind: "send", to: conn, message: { type: "error", code, message } });
   }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }

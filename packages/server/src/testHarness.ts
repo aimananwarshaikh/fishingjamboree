@@ -7,7 +7,7 @@ import { getLegalActions } from "@fishingjamboree/engine";
 import type { Action, PlayerView } from "@fishingjamboree/engine";
 import { loadContent } from "./content";
 import { ServerCore } from "./core";
-import type { ConnId, CoreConfig, Outbound } from "./core";
+import type { ConnId, CoreConfig, CoreDeps, Outbound } from "./core";
 import { PROTOCOL_VERSION } from "./protocol";
 import type { ClientAction, RoomInfo, SeatId, ServerMessage, ServerMessageType } from "./protocol";
 
@@ -18,7 +18,14 @@ export const V = PROTOCOL_VERSION;
 
 type MessageOf<T extends ServerMessageType> = Extract<ServerMessage, { type: T }>;
 
-export function harness(config: Partial<CoreConfig> = {}, roomCodes: string[] = []) {
+/** Test-only parts of `CoreDeps`: a stubbed engine and a log to read. */
+export type HarnessExtras = Pick<CoreDeps, "engine" | "log">;
+
+export function harness(
+  config: Partial<CoreConfig> = {},
+  roomCodes: string[] = [],
+  extras: HarnessExtras = {},
+) {
   let time = 1_000_000;
   let codeCount = 0;
   let tokenCount = 0;
@@ -28,6 +35,7 @@ export function harness(config: Partial<CoreConfig> = {}, roomCodes: string[] = 
     content,
     now: () => time,
     config,
+    ...extras,
     ids: {
       roomCode: () => {
         const n = codeCount++;

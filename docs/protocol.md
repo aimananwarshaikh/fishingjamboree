@@ -103,6 +103,10 @@ Nobody can join a room once the game has started. There are no spectators yet.
 | `server-busy`          | No free room code could be found                                    |
 | `kicked`               | This player was removed from the room; the token no longer works    |
 | `cannot-kick`          | That seat cannot be removed (yourself, unknown, removed, game over) |
+| `server-error`         | The server hit an error handling this message (a bug); try again    |
+| `room-closed`          | The room hit a server error and was closed; the seat is gone        |
+
+A bug in the server never stops other rooms (review P2-4). If handling a message throws, nothing half-built is sent and only the sender gets `server-error`; the room is kept. If a room throws while the server runs its timers (turn timer, grace, lobby seats), it would throw again on every tick, so it is **closed**: each connected player gets `room-closed`, their connection stays open with no seat, the room and its tokens are gone, and the error is logged with the room code. Other rooms are served on the same tick.
 
 `rejected.error.code`: the engine's `game-over`, `unknown-player`, `not-your-turn`, `wrong-phase`, `illegal-action`, plus:
 

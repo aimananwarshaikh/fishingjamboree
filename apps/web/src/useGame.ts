@@ -166,8 +166,9 @@ export function useGame(content: Content) {
         return;
       }
       if (msg.type === "error") {
-        if (msg.code === "kicked") {
-          // Removed from the room for good: forget the seat and do not retry.
+        if (msg.code === "kicked" || msg.code === "room-closed") {
+          // Removed from the room, or the room was closed after a server
+          // error: the seat is gone for good. Forget it and do not retry.
           saveSession(null);
           const store = shared();
           const s = stateRef.current.session ?? attempt.current;
