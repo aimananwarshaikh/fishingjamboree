@@ -104,7 +104,7 @@ node scripts/playtest-three-tabs.mjs
 ```
 
 If Playwright is installed globally, prefix it with `NODE_PATH="$(npm root -g)"`. `GRACE=1` also
-closes a tab and waits out the 60-second grace to check the server plays for it (about 2 minutes
-longer). `SEED=…` changes the choices, `HEADED=1` shows the browser and `WEB_URL=…` points it at
+closes a tab and waits out the 60-second grace to check the server misses its turns and the host can remove it
+(about 2 minutes longer). `SEED=…` changes the choices, `HEADED=1` shows the browser and `WEB_URL=…` points it at
 another client address. Restart `pnpm start:server` after changing server code: it does not
 reload.

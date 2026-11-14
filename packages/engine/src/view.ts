@@ -27,6 +27,7 @@ export const redactForClient: Engine["redactForClient"] = (state, viewer) => {
     upgrades: p.upgrades,
     position: p.position,
     missedTurns: p.missedTurns,
+    missedLastTurn: p.missedLastTurn,
     removed: p.removed,
   }));
   const decks = Object.fromEntries(

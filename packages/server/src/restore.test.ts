@@ -59,11 +59,11 @@ describe("takeChanges", () => {
     const first = h.core.takeChanges();
     expect(first.save.map((s) => s.code)).toEqual([code]);
     expect(first.remove).toEqual([]);
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [], broken: [] });
     h.send("c2", { type: "leave" });
     expect(h.core.takeChanges().save[0]!.seats.map((s) => s.id)).toEqual(["p1"]);
     h.send("c1", { type: "leave" });
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code], broken: [] });
   });
 
   it("covers timers: a turn missed by the timer and an idle room deleted", () => {
@@ -77,7 +77,7 @@ describe("takeChanges", () => {
     h.drop("c2");
     h.core.takeChanges();
     h.advance(IDLE);
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [code], broken: [] });
   });
 
   it("a snapshot holds no connection ids or clock times", () => {
@@ -232,6 +232,30 @@ describe("restoring a game mid-turn", () => {
     expect(h.last("r3", "error").code).toBe("kicked");
   });
 
+  it("a removed seat gets no grace and never becomes away when the restored room is rejoined (review P3)", () => {
+    const h1 = harness();
+    const { code, tokens } = h1.started(3);
+    h1.send("c1", { type: "kick", seat: "p3" });
+    const h = restart(saved(h1, code));
+    h.send("r1", { type: "rejoin", v: V, code, seatToken: tokens[0] });
+    expect(h.last("r1", "welcome").room.seats[2]).toMatchObject({
+      removed: true,
+      away: false,
+      awayInMs: null,
+    });
+    const rev = h.room(code).rev;
+    h.clear();
+    h.advance(GRACE);
+    // Only p2's grace ends: one room message, and p3 is untouched.
+    expect(h.got("r1", "room")).toHaveLength(1);
+    expect(h.room(code).seats.map((s) => [s.away, s.removed])).toEqual([
+      [false, false],
+      [true, false],
+      [false, true],
+    ]);
+    expect(h.room(code).rev).toBe(rev + 1);
+  });
+
   it("keeps the room's own timers, even if the new server's defaults differ", () => {
     const h1 = harness({ turnTimeoutMs: 30_000 });
     const { code, tokens } = h1.started(2);
@@ -351,7 +375,7 @@ describe("a restored room is like any other", () => {
     const h1 = harness();
     const { code, tokens } = h1.started(2);
     const h = restart(saved(h1, code));
-    expect(h.core.takeChanges()).toEqual({ save: [], remove: [] });
+    expect(h.core.takeChanges()).toEqual({ save: [], remove: [], broken: [] });
     h.send("r1", { type: "rejoin", v: V, code, seatToken: tokens[0] });
     expect(h.core.takeChanges().save.map((s) => s.code)).toEqual([code]);
   });

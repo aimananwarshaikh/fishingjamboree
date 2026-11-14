@@ -99,6 +99,7 @@ describe("createGame", () => {
         upgrades: { speed: false, capacity: false },
         position: null,
         missedTurns: 0,
+        missedLastTurn: false,
         removed: false,
       });
     }

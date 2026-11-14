@@ -34,7 +34,9 @@ const LIMIT = content.rules.missedTurnsBeforeRemoval;
 const SEA = tile(3, 15);
 
 const miss = (state: GameState, player: PlayerId = actor(state)) =>
-  act(state, { type: "missTurn", player });
+  act(state, { type: "missTurn", player, reason: "timeout" });
+const missAway = (state: GameState, player: PlayerId = actor(state)) =>
+  act(state, { type: "missTurn", player, reason: "away" });
 const remove = (state: GameState, player: PlayerId) => act(state, { type: "removePlayer", player });
 
 const reject = (state: GameState, action: Action) => {
@@ -65,7 +67,7 @@ describe("a missed turn", () => {
     const before = player(state, p).position;
     const { state: next, events } = miss(state);
     expect(types(events).slice(0, 3)).toEqual(["turnMissed", "turnEnded", "turnStarted"]);
-    expect(events[0]).toEqual({ type: "turnMissed", player: p });
+    expect(events[0]).toEqual({ type: "turnMissed", player: p, reason: "timeout", counted: true });
     expect(player(next, p).position).toBe(before);
     expect(player(next, p).missedTurns).toBe(1);
     expect(actor(next)).toBe(id(state, 1));
@@ -82,28 +84,88 @@ describe("a missed turn", () => {
     expect(player(next, p).position).toBe(START_LEFT);
     expect(next.decks).toEqual(rolled.decks);
   });
+});
 
-  it("in the shop: nothing is bought and the shop closes", () => {
-    const state = clone(withPlayer(started(2), 0, { cash: 1000 }));
-    const p = id(state, 0);
-    state.phase = { kind: "dockShop", reason: "docked", dock: "start-left", actors: [p] };
-    const { state: next, events } = miss(state);
-    expect(types(events)).not.toContain("upgradeBought");
-    expect(player(next, p)).toMatchObject({ cash: 1000, upgrades: { speed: false } });
-    expect(actor(next)).toBe(id(state, 1));
-  });
+describe("time running out after the move (designer, 2026-11-14: review P2-3)", () => {
+  /** The player has played this turn, so their run of misses is already 0; give them one to see it kept. */
+  const afterOneMiss = (state: GameState, p: PlayerId) => {
+    const s = clone(state);
+    s.players.find((x) => x.id === p)!.missedTurns = 1;
+    return s;
+  };
 
-  it("at the end of the turn: the Helicopter is not used", () => {
+  for (const reason of ["timeout", "away"] as const) {
+    it(`in the shop (${reason}): nothing is bought, the turn ends normally, not a missed turn`, () => {
+      const state = clone(withPlayer(started(2), 0, { cash: 1000 }));
+      const p = id(state, 0);
+      state.phase = { kind: "dockShop", reason: "docked", dock: "start-left", actors: [p] };
+      const { state: next, events } = act(afterOneMiss(state, p), {
+        type: "missTurn",
+        player: p,
+        reason,
+      });
+      expect(types(events).slice(0, 3)).toEqual(["turnTimedOut", "turnEnded", "turnStarted"]);
+      expect(events[0]).toEqual({ type: "turnTimedOut", player: p, reason });
+      expect(player(next, p)).toMatchObject({
+        cash: 1000,
+        upgrades: { speed: false },
+        missedTurns: 1,
+        missedLastTurn: false,
+      });
+      expect(actor(next)).toBe(id(state, 1));
+    });
+  }
+
+  it("at the end of the turn: the Helicopter is not used, the turn ends normally", () => {
     const state = clone(withPlayer(started(2), 0, { cash: 500, fish: [100, 100] }));
     state.activeEvent = { card: "helicopter", drawnAfterRound: 5 };
     const p = id(state, 0);
     state.phase = { kind: "turnEnd", actors: [p] };
     const { state: next, events } = miss(state);
+    expect(types(events).slice(0, 2)).toEqual(["turnTimedOut", "turnEnded"]);
     expect(types(events)).not.toContain("helicopterUsed");
-    expect(player(next, p)).toMatchObject({ cash: 500, fish: [100, 100] });
+    expect(player(next, p)).toMatchObject({
+      cash: 500,
+      fish: [100, 100],
+      missedTurns: 0,
+      missedLastTurn: false,
+    });
     expect(actor(next)).toBe(id(state, 1));
   });
 
+  it("after a Sinking Boat: the ship goes to the first dock offered, no shop, not a missed turn", () => {
+    const state = clone(
+      withPlayer(withShips(started(2), { 0: SEA, 1: tile(4, 15) }), 0, { cash: 1000 }),
+    );
+    const p = id(state, 0);
+    state.phase = {
+      kind: "placeShip",
+      reason: "sinking-boat",
+      docks: ["start-left", "start-right"],
+      actors: [p],
+    };
+    const { state: next, events } = miss(state);
+    expect(events[0]).toEqual({ type: "turnTimedOut", player: p, reason: "timeout" });
+    expect(types(events)).toContain("shipRelocated");
+    expect(types(events)).not.toContain("turnMissed");
+    expect(player(next, p)).toMatchObject({ position: START_LEFT, missedLastTurn: false });
+    expect(next.phase.kind).not.toBe("dockShop");
+    expect(actor(next)).toBe(id(state, 1));
+  });
+
+  it("is never removal: three in a row after the move remove nobody", () => {
+    let state = started(2);
+    const p = actor(state);
+    for (let n = 0; n < LIMIT + 1; n += 1) {
+      const s = clone(state);
+      s.phase = { kind: "dockShop", reason: "docked", dock: "start-left", actors: [p] };
+      state = playOn(miss(s).state);
+      expect(player(state, p).removed).toBe(false);
+    }
+  });
+});
+
+describe("a missed turn: placing a ship, and who may miss", () => {
   it("when placing a ship at setup: placed on the first dock offered, and it counts", () => {
     const { state } = createGame(content, { seed: "miss", players: ["a", "b", "c"] });
     const p = actor(state);
@@ -133,28 +195,18 @@ describe("a missed turn", () => {
     expect(actor(next)).toBe(id(state, 0));
   });
 
-  it("after a Sinking Boat: the ship goes to the first dock offered, no shop, the turn ends", () => {
-    const state = clone(
-      withPlayer(withShips(started(2), { 0: SEA, 1: tile(4, 15) }), 0, { cash: 1000 }),
-    );
-    const p = id(state, 0);
-    state.phase = {
-      kind: "placeShip",
-      reason: "sinking-boat",
-      docks: ["start-left", "start-right"],
-      actors: [p],
-    };
-    const { state: next, events } = miss(state);
-    expect(types(events)).toContain("shipRelocated");
-    expect(player(next, p).position).toBe(START_LEFT);
-    expect(next.phase.kind).not.toBe("dockShop");
-    expect(actor(next)).toBe(id(state, 1));
-  });
-
   it("is a system action: only for the deciding player, and never offered as a legal action", () => {
     const state = started(3);
-    expect(reject(state, { type: "missTurn", player: id(state, 1) })).toBe("not-your-turn");
-    expect(reject(state, { type: "missTurn", player: "zz" })).toBe("unknown-player");
+    expect(reject(state, { type: "missTurn", player: id(state, 1), reason: "timeout" })).toBe(
+      "not-your-turn",
+    );
+    expect(reject(state, { type: "missTurn", player: "zz", reason: "away" })).toBe(
+      "unknown-player",
+    );
+    // A reason is required (an old saved log without one does not replay).
+    expect(reject(state, { type: "missTurn", player: actor(state) } as unknown as Action)).toBe(
+      "illegal-action",
+    );
     for (const p of state.players) {
       const legal = getLegalActions(content, state, p.id).map((a) => a.type as string);
       expect(legal).not.toContain("missTurn");
@@ -201,6 +253,59 @@ describe("missed turns in a row", () => {
       expect(actor(state)).not.toBe(p);
       state = playOn(state);
     }
+  });
+});
+
+describe("an away player's missed turns (designer, 2026-11-14: review P1-1)", () => {
+  it("are missed but do not count towards removal", () => {
+    let state = started(2);
+    const p = actor(state);
+    for (let n = 0; n < LIMIT + 3; n += 1) {
+      const { state: next, events } = missAway(state);
+      expect(events[0]).toEqual({ type: "turnMissed", player: p, reason: "away", counted: false });
+      expect(types(events)).not.toContain("playerRemoved");
+      state = playOn(next);
+    }
+    expect(player(state, p)).toMatchObject({ removed: false, missedTurns: 0 });
+    expect(player(state, p).missedLastTurn).toBe(true);
+  });
+
+  it("neither count nor break a run of timed-out turns", () => {
+    let state = started(2);
+    const p = actor(state);
+    state = playOn(miss(state).state); // 1 counted
+    state = playOn(missAway(state).state); // not counted, run kept
+    expect(player(state, p).missedTurns).toBe(1);
+    for (let n = 2; n < LIMIT; n += 1) state = playOn(miss(state).state);
+    expect(player(state, p).missedTurns).toBe(LIMIT - 1);
+    state = playOn(missAway(state).state);
+    const { events } = miss(state);
+    expect(events.find((e) => e.type === "playerRemoved")).toMatchObject({
+      player: p,
+      reason: "missed-turns",
+    });
+  });
+
+  it("an away player at setup is placed on the first dock and setup goes on", () => {
+    const { state } = createGame(content, { seed: "miss", players: ["a", "b", "c"] });
+    const p = actor(state);
+    const { state: next, events } = missAway(state);
+    expect(types(events).slice(0, 2)).toEqual(["turnMissed", "shipPlaced"]);
+    expect(player(next, p)).toMatchObject({ position: START_LEFT, missedTurns: 0 });
+    expect(next.phase.kind).toBe("roll");
+  });
+
+  it("missedLastTurn is set by either kind of miss and cleared by the player's own action", () => {
+    let state = started(2);
+    const p = actor(state);
+    expect(player(state, p).missedLastTurn).toBe(false);
+    state = playOn(missAway(state).state);
+    expect(player(state, p).missedLastTurn).toBe(true);
+    state = act(state, { type: "roll", player: p }).state;
+    expect(player(state, p).missedLastTurn).toBe(false);
+    state = playOn(playOn(state));
+    state = playOn(miss(state).state);
+    expect(player(state, p).missedLastTurn).toBe(true);
   });
 });
 
@@ -255,7 +360,7 @@ describe("removing a player (host kick)", () => {
       removed: true,
     });
     expect(types(events).slice(-1)).toEqual(["gameEnded"]);
-    expect(reject(next, { type: "missTurn", player: stays })).toBe("game-over");
+    expect(reject(next, { type: "missTurn", player: stays, reason: "timeout" })).toBe("game-over");
   });
 
   it("cannot remove a player twice, an unknown player, or after the game", () => {
@@ -294,7 +399,8 @@ describe("replay and content", () => {
       if (n > 3000) throw new Error("the game did not end");
       const p = actor(state);
       if (n === 40) push({ type: "removePlayer", player: state.players[3]!.id });
-      else if (n % 7 === 0) push({ type: "missTurn", player: p });
+      else if (n % 7 === 0) push({ type: "missTurn", player: p, reason: "timeout" });
+      else if (n % 11 === 0) push({ type: "missTurn", player: p, reason: "away" });
       else push(getLegalActions(content, state, p)[0]!);
       expect(invariantProblems(state)).toEqual([]);
     }
@@ -332,7 +438,8 @@ describe("random games with missed turns and removals", () => {
         const p = actor(state);
         const roll100 = pick(100);
         let action: Action;
-        if (roll100 < 15) action = { type: "missTurn", player: p };
+        if (roll100 < 15) action = { type: "missTurn", player: p, reason: "timeout" };
+        else if (roll100 < 25) action = { type: "missTurn", player: p, reason: "away" };
         else if (roll100 === 99) {
           const left = state.players.filter((x) => !x.removed);
           action = { type: "removePlayer", player: left[pick(left.length)]!.id };

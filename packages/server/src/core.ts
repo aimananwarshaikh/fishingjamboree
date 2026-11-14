@@ -16,7 +16,14 @@
  * turns in a row.
  */
 import * as realEngine from "@fishingjamboree/engine";
-import type { Action, Content, GameEvent, GameState, ReplayLog } from "@fishingjamboree/engine";
+import type {
+  Action,
+  Content,
+  GameEvent,
+  GameState,
+  MissReason,
+  ReplayLog,
+} from "@fishingjamboree/engine";
 import type { IdSource } from "./ids";
 import { parseClientMessage } from "./parse";
 import { parseRoomSnapshot, ROOM_SNAPSHOT_VERSION } from "./snapshot";
@@ -58,6 +65,12 @@ export interface CoreConfig {
   reconnectBudgetMs: number;
   /** Pause before the server misses an away player's turn, so others can follow. */
   autoActionDelayMs: number;
+  /**
+   * An away player's turn is never missed sooner than this after they
+   * disconnected, even with no reconnect budget left (a blip; review P2-2).
+   * Not after `leave`, and it never holds back the turn timer.
+   */
+  disconnectFloorMs: number;
   /** A room with no connections at all is deleted after this long. */
   roomIdleTtlMs: number;
   maxNameLength: number;
@@ -69,6 +82,7 @@ export const DEFAULT_CONFIG: CoreConfig = {
   reconnectGraceMs: 60_000,
   reconnectBudgetMs: 2 * 60_000,
   autoActionDelayMs: 2_000,
+  disconnectFloorMs: 10_000,
   roomIdleTtlMs: 30 * 60_000,
   maxNameLength: 20,
 };
@@ -107,7 +121,7 @@ interface Seat {
   disconnectedAt: number | null;
   /** The player sent `leave` during a game: no grace period. */
   left: boolean;
-  /** In a game: the reconnect grace is over (or the player left), so the server plays for them. */
+  /** In a game: the reconnect grace is over (or the player left), so the server misses their turns. */
   away: boolean;
   /** In a game, while disconnected and not away: when the current grace started counting. */
   graceFrom: number | null;
@@ -159,6 +173,8 @@ export class ServerCore {
   private readonly conns = new Map<ConnId, { room: Room; seat: Seat }>();
   /** Codes of rooms that may have changed (or gone) since the last `takeChanges`. */
   private readonly touched = new Set<string>();
+  /** Rooms closed after an error since the last `takeChanges`, with their last snapshot if one could be made. */
+  private readonly broken = new Map<string, RoomSnapshot | null>();
   private readonly trackChanges: boolean;
 
   constructor(deps: CoreDeps) {
@@ -246,7 +262,7 @@ export class ServerCore {
     return out;
   }
 
-  /** Runs everything that is due: frees lobby seats, plays for away players, deletes idle rooms. */
+  /** Runs everything that is due: frees lobby seats, misses turns that are due, deletes idle rooms. */
   tick(): Outbound[] {
     const out: Outbound[] = [];
     const now = this.now();
@@ -308,19 +324,28 @@ export class ServerCore {
 
   /**
    * The rooms that may have changed since the last call, as snapshots to
-   * save, and the codes of rooms that are gone (to delete). Server-side only:
-   * snapshots hold tokens and seeds.
+   * save; the codes of rooms that are gone (to delete); and rooms closed
+   * after an error (review P2-5), whose saved file is kept aside for
+   * debugging, with their last snapshot (`null` if none could be made) to
+   * write first. Server-side only: snapshots hold tokens and seeds.
    */
-  takeChanges(): { save: RoomSnapshot[]; remove: string[] } {
+  takeChanges(): {
+    save: RoomSnapshot[];
+    remove: string[];
+    broken: { code: string; snapshot: RoomSnapshot | null }[];
+  } {
     const save: RoomSnapshot[] = [];
     const remove: string[] = [];
+    const broken = [...this.broken].map(([code, snapshot]) => ({ code, snapshot }));
     for (const code of this.touched) {
+      if (this.broken.has(code)) continue;
       const room = this.rooms.get(code);
       if (room) save.push(this.snapshotOf(room));
       else remove.push(code);
     }
     this.touched.clear();
-    return { save, remove };
+    this.broken.clear();
+    return { save, remove, broken };
   }
 
   /** A snapshot of one room now, or `null`. */
@@ -390,7 +415,7 @@ export class ServerCore {
         conn: null,
         disconnectedAt: now,
         left: s.left,
-        away: s.away,
+        away: s.away && !s.removed,
         graceFrom: null,
         graceLeftMs: Math.min(s.graceLeftMs, snap.timers.reconnectBudgetMs),
         removed: s.removed,
@@ -726,7 +751,7 @@ export class ServerCore {
       }
     }
     const game = room.game;
-    // Nobody is played for while nobody is watching.
+    // No turn is missed while nobody is watching.
     if (room.status === "playing" && game && room.emptySince === null) {
       // A disconnected player becomes away when the grace ends; everyone is told.
       for (const seat of room.seats) {
@@ -740,9 +765,10 @@ export class ServerCore {
       for (const actor of game.state.phase.actors) {
         const seat = room.seats.find((s) => s.id === actor);
         if (!seat) continue;
-        const at = seat.away ? game.lastActionAt + this.config.autoActionDelayMs : turnDeadline;
+        const at = seat.away ? this.awayMissAt(game, seat) : turnDeadline;
         if (at === null) continue;
-        steps.push({ at, run: (out) => this.missTurn(out, room, game, seat) });
+        const reason = seat.away ? "away" : "timeout";
+        steps.push({ at, run: (out) => this.missTurn(out, room, game, seat, reason) });
       }
     }
     return steps.reduce<Step | null>((a, b) => (a === null || b.at < a.at ? b : a), null);
@@ -752,6 +778,18 @@ export class ServerCore {
   private awayAt(room: Room, seat: Seat): number | null {
     if (room.status !== "playing" || seat.away || seat.graceFrom === null) return null;
     return seat.graceFrom + Math.min(room.timers.reconnectGraceMs, seat.graceLeftMs);
+  }
+
+  /**
+   * When the server misses an away player's turn: the short delay after the
+   * previous action, but never sooner than `disconnectFloorMs` after the
+   * disconnect (unless they sent `leave`), so a blip with no budget left
+   * does not cost the turn (review P2-2).
+   */
+  private awayMissAt(game: Game, seat: Seat): number {
+    const afterAction = game.lastActionAt + this.config.autoActionDelayMs;
+    if (seat.left || seat.disconnectedAt === null) return afterAction;
+    return Math.max(afterAction, seat.disconnectedAt + this.config.disconnectFloorMs);
   }
 
   /** When the turn timer runs out for a deciding player who is not away. */
@@ -777,9 +815,13 @@ export class ServerCore {
     this.broadcastRoom(out, room);
   }
 
-  /** The deciding player is away or out of time: their turn is missed (docs/protocol.md §7). */
-  private missTurn(out: Outbound[], room: Room, game: Game, seat: Seat) {
-    const action: Action = { type: "missTurn", player: seat.id };
+  /**
+   * The deciding player is away or out of time: their turn is missed
+   * (docs/protocol.md §7). Only a turn that ran the whole timer counts
+   * towards removal.
+   */
+  private missTurn(out: Outbound[], room: Room, game: Game, seat: Seat, reason: MissReason) {
+    const action: Action = { type: "missTurn", player: seat.id, reason };
     const result = this.engine.applyAction(this.content, game.state, action);
     if (!result.ok) {
       // Cannot happen: the deciding player can always miss their turn. Fail loudly rather than spin.
@@ -866,7 +908,8 @@ export class ServerCore {
     // Every other disconnected player's grace starts again (docs/protocol.md §7),
     // as far as their budget allows.
     for (const seat of room.seats) {
-      if (seat.left || seat.conn !== null || seat.graceLeftMs <= 0) continue;
+      // A removed seat has no timers: never a grace, never away (review P3).
+      if (seat.removed || seat.left || seat.conn !== null || seat.graceLeftMs <= 0) continue;
       seat.away = false;
       seat.graceFrom = room.resumedAt;
     }
@@ -921,6 +964,20 @@ export class ServerCore {
    */
   private closeBroken(out: Outbound[], room: Room, error: unknown) {
     this.log(`room ${room.code}: error in tick, room closed: ${describeError(error)}`);
+    // Keep what reproduces the bug (review P2-5): the replay log (seed and
+    // actions; no seat tokens) in the log, and the room's file set aside.
+    if (room.game) {
+      this.log(`room ${room.code}: replay log: ${JSON.stringify(room.game.log)}`);
+    }
+    if (this.trackChanges) {
+      let snapshot: RoomSnapshot | null = null;
+      try {
+        snapshot = this.snapshotOf(room);
+      } catch (snapError) {
+        this.log(`room ${room.code}: no snapshot of the closed room: ${describeError(snapError)}`);
+      }
+      this.broken.set(room.code, snapshot);
+    }
     for (const seat of room.seats) {
       if (seat.conn === null) continue;
       this.error(out, seat.conn, "room-closed", "this room hit a server error and was closed");

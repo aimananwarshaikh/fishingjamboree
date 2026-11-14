@@ -63,6 +63,7 @@ const MUST_REACH: Record<GameEventType, true | string> = {
   turnSkipped: "too rare for a random bot: apply.test.ts (late entry with no free starting dock)",
   turnMissed: "server system action, never chosen by a player: missedTurns.test.ts",
   playerRemoved: "server system action, never chosen by a player: missedTurns.test.ts",
+  turnTimedOut: "server system action, never chosen by a player: missedTurns.test.ts",
   rolled: true,
   blocked: true,
   moved: true,

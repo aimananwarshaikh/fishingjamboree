@@ -50,11 +50,17 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
     case "turnSkipped":
       return `${name(ev.player)} has no free starting dock and skips the turn.`;
     case "turnMissed":
-      return `${name(ev.player)} misses the turn.`;
+      return ev.reason === "away"
+        ? `${name(ev.player)} is away and misses the turn.`
+        : `${name(ev.player)} ran out of time and misses the turn.`;
+    case "turnTimedOut":
+      return ev.reason === "away"
+        ? `${name(ev.player)} is away; the turn ends.`
+        : `${name(ev.player)} ran out of time; the turn ends.`;
     case "playerRemoved":
       return ev.reason === "kicked"
         ? `${name(ev.player)} is removed from the game by the host.`
-        : `${name(ev.player)} is removed from the game after ${content.rules.missedTurnsBeforeRemoval} missed turns in a row.`;
+        : `${name(ev.player)} is removed from the game after running out of time ${content.rules.missedTurnsBeforeRemoval} turns in a row.`;
     case "rolled": {
       const r = ev.roll;
       const bonus = r.speedBonus + r.eventModifier;
@@ -181,6 +187,6 @@ export function seatStatus(
 ): string | null {
   if (seat?.removed) return "removed from the game";
   if (!seat || seat.connected) return null;
-  if (seat.away) return "away: the server plays for them";
+  if (seat.away) return "away: their turns are missed until they come back";
   return secondsLeft === null ? "disconnected" : `disconnected: ${secondsLeft} s to come back`;
 }

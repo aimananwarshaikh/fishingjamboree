@@ -174,7 +174,7 @@ describe("a whole game over WebSockets", () => {
   it("misses the turn of a player who stays away, on the tick timer, until they rejoin", async () => {
     const { connect } = await start(
       { rateBurst: 1e6, ratePerSecond: 1e6 },
-      { reconnectGraceMs: 40, autoActionDelayMs: 5 },
+      { reconnectGraceMs: 40, autoActionDelayMs: 5, disconnectFloorMs: 20 },
     );
     const { code, tokens, seats } = await lobby(connect, 2);
     const [ann, bob] = seats as [TestClient, TestClient];
@@ -197,7 +197,12 @@ describe("a whole game over WebSockets", () => {
     }
     const auto = ann.messages.find((m) => m.type === "update" && m.auto);
     expect(auto).toMatchObject({ by: "p2", auto: true });
-    expect(auto?.type === "update" && auto.events[0]).toEqual({ type: "turnMissed", player: "p2" });
+    expect(auto?.type === "update" && auto.events[0]).toEqual({
+      type: "turnMissed",
+      player: "p2",
+      reason: "away",
+      counted: false,
+    });
 
     // Bob rejoins and gets the current game.
     const back = await connect();

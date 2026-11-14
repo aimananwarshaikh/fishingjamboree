@@ -72,7 +72,7 @@ Nobody can join a room once the game has started. There are no spectators yet.
 - `timers` is the room's time limits, fixed when the room is created: `turnTimeoutMs` (`null` if there is no turn timer), `reconnectGraceMs`, `reconnectBudgetMs` ([section 7](#7-disconnect-policy)).
 - `awayInMs` is, in a game, for a disconnected player who is not yet away: how many milliseconds are left before they are away. Otherwise `null`.
 - `game` is `null` in the lobby, otherwise `{ seq, view, turnTimeLeftMs }`.
-- `turnTimeLeftMs` (in `game` and in `update`) is how many milliseconds the deciding player has left before the server plays for them. It is `null` when no turn timer runs: no timer is set, the deciding player is away (the server acts after the short delay instead), or the game is over.
+- `turnTimeLeftMs` (in `game` and in `update`) is how many milliseconds the deciding player has left before their turn timer runs out and the server ends the turn for them (§7). It is `null` when no turn timer runs: no timer is set, the deciding player is away (the server misses their turn after the short delay instead), or the game is over.
 - **Times are relative.** `awayInMs` and `turnTimeLeftMs` are counted when the message is sent. A client adds them to the time the message arrived on its own clock, so client and server clocks need not agree. They are not resent as time passes; a later message carries fresh values.
 - `view` is the receiver's own `PlayerView` (`view.viewer` is their seat). It is sent whole in every `update`; it is small.
 - `events` are the engine's `GameEvent`s for that action, the same for everyone. They are for animation and the log. The view alone is enough to carry on.
@@ -107,7 +107,7 @@ Nobody can join a room once the game has started. There are no spectators yet.
 | `server-error`         | The server hit an error handling this message (a bug); try again    |
 | `room-closed`          | The room hit a server error and was closed; the seat is gone        |
 
-A bug in the server never stops other rooms (review P2-4). If handling a message throws, nothing half-built is sent and only the sender gets `server-error`; the room is kept. If a room throws while the server runs its timers (turn timer, grace, lobby seats), it would throw again on every tick, so it is **closed**: each connected player gets `room-closed`, their connection stays open with no seat, the room and its tokens are gone, and the error is logged with the room code. Other rooms are served on the same tick.
+A bug in the server never stops other rooms (review P2-4). If handling a message throws, nothing half-built is sent and only the sender gets `server-error`; the room is kept. If a room throws while the server runs its timers (turn timer, grace, lobby seats), it would throw again on every tick, so it is **closed**: each connected player gets `room-closed`, their connection stays open with no seat, the room and its tokens are gone, and the error is logged with the room code. So the bug can be reproduced (review P2-5), the room's replay log (seed and actions, no seat tokens) is logged too, and with rooms saved its file is written once more and kept as `<CODE>.json.bad` (never loaded again) instead of being deleted. Other rooms are served on the same tick.
 
 `rejected.error.code`: the engine's `game-over`, `unknown-player`, `not-your-turn`, `wrong-phase`, `illegal-action`, plus:
 
@@ -157,11 +157,11 @@ A seat is never freed during a game. The game is not paused for the other player
 **Turn timer and missed turns** (review P1-2; rules decided with the designer, 2026-11-13; rulebook "Online play").
 
 - A player has **90 seconds** (`turnTimeoutMs`) for a whole turn: rolling, moving and shopping. It counts from the start of the turn (each setup placement counts as one), or from the moment a room nobody was connected to is rejoined. Decisions inside the turn do not restart it.
-- When it runs out, the server applies the engine's system action `missTurn` for them: nothing more happens that turn (no move, no card, no purchase, no Helicopter) and the turn passes. A ship that has to be placed (setup, late entry, Sinking Boat) goes on the first dock offered. The update has `auto: true`. The player is not marked away.
+- When it runs out, the server applies the engine's system action `missTurn` for them (`reason: "timeout"`). Before the move (placing at setup or late entry, rolling, moving) the turn is missed (`turnMissed`): nothing more happens (no move, no card, no purchase, no Helicopter) and the turn passes; a ship to be placed goes on the first dock offered. After the move (the dock shop, the end-of-turn Helicopter choice, the dock after a Sinking Boat) the turn just ends (`turnTimedOut`, review P2-3): what was done stands, nothing is bought or used, a Sinking Boat ship goes on the first dock offered with no shop; it is not a missed turn and counts for neither removal nor the awards. The same split applies to an away player's turn. The update has `auto: true`. The player is not marked away.
 - It runs whether the player is connected or not: a disconnect never extends a turn.
 - Clients see it as `turnTimeLeftMs` ([section 4](#4-server-to-client)). There is no turn timer in the lobby. `turnTimeoutMs: null` switches it off.
 - **The server never plays for a player.** It only misses their turns.
-- **3 missed turns in a row** (`missedTurnsBeforeRemoval` in `content/rules.json`) and the engine removes the player (`playerRemoved`, reason `missed-turns`). Any action of the player's own resets the count.
+- **3 timed-out turns in a row** (`missedTurnsBeforeRemoval` in `content/rules.json`) and the engine removes the player (`playerRemoved`, reason `missed-turns`). Any action of the player's own resets the count. The server sends `missTurn` with `reason: "timeout"` when the turn timer ran out and `reason: "away"` when it misses an away player's turn; only `timeout` counts (`turnMissed.counted`). An away miss neither counts nor resets the run (review P1-1).
 
 **Removing a player** (host kick).
 
@@ -177,7 +177,8 @@ A seat is never freed during a game. The game is not paused for the other player
 - A disconnected player has up to **60 seconds** (`reconnectGraceMs`), counted from the disconnect, to come back. During that time they are not away; if it is their turn, the turn timer still runs.
 - Each player has a **budget** of **2 minutes** (`reconnectBudgetMs`) of grace for the whole game. The time they spend disconnected and not away is taken from it (at most one grace per disconnect; time while nobody in the room is connected does not count). A disconnect with less than 60 seconds of budget left gets only what is left; with nothing left the player is away at once. The budget is full for everyone when the game starts.
 - Clients see what is left of a disconnected player's grace as `awayInMs`.
-- After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message. Whenever it is an away player's turn, the server misses it **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens. So an away player is removed after three of their turns.
+- After the grace, the player is **away**: their seat's `away` becomes `true` and everyone gets a `room` message. Whenever it is an away player's turn, the server misses it **2 seconds** (`autoActionDelayMs`) after the previous action, so the others can follow what happens. These misses do not count towards removal, so the server never removes an away player; the host can (`kick`).
+- **Never sooner than 10 seconds after the disconnect** (`disconnectFloorMs`, review P2-2): an away player's turn is missed at the later of the 2-second delay and 10 seconds after they disconnected, so a blip with no budget left (away at once) does not lose the turn if they are back within 10 seconds. Not after `leave` (a deliberate exit gets only the 2-second delay). The floor never holds back the turn timer: a turn that runs its 90 seconds is missed on time, connected or not.
 - Reconnecting ends this immediately (`away` goes back to `false`). A later disconnect starts a new grace period, from what is left of the budget.
 - `leave` during a game means away at once, with no grace and no budget used. The seat is kept and the player can still `rejoin` (until they are removed).
 - A missed turn or a removal is an ordinary action: it goes through `applyAction`, is added to the replay log, and is sent as an `update`. Clients can never send these actions (`parse.ts` refuses them).
@@ -185,7 +186,7 @@ A seat is never freed during a game. The game is not paused for the other player
 ### When nobody is connected
 
 - The server misses nobody's turn. The game stands still.
-- When someone reconnects, every other disconnected player's grace starts again from that moment (unless they had sent `leave`), capped by what is left of their budget; a player with no budget left stays away. The turn timer also counts from that moment.
+- When someone reconnects, every other disconnected player's grace starts again from that moment (unless they had sent `leave`), capped by what is left of their budget; a player with no budget left stays away. A removed seat is skipped: it never gets a grace and never becomes away (also after a restart). The turn timer also counts from that moment.
 - A room nobody has been connected to for **30 minutes** (`roomIdleTtlMs`) is deleted, whatever its status.
 
 ### After a server restart
@@ -277,7 +278,7 @@ core.restoreRoom(json); // → { ok: true, code } | { ok: false, reason }   neve
 
 - `RoomSnapshot` (`src/snapshot.ts`): code, status, host, `rev`, timers, seats (id, name, token, `left`, `away`, `removed`, reconnect budget left) and, once started, the game's `ReplayLog` plus its current `GameState`. No connection ids and no clock times. It holds seat tokens and the seed: **server-side only**.
 - `restoreRoom` checks the shape, refuses a code already in use or a log made with other content (content hash), replays the log and refuses it unless the result equals the saved state (and the status, players and removals agree).
-- `createGameServer({ store })` takes a `RoomStore` (`load`, `save`, `remove`, `discard`). On start it restores every saved room; an unreadable or refused entry is logged with the reason and moved aside (`discard`), and never stops the server. After every core call it saves what changed and deletes what is gone; a failed write is logged and the game goes on in memory.
+- `createGameServer({ store })` takes a `RoomStore` (`load`, `save`, `remove`, `discard`). On start it restores every saved room; an unreadable or refused entry is logged with the reason and moved aside (`discard`), and never stops the server. After every core call it saves what changed and deletes what is gone; a room closed after an error (`takeChanges().broken`) is saved once more and moved aside (`discard`) instead. A failed write is logged and the game goes on in memory.
 - `fileRoomStore(dir)` (`src/roomStore.ts`): one file `<CODE>.json` per room, created `0600` in a `0700` folder, written to a temporary file and renamed (never half a file); an unchanged room is not written again; a bad file becomes `<CODE>.json.bad`. `main.ts` uses it when `ROOMS_DIR` is set.
 
 The web client can import the message types from `packages/server/src/protocol.ts`, which has no Node imports.

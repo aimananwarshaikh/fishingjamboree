@@ -387,8 +387,17 @@ export interface PlayerState {
   upgrades: Record<UpgradeId, boolean>;
   /** `null` while waiting off the board (before setup placement or late entry), and once removed. */
   position: TileId | null;
-  /** Turns missed in a row (online play); any action of the player's own resets it. */
+  /**
+   * Turns missed in a row because the turn timer ran out (online play); any
+   * action of the player's own resets it. A turn missed while the player is
+   * away neither counts nor resets it.
+   */
   missedTurns: number;
+  /**
+   * The player's latest turn was missed (either reason) and they have not
+   * acted since: the engine's reading of "away when the game ends" (awards).
+   */
+  missedLastTurn: boolean;
   /** Removed from the game (by the host, or after too many missed turns): no more turns, cannot win. */
   removed: boolean;
 }
@@ -629,12 +638,20 @@ export type PlayerAction =
   | EndTurnAction;
 
 /**
+ * Why the server ends a turn for the deciding player (online play):
+ * `timeout`, the turn timer ran out; `away`, the player is away (after the
+ * short delay). Only `timeout` counts towards removal.
+ */
+export type MissReason = "timeout" | "away";
+
+/**
  * Online play, decided by the server and never by a client: the deciding
- * player ran out of time, so their turn is missed (nothing more happens; a
- * ship that has to be placed goes on the first dock offered).
+ * player ran out of time or is away, so their turn is missed (nothing more
+ * happens; a ship that has to be placed goes on the first dock offered).
  */
 export interface MissTurnAction extends ActionBase {
   type: "missTurn";
+  reason: MissReason;
 }
 
 /** Online play, decided by the server (host kick): `player` leaves the game for good. */
@@ -687,8 +704,18 @@ export type GameEvent =
   | { type: "roundStarted"; round: number }
   | { type: "turnStarted"; player: PlayerId; round: number }
   | { type: "turnSkipped"; player: PlayerId; reason: TurnSkipReason }
-  /** The player ran out of time (online play). */
-  | { type: "turnMissed"; player: PlayerId }
+  /**
+   * The player's turn was missed (online play). `counted`: it counts towards
+   * removal (only a turn that ran the whole turn timer does).
+   */
+  | { type: "turnMissed"; player: PlayerId; reason: MissReason; counted: boolean }
+  /**
+   * The server ended the turn after the move (online play: time ran out or
+   * the player is away in the shop, the end-of-turn choice or a Sinking Boat
+   * dock choice). Not a missed turn: what was done stands, nothing more
+   * happens, and it counts for nothing (removal, awards).
+   */
+  | { type: "turnTimedOut"; player: PlayerId; reason: MissReason }
   /** The player is out of the game; their ship has left the board. */
   | { type: "playerRemoved"; player: PlayerId; reason: RemovalReason }
   | { type: "rolled"; player: PlayerId; roll: RollResult }

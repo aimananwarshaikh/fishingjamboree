@@ -244,7 +244,7 @@ describe("turn timer and reconnect grace (P1-2)", () => {
     expect(turnSecondsLeft(ann.state(), tabNow())).toBe(90);
     const log = ann.state().log.map((l) => l.text);
     const who = actor === "p1" ? "Ann" : "Bob";
-    expect(log).toContain(`${who} misses the turn. (auto)`);
+    expect(log).toContain(`${who} ran out of time and misses the turn. (auto)`);
   });
 
   it("counts down a dropped player's grace, then shows them away", () => {

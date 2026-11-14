@@ -20,7 +20,8 @@
  * click on a button is quiet, a 4th player can join a lobby, and a phone-width
  * tab (390 px) has no horizontal scroll and tappable buttons; the host removes
  * the 4th player from the lobby. With GRACE=1 the closed tab's turns are missed
- * and, after three in a row, its player is removed from the game. Rejoining (P1-1):
+ * (away: they do not count towards removal), and after three of them the host
+ * removes that player from the game. Rejoining (P1-1):
  * a closed tab's player opens a new tab and rejoins from the start-screen offer
  * (a new tab never rejoins by itself, so the three tabs stay three players);
  * and a player opens their rejoin link in a fresh browser context, while the
@@ -425,7 +426,7 @@ while (stats.actions < MAX_ACTIONS) {
       );
     }
     const seqAtClose = Math.max(...(await Promise.all(pages.map(seqOf))));
-    // Keep playing the remaining seats; the server must act for the closed one.
+    // Keep playing the remaining seats; the server must miss the closed one's turns.
     const end = Date.now() + 120000;
     let autoSeen = false;
     while (Date.now() < end && !autoSeen) {
@@ -439,13 +440,27 @@ while (stats.actions < MAX_ACTIONS) {
       }
     }
     check(autoSeen, `after the grace ${seat}'s turns are missed and the game goes on`);
-    // Three missed turns in a row: the seat is removed. Keep playing meanwhile,
-    // or the others' turn timers would run out too.
+    // An away player's missed turns do not count towards removal (review
+    // P1-1): play three more of their turns, then the host removes them.
     const removedCount = () => pages[0].locator(".players small.removed").count();
-    for (let i = 0; i < 400 && (await removedCount()) === 0; i++) {
+    const awayMisses = async () =>
+      (await pages[0].locator(".log li").allInnerTexts()).filter((l) =>
+        l.includes("is away and misses the turn"),
+      ).length;
+    for (let i = 0; i < 400 && (await awayMisses()) < 3; i++) {
       if (!(await step(pages))) await new Promise((r) => setTimeout(r, 250));
     }
-    check((await removedCount()) === 1, `after 3 missed turns ${seat} is shown as removed`);
+    check(
+      (await awayMisses()) >= 3 && (await removedCount()) === 0,
+      `after 3 away turns ${seat} is still in the game`,
+    );
+    // pages[0] is the host's tab, which is never the one closed.
+    const host = pages[0];
+    const goneName = names[Number(seat.slice(1)) - 1];
+    host.once("dialog", (d) => d.accept());
+    await host.locator(`button[title="Remove ${goneName}"]`).click();
+    for (let i = 0; i < 40 && (await removedCount()) === 0; i++) await host.waitForTimeout(250);
+    check((await removedCount()) === 1, `the host removes ${seat}; shown as removed`);
     continue;
   }
 
