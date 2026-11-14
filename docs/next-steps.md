@@ -63,13 +63,13 @@ Small fixes and tests: Sonnet unless noted.
 **Web client**
 
 - **Done (B1):** `?server=` is honoured only in a dev build or for a server on `VITE_ALLOWED_SERVERS` (`serverUrl.ts`, notes log). Was: `?server=` could send the seat token to another server.
-- `leave` while reconnecting is lost, because the pending retry timer reopens the socket (`useGame.ts:186-189`, `:137-146`, `:100`).
-- After errors other than `bad-token` and `room-not-found` during a rejoin (for example `unsupported-version`) the table is dead (`useGame.ts:116-125`).
+- **Done (B1):** `leave` while reconnecting cancels the rejoin and forgets the seat (`connection.ts`).
+- **Done (B1):** a rejoin refused for another reason goes back to the start screen with the message (`server-error` is retried).
 - The server port is fixed at 8787 (`useGame.ts:54`) and an `https` page needs `wss`. See B5.
 
 **Missing tests** (Sonnet)
 
-- `useGame.ts` (backoff, saved session, `bad-token` reset, `leave`). `scripts/playtest-three-tabs.mjs` covers it but is not in `pnpm check` or CI (`.github/workflows/ci.yml`).
+- **Done (B1):** the connection logic moved to `connection.ts` and is tested (`connection.test.ts`: backoff, saved session, each refusal, `leave`). Still open: `scripts/playtest-three-tabs.mjs` is not in `pnpm check` or CI (`.github/workflows/ci.yml`).
 - `fuzz.test.ts`: count the event types reached and fail if an expected one never appears (`turnSkipped`, `relocationFailed`, Sinking Boat to the cruise dock); read the token value from content (`fuzz.test.ts:130`).
 - Engine: Helicopter expiring between start and end of a turn, and use on the last turn of round 20; a Sinking Boat victim taking a late entrant's dock; `applyAction` leaves its input untouched.
 - Server: two rooms at once; the transport's `close()` during a game; unusual Unicode names.
