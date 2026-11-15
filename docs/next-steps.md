@@ -15,7 +15,7 @@ A full online game for 2–4 players runs in a browser (desktop and phone width)
 
 How to run it: see "Running locally" in `README.md`. `pnpm check` and `npx prettier --check .` must pass before a commit.
 
-The client is bare: SVG board, no card art, no animation. That is Milestone B2.
+The client is bare: SVG board, no card art, no animation. That is Milestone B2. Since B2a the board is the real art and ships animate; cards, tokens, dice and the awards reveal are B2b.
 
 ## End-of-B1 review (2026-11-14)
 
@@ -110,6 +110,8 @@ Phases are in `docs/build-plan.md` section 5.
   - P1-2 follow-ups, only if wanted: a host pause; a per-room timer length chosen in the lobby (the room already holds its own `timers`); a bot taking a removed player's place (the designer's option once bots exist, B6).
 - **B1b (Golden Hook Awards): done** (2026-11-14). Stats, `content/awards.json`, the secret draw, the payout, hidden state, protocol and tests; rulebook "End of the game". Placeholder amounts. For the designer: Landlubber pays nobody when the fewest Risk draws is 0 (decision 3, "a stat of 0 never wins"), which happens often (seed `full-b`); and "away at the end" is read as "missed their last turn". See `docs/bonus-awards.md` "Built (B1b)".
 - **B2 (real UI):**
+  - **B2a: done** (2026-11-15). The board art (`assets/board/board.webp`, round track cropped off until the designer's PNG arrives; question 7 asked again, not yet received) with ships, the Golden Fish and click targets on top; the animation queue (`apps/web/src/animation.ts`: ships sail along their paths, a placed ship fades in, a removed one fades out, a Sinking Boat ship is towed, the Golden Fish appears and goes when its step plays; a plain caption for dice, cards, fish, fines and sales); the turn timer handled in the client (at most 1.5 s of animation on the update that gives a player the turn; no server change); the plug-in points for B2b in `docs/architecture.md` §13. Tests: `animation.test.ts`, `boardArt.test.ts`, `describe.test.ts`, `store.test.ts`.
+  - **B2b (next):** the step components (dice, cards, tokens, money), the round banner and bar, the awards reveal, web-size art copies. Watch: `view.result` arrives with the last update, so the result table must wait for the reveal to finish (architecture §13).
   - Golden Hook Awards reveal after round 20, one award at a time.
   - The log is per tab; a refresh restarts it from "Joined room …" (the protocol sends no event history on rejoin, by design). Decide if the real UI needs history; if so, it is a protocol change.
   - Round banner and "Round N/20" progress bar with the three event marks (decided 2026-11-12; the bare client only has the bar). Needs the PNG from the designer.
