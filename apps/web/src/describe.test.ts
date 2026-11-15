@@ -10,7 +10,7 @@ import type { GameState, PlayerView } from "@fishingjamboree/engine";
 import { loadBundledContent } from "./content";
 import { eventsToSteps } from "./animation";
 import type { AnimStep } from "./animation";
-import { stepCaption } from "./describe";
+import { awardOutcome, stepCaption } from "./describe";
 
 const content = loadBundledContent();
 const name = (p: string) => ({ p1: "Ann", p2: "Bob", p3: "Cy" })[p] ?? p;
@@ -76,5 +76,49 @@ describe("stepCaption", () => {
       }
       expect(n).toBeGreaterThan(50);
     }
+  });
+});
+
+describe("stepCaption: fish", () => {
+  it("does not say '+no fish' when everything was lost to capacity", () => {
+    const fish = (kept: number[], lost: number[]): AnimStep => ({
+      kind: "fish",
+      player: "p1",
+      kept,
+      lost,
+      bonus: 0,
+    });
+    expect(stepCaption(fish([100], []), content, name)).toBe("Ann: +1 fish ($100)");
+    expect(stepCaption(fish([], [100, 100]), content, name)).toMatch(/^Ann: .* lost \(full\)$/);
+    expect(stepCaption(fish([100], [300]), content, name)).toMatch(
+      /^Ann: \+1 fish \(\$100\), .* lost \(full\)$/,
+    );
+  });
+});
+
+describe("awardOutcome", () => {
+  const base = { award: "big-haul", amount: 300, value: 7 };
+  it("names the paid winners and the amount", () => {
+    expect(awardOutcome({ ...base, qualified: ["p1", "p2"], winners: ["p1", "p2"] }, name)).toEqual(
+      {
+        who: "Ann and Bob",
+        amount: 300,
+        note: null,
+      },
+    );
+  });
+  it("says so when the qualified players are not paid", () => {
+    expect(awardOutcome({ ...base, qualified: ["p3"], winners: [] }, name)).toEqual({
+      who: "Cy",
+      amount: null,
+      note: "not paid (not in the game at the end)",
+    });
+  });
+  it("says nobody when nobody qualified", () => {
+    expect(awardOutcome({ ...base, value: null, qualified: [], winners: [] }, name)).toEqual({
+      who: "Nobody",
+      amount: null,
+      note: null,
+    });
   });
 });

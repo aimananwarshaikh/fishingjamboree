@@ -3,14 +3,16 @@ import { getLegalActions } from "@fishingjamboree/engine";
 import type { Action, Content, PlayerView, UpgradeId } from "@fishingjamboree/engine";
 import type { RoomInfo, SeatInfo } from "../../../packages/server/src/protocol";
 import { Board, playerColor } from "./Board";
-import { describeAction, phaseTask, seatStatus, stepCaption, upgradeText } from "./describe";
+import { awardOutcome, describeAction, phaseTask, seatStatus, upgradeText } from "./describe";
+import { StepView } from "./StepViews";
+import { roundBar } from "./stepView";
 import { frameAt, queueEnd } from "./animation";
 import type { AnimQueue, Frame } from "./animation";
 import { loadBundledContent } from "./content";
 import { useGame } from "./useGame";
 import type { RejoinOffer } from "./useGame";
 import { rejoinLink } from "./savedSeats";
-import { awaySecondsLeft, turnSecondsLeft } from "./store";
+import { awaySecondsLeft, turnSecondsLeft, visibleLog } from "./store";
 import type { Banner, ClientState } from "./store";
 
 const content = loadBundledContent();
@@ -26,7 +28,7 @@ export function App() {
           {state.connection === "closed" && state.session ? "reconnecting…" : state.connection}
         </span>
       </header>
-      <BannerView banner={state.banner} />
+      {prefersReducedMotion() && <BannerView banner={state.banner} />}
       {state.contentMismatch && (
         <p className="notice error">
           This page and the server have different game content. Reload after updating, or the board
@@ -85,7 +87,19 @@ function KickButton(props: { name: string; inGame: boolean; onKick: () => void }
   );
 }
 
-/** Shows each new banner for a moment. It never blocks clicks. */
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Shows each new banner for a moment. It never blocks clicks. Only for players
+ * who asked for reduced motion: otherwise the `round` and `event` steps draw
+ * the round banner and the event card on the animation clock (StepViews.tsx).
+ */
 function BannerView({ banner }: { banner: Banner | null }) {
   const [shown, setShown] = useState<number | null>(null);
   useEffect(() => {
@@ -294,19 +308,33 @@ function useFrame(anim: AnimQueue, view: PlayerView): Frame {
   return useMemo(() => frameAt(anim, view, now), [anim, view, now]);
 }
 
-/** A plain caption for the step playing now (B2b replaces it with the real components). */
-function StepOverlay(props: { frame: Frame; name: (p: string) => string }) {
-  const cur = props.frame.current;
-  const text = cur ? stepCaption(cur.step, content, props.name) : null;
-  if (!cur || text === null) return null;
+/** The always-visible "Round N/20" bar with the three event marks. Sticks to the top of the screen. */
+function RoundBar(props: { round: number; rounds: number; eventAfter: number[] }) {
+  const { round, rounds } = props;
+  const bar = roundBar(round, rounds, props.eventAfter);
   return (
-    <div
-      key={cur.id}
-      className={`step-overlay step-${cur.step.kind}`}
-      data-step={cur.step.kind}
-      aria-hidden="true"
-    >
-      {text}
+    <div className="round-bar" data-round={round}>
+      <span className="round-label">
+        Round {round}/{rounds}
+      </span>
+      <div
+        className="bar"
+        role="progressbar"
+        aria-label="Round"
+        aria-valuemin={1}
+        aria-valuemax={rounds}
+        aria-valuenow={round}
+      >
+        <div className="fill" style={{ width: `${bar.fill * 100}%` }} />
+        {bar.marks.map((m) => (
+          <i
+            key={m.after}
+            className={m.passed ? "passed" : ""}
+            style={{ left: `${m.at * 100}%` }}
+            title={`Event after round ${m.after}`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -384,6 +412,7 @@ function Table(props: {
 
   return (
     <div className="table" data-seq={state.game!.seq} data-me={me}>
+      <RoundBar round={view.round} rounds={rounds} eventAfter={content.rules.eventAfterRounds} />
       <section className="board-wrap" data-animating={frame.busy ? "yes" : "no"}>
         <Board
           content={content}
@@ -393,22 +422,17 @@ function Table(props: {
           names={names}
           onAction={props.act}
         />
-        <StepOverlay frame={frame} name={name} />
+        {frame.current && (
+          <StepView
+            key={frame.current.id}
+            current={frame.current}
+            content={content}
+            view={view}
+            name={name}
+          />
+        )}
       </section>
       <div className="card status">
-        <div className="round">
-          Round {view.round}/{rounds}
-          <div className="bar">
-            <div className="fill" style={{ width: `${(view.round / rounds) * 100}%` }} />
-            {content.rules.eventAfterRounds.map((r) => (
-              <i
-                key={r}
-                style={{ left: `${(r / rounds) * 100}%` }}
-                title={`Event after round ${r}`}
-              />
-            ))}
-          </div>
-        </div>
         <TurnStatus state={state} view={view} me={me} name={name} seats={room.seats} />
         {event && (
           <p className="event">
@@ -523,7 +547,7 @@ function Table(props: {
           </table>
         </div>
 
-        {view.result && (
+        {view.result && !frame.revealing && (
           <div className="card result">
             <h2>Result</h2>
             <ol>
@@ -537,6 +561,24 @@ function Table(props: {
                   </li>
                 ))}
             </ol>
+            {view.result.awards.length > 0 && (
+              <>
+                <h3>Golden Hook Awards</h3>
+                <ul className="award-list">
+                  {view.result.awards.map((a) => {
+                    const out = awardOutcome(a, name);
+                    const def = content.awards.awards.find((d) => d.id === a.award);
+                    return (
+                      <li key={a.award}>
+                        <b>{def?.name ?? a.award}</b> ({def?.text.toLowerCase()}): {out.who}
+                        {out.amount !== null ? `, +$${out.amount}` : ""}
+                        {out.note ? ` (${out.note})` : ""}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
             <button className="secondary" onClick={props.onLeave}>
               Leave room
             </button>
@@ -550,7 +592,7 @@ function Table(props: {
         <div className="card log">
           <h3>Log</h3>
           <ol reversed>
-            {[...state.log].reverse().map((l) => (
+            {[...visibleLog(state.log, frame.revealing)].reverse().map((l) => (
               <li key={l.id} className={l.kind}>
                 {l.text}
               </li>
