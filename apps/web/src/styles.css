@@ -509,3 +509,72 @@ button.kick {
   font-family: monospace;
   font-size: 0.85rem;
 }
+
+/* B4: board zoom. The toolbar sits above the board; every control is 44 px or more. */
+.board-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.board-tools button {
+  min-width: 44px;
+}
+.board-tools button.icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+.board-tools .follow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.board-tools .follow input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}
+/* The board never takes the page's horizontal scroll, and ignores text selection while dragging. */
+.board {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.board-wrap {
+  min-width: 0;
+}
+
+/* B4: touch tuning at phone width. Action buttons (roll, dock, shop, Helicopter, end turn)
+   fill the row so the thumb target is the same everywhere and nothing is ragged. */
+@media (max-width: 799px) {
+  .actions button,
+  .shop button {
+    display: block;
+    width: 100%;
+    margin: 6px 0;
+    text-align: left;
+  }
+  .shop {
+    padding: 8px 10px 4px;
+  }
+  .board-tools {
+    gap: 4px 6px;
+  }
+  .board-tools button {
+    padding: 8px 12px;
+    margin: 0;
+  }
+  .board-tools .follow {
+    font-size: 0.85rem;
+  }
+}
+/* A touch screen pinches; the + and - buttons are for mouse users. */
+@media (pointer: coarse) {
+  .board-tools button.icon {
+    display: none;
+  }
+}

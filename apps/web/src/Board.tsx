@@ -8,7 +8,8 @@
 import type { Action, Content, PlayerView } from "@fishingjamboree/engine";
 import boardUrl from "../../../assets/board/board.webp";
 import type { Frame } from "./animation";
-import { ART, boardTargets, shipMarks, tileOrigin, viewBox } from "./boardArt";
+import { ART, boardTargets, shipMarks, tileOrigin } from "./boardArt";
+import type { BoardZoom } from "./BoardZoom";
 
 export const PLAYER_COLORS = ["#e4572e", "#f2b705", "#3fa34d", "#9b5de5"];
 
@@ -25,21 +26,26 @@ interface Props {
   /** Seat -> display name, for tooltips. */
   names: Record<string, string>;
   onAction: (action: Action) => void;
+  /** Zoom state and gestures (BoardZoom.tsx): only the view box changes, everything is still drawn in art pixels. */
+  zoom: BoardZoom;
 }
 
 const T = ART.tile;
 
-export function Board({ content, view, frame, legal, names, onAction }: Props) {
+export function Board({ content, view, frame, legal, names, onAction, zoom }: Props) {
   const { board } = content;
   const targets = boardTargets(content, legal);
   const actor = view.phase.actors[0];
-  const box = viewBox();
+  const box = zoom.box;
   const fish = frame.goldenFish;
   const fishTile = fish ? board.tiles[fish.tile] : null;
 
   return (
     <svg
       className="board"
+      ref={zoom.svgRef}
+      data-zoomed={zoom.zoomed ? "yes" : "no"}
+      {...zoom.svgProps}
       viewBox={`${box.x} ${box.y} ${box.width} ${box.height}`}
       role="img"
       aria-label="Game board"

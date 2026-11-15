@@ -378,12 +378,21 @@ Dropped from the kickoff seed list: "a fine when docked" (docking draws no card)
 | `store.ts`             | `ClientState` and `onServerMessage`: the `seq`/`rev` rules, countdowns, the log, banners, and the animation queue (`state.anim`). |
 | `animation.ts`         | The animation queue: events → steps → a timed queue → a frame for any time. Pure; the tab's clock is passed in.                   |
 | `boardArt.ts`          | Where `content/board.json`'s tiles sit on `assets/board/board.webp`, the view box, click targets, where ships are drawn.          |
+| `boardView.ts`         | Board zoom maths (B4): `BoardView`, pan, pinch, `followView`, double tap. Pure, tested.                                           |
 | `describe.ts`          | Text: log lines, button labels, and `stepCaption` (B2a's plain caption for the step playing).                                     |
 | `Board.tsx`, `App.tsx` | Drawing. `useFrame` (in `App.tsx`) redraws on `requestAnimationFrame` while the queue has steps, then stops.                      |
 
 ### The board
 
 The art is drawn as an SVG `<image>` in its own pixel space (1378×1969; the 8×20 grid starts at x = 293, a tile is 98.45 px). The whole art is shown, edge to edge (decided 2026-11-15: an earlier crop of the round track cut the scenery on both sides and looked unfinished). The printed round track on the left stays visible as decoration until the designer's PNG without it arrives (question 7); then only the file and, if its size differs, the numbers in `ART` change. On desktop the board column is 560 px wide (a tile about 40 px); on a 390 px phone a tile is about 26 px, under the 44 px touch size, which is for B4 (zoom). Tiles are not drawn: only click targets (move destinations, starting docks), ships and the Golden Fish go on top. Ships at rest on one tile go in its corners.
+
+### Board zoom (B4)
+
+At 390 px the whole art gives a tile of about 28 px, under the 44 px touch size, and the designer wants the whole art kept. So the board can zoom; nothing is cropped at rest.
+
+- `boardView.ts` (pure): a `BoardView` is a centre in art pixels and a zoom (1 = the whole art). The window keeps the art's aspect ratio, so the container never changes shape; only the SVG `viewBox` does. Ships, targets and the Golden Fish are drawn in art pixels inside that SVG, so they stay lined up with the board and with the animation frames at every zoom, and the browser's own hit test keeps the click targets exact. `animation.ts` is not involved.
+- `BoardZoom.tsx` (`useBoardZoom`, `ZoomTools`): two-finger pinch, one-finger pan (only when zoomed; at the whole board the page scrolls: `touch-action: pan-y`, zoomed: `none`), double tap or double click to zoom in on a point and again to go out, buttons (My ship, Whole board, + and -; + and - are hidden on touch screens), and **Follow my turn** (on by default under 800 px). Following re-aims on a change of round, phase, deciding player or my position: on my decision the view goes to my ship and the tiles I can tap (`followView`: as large as holds them, never under 44 px per tile; if they do not fit even then, the ship stays centred); on other players' turns it shows the whole board. A gesture or button of mine holds until the next change. A pan that starts on a click target and moves is a drag, not a click. A 220 ms tween (instant with reduced motion).
+- Nothing in the engine, server, protocol or animation queue changed.
 
 ### The animation queue
 
