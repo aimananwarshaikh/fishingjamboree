@@ -30,6 +30,8 @@ export function harness(
   let codeCount = 0;
   let tokenCount = 0;
   const codes = [...roomCodes];
+  /** Seeds the next games will get, in order; then `SEED`. */
+  const seeds: string[] = [];
   const letters = "BCDFGHJKMNPQRSTVWXZ";
   const core = new ServerCore({
     content,
@@ -42,7 +44,7 @@ export function harness(
         return codes.shift() ?? `BCD${letters[n % letters.length]}`;
       },
       seatToken: () => `token-${++tokenCount}`,
-      gameSeed: () => SEED,
+      gameSeed: () => seeds.shift() ?? SEED,
     },
   });
 
@@ -65,6 +67,7 @@ export function harness(
 
   const h = {
     core,
+    seeds,
     sent,
     now: () => time,
     send: (conn: ConnId, message: unknown) => deliver(core.handleMessage(conn, message)),

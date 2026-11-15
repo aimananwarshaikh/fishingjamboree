@@ -508,6 +508,56 @@ const results = await Promise.all(
 );
 check(new Set(results).size === 1, "all tabs show the same result");
 
+// ---------------------------------------------------------------------------
+// Rematch (B3): the host plays again; removed and closed seats are dropped.
+{
+  const live = pages.filter((p) => !p.isClosed());
+  const others = live.slice(1);
+  await pages[0].setViewportSize({ width: 390, height: 844 }); // the host on a phone
+  check(await noHorizontalScroll(pages[0]), "phone: the result has no horizontal scroll");
+  const playAgain = pages[0].getByRole("button", { name: "Play again" });
+  check((await playAgain.count()) === 1, "the host sees a Play again button");
+  const box = await playAgain.boundingBox();
+  check(box !== null && box.height >= 40, `phone: Play again is at least 40 px (${box?.height})`);
+  for (const p of others) {
+    check(
+      (await p.getByRole("button", { name: "Play again" }).count()) === 0 &&
+        (await p.getByText("The host can start a rematch.").count()) === 1,
+      "a player who is not the host cannot start a rematch",
+    );
+  }
+  await playAgain.click();
+  for (const p of live) await p.locator(".seats").waitFor({ timeout: 5000 });
+  check(
+    (await pages[0].locator(".seats li").count()) === live.length,
+    `after the rematch the lobby holds the ${live.length} players still here`,
+  );
+  for (const p of live) {
+    const gone =
+      (await p.locator(".result").count()) === 0 && (await p.locator(".award-list").count()) === 0;
+    const logs = await p.locator(".log li").allInnerTexts();
+    check(gone && logs.length <= 1, "the old result and log are gone on every tab");
+  }
+  await pages[0].getByRole("button", { name: "Start game" }).click();
+  check(await waitAllSeq(live, 0), "the rematch starts at seq 0 on every tab");
+  for (const p of live) {
+    check(
+      (await p.locator(".result").count()) === 0 &&
+        !(await p.locator(".log li").allInnerTexts()).some((l) =>
+          /^Game over|^Golden Hook/.test(l),
+        ),
+      "the new game shows nothing of the last one",
+    );
+  }
+  let played = 0;
+  for (let i = 0; i < 40 && played < 8; i++) {
+    if (await step(live)) played++;
+    else await new Promise((r) => setTimeout(r, 250));
+  }
+  check(played >= 8, `the rematch can be played (${played} actions)`);
+  check(await noHorizontalScroll(pages[0]), "phone: the rematch table has no horizontal scroll");
+}
+
 console.log("\n==== Result");
 console.log(result ?? "(none)");
 console.log(`\nClicks: ${stats.actions} (server seq ${finalSeqs[0]})`);

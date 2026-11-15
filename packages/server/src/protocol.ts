@@ -102,7 +102,9 @@ export type ClientMessage =
   | { type: "sync" }
   | { type: "leave" }
   /** Host only: remove `seat` from the lobby or the game for good. */
-  | { type: "kick"; seat: SeatId };
+  | { type: "kick"; seat: SeatId }
+  /** Host only, after a game: back to the lobby with the connected, non-removed players. */
+  | { type: "rematch" };
 
 export type ClientMessageType = ClientMessage["type"];
 
@@ -128,6 +130,8 @@ export type ProtocolErrorCode =
   | "server-busy"
   | "kicked"
   | "cannot-kick"
+  /** `rematch` while no game has finished in this room. */
+  | "game-not-finished"
   /** The server hit an error handling the message (a bug); nothing was changed. Try again. */
   | "server-error"
   /** The room hit a server error and was closed; the connection has no seat any more. */

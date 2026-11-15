@@ -204,6 +204,8 @@ export function useGame(content: Content) {
     start: () => send({ type: "start" }),
     /** Host only: removes a player from the room (for good, in a game). */
     kick: (seat: SeatId) => send({ type: "kick", seat }),
+    /** Host only, after a game: back to the lobby with the players who are still here. */
+    rematch: () => send({ type: "rematch" }),
     leave: () => connection.leave(),
     /** Sends an engine action (its `player` is replaced by the server). */
     act: (action: Action) => {

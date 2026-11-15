@@ -39,16 +39,17 @@ Nobody can join a room once the game has started. There are no spectators yet.
 
 ## 3. Client to server
 
-| Message  | Fields                            | Allowed when                 | Reply                                                                              |
-| -------- | --------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------- |
-| `create` | `v`, `name`                       | The connection has no seat   | `welcome`                                                                          |
-| `join`   | `v`, `code`, `name`               | No seat; the room is a lobby | `welcome`; `room` to the others                                                    |
-| `rejoin` | `v`, `code`, `seatToken`          | No seat                      | `welcome`; `room` to the others                                                    |
-| `start`  |                                   | Host, in the lobby           | `room`, then `update` with `seq` 0, to everyone                                    |
-| `intent` | `clientActionId`, `seq`, `action` | Seated                       | `update` to everyone, or `rejected` to the sender                                  |
-| `sync`   |                                   | Seated                       | `snapshot`                                                                         |
-| `leave`  |                                   | Seated                       | `left`; `room` to the others                                                       |
-| `kick`   | `seat`                            | Host, lobby or game          | Lobby: `room`; game: `update` and `room`; the removed player gets `error` `kicked` |
+| Message   | Fields                            | Allowed when                 | Reply                                                                              |
+| --------- | --------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------- |
+| `create`  | `v`, `name`                       | The connection has no seat   | `welcome`                                                                          |
+| `join`    | `v`, `code`, `name`               | No seat; the room is a lobby | `welcome`; `room` to the others                                                    |
+| `rejoin`  | `v`, `code`, `seatToken`          | No seat                      | `welcome`; `room` to the others                                                    |
+| `start`   |                                   | Host, in the lobby           | `room`, then `update` with `seq` 0, to everyone                                    |
+| `intent`  | `clientActionId`, `seq`, `action` | Seated                       | `update` to everyone, or `rejected` to the sender                                  |
+| `sync`    |                                   | Seated                       | `snapshot`                                                                         |
+| `leave`   |                                   | Seated                       | `left`; `room` to the others                                                       |
+| `kick`    | `seat`                            | Host, lobby or game          | Lobby: `room`; game: `update` and `room`; the removed player gets `error` `kicked` |
+| `rematch` |                                   | Host, after the game         | `room` (status `lobby`) to everyone; refused with `game-not-finished` before that  |
 
 - `v` is the protocol version, currently `1`. The server refuses any other value with `unsupported-version`, so an old cached web client fails clearly instead of misbehaving.
 - `action` is an engine `Action` without `player`: `{ "type": "roll" }`, `{ "type": "move", "to": 57 }`, `{ "type": "placeShip", "dock": "start-left" }`, `{ "type": "buyUpgrade", "upgrade": "speed" }`, `{ "type": "useHelicopter" }`, `{ "type": "endTurn" }`. Clients pick one from `getLegalActions(content, view, seat)`.
@@ -104,6 +105,7 @@ Nobody can join a room once the game has started. There are no spectators yet.
 | `server-busy`          | No free room code could be found                                    |
 | `kicked`               | This player was removed from the room; the token no longer works    |
 | `cannot-kick`          | That seat cannot be removed (yourself, unknown, removed, game over) |
+| `game-not-finished`    | `rematch` while no game in this room has finished                   |
 | `server-error`         | The server hit an error handling this message (a bug); try again    |
 | `room-closed`          | The room hit a server error and was closed; the seat is gone        |
 
@@ -172,6 +174,13 @@ A seat is never freed during a game. The game is not paused for the other player
 - If the host is removed (after missed turns), the lowest remaining seat becomes host.
 - With one player left the game ends at once and they win (`result.reason` is `last-player`).
 - Only the host can kick (`not-host`); not themselves, an unknown or already removed seat, or after the game (`cannot-kick`).
+
+**Rematch** (B3; the protocol version stays 1: one new message and one new error code).
+
+- When a game has finished (`status: "finished"`), the host sends `rematch`. The room becomes a lobby again (`status: "lobby"`, one `room` message to everyone, `rev` + 1) and the game is gone: `snapshot` and `welcome` then carry `game: null`. Clients drop the old view, log and animation queue when they see it.
+- **Who comes along:** every seat that is connected and not removed keeps its seat, seat id and token. Removed seats and seats with no connection (away, left, or still inside a reconnect grace) are **dropped**: the seat is freed and its token stops working (`rejoin` answers `bad-token`). Their seat ids are free for new joiners (the lowest free number is used, as in any lobby).
+- The new game starts with the ordinary `start` (host, at least `minPlayers` players, nobody disconnected). `start` draws a fresh seed from the server, so the game, the decks and the awards are new. The reconnect budgets start full again.
+- Only the host can ask (`not-host`), and only after a game (`game-not-finished`). A saved room that is a lobby again restores as any lobby.
 
 **Reconnect grace and its budget.**
 
@@ -287,7 +296,7 @@ The web client can import the message types from `packages/server/src/protocol.t
 ## 10. Open items
 
 - No pause. A bot taking a removed player's place (the designer's option, once bots exist, B6).
-- No spectators (`redactForClient` already accepts `"spectator"`).
-- No rematch in the same room (Milestone B3).
+- Spectators would need a role in `RoomInfo` and views from `redactForClient(…, "spectator")`, which already exists.
+- No ready-up (decided 2026-11-15: the host alone starts a game). No spectators (decided 2026-11-15: later, not B3).
 - Rooms are saved only when the server is given a `RoomStore` (`ROOMS_DIR`); without one, a restart ends every game. A store for deployment (a database, if the host has no lasting disk or runs more than one server) is for B5.
 - The replay log is not offered to clients after the game.

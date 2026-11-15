@@ -9,6 +9,7 @@ import { loadBundledContent } from "./content";
 import { describeEvent } from "./describe";
 import {
   KICKED_NOTICE,
+  REMATCH_LINE,
   REPLACED_NOTICE,
   ROOM_CLOSED_NOTICE,
   awaySecondsLeft,
@@ -230,6 +231,78 @@ describe("three tabs (stage 6b)", () => {
     expect(visibleLog(ann.state().log, false)).toEqual(ann.state().log);
     // No game-over banner: the end of the game is the awards reveal.
     expect(ann.state().banner?.title).not.toBe("Game over");
+  });
+});
+
+describe("rematch (B3)", () => {
+  /** Two tabs play a whole game; returns them. */
+  function finishedGame() {
+    const t = table();
+    const ann = t.tab("a");
+    const bob = t.tab("b");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    ann.send({ type: "start" });
+    const bySeat: Record<string, typeof ann> = { p1: ann, p2: bob };
+    for (let i = 0; i < 3000; i++) {
+      const view = ann.state().game!.view;
+      if (view.phase.kind === "gameOver") break;
+      bySeat[view.phase.actors[0]!]!.actFirst();
+    }
+    expect(ann.state().game!.view.phase.kind).toBe("gameOver");
+    return { ...t, ann, bob };
+  }
+
+  it("empties the game, the animation queue and the held log lines on every tab, then plays a fresh game", () => {
+    const { ann, bob } = finishedGame();
+    for (const tab of [ann, bob]) {
+      expect(tab.state().anim.steps.length).toBeGreaterThan(0); // the reveal is still queued
+      expect(tab.state().log.some((l) => l.hold)).toBe(true);
+    }
+    ann.send({ type: "rematch" });
+    for (const tab of [ann, bob]) {
+      const st = tab.state();
+      expect(st.room!.status).toBe("lobby");
+      expect(st.game).toBeNull();
+      expect(st.turnDeadline).toBeNull();
+      expect(st.anim.steps).toEqual([]);
+      expect(st.anim.seq).toBeNull();
+      expect(st.banner).toBeNull();
+      expect(st.log.map((l) => l.text)).toEqual([REMATCH_LINE]);
+      expect(st.session).not.toBeNull();
+    }
+    ann.send({ type: "start" });
+    for (const tab of [ann, bob]) {
+      const st = tab.state();
+      expect(st.game!.seq).toBe(0);
+      expect(st.game!.view.result).toBeNull();
+      expect(st.log.some((l) => l.hold)).toBe(false);
+      expect(st.log.some((l) => l.text.startsWith("Game over"))).toBe(false);
+      // The new game queues its own steps, none of the old reveal.
+      expect(st.anim.steps.some((s) => s.step.kind === "award" || s.step.kind === "gameEnd")).toBe(
+        false,
+      );
+    }
+  });
+
+  it("a tab that missed the room message is put right by a snapshot", () => {
+    const { ann, bob } = finishedGame();
+    const stale = bob.state();
+    ann.send({ type: "rematch" });
+    const room = ann.state().room!;
+    const next = onServerMessage(stale, { type: "snapshot", room, game: null }, ctx);
+    expect(next.game).toBeNull();
+    expect(next.room!.status).toBe("lobby");
+    expect(next.anim.steps).toEqual([]);
+    expect(next.log.map((l) => l.text)).toEqual([REMATCH_LINE]);
+  });
+
+  it("a non-host asking is refused and changes nothing", () => {
+    const { ann, bob } = finishedGame();
+    bob.send({ type: "rematch" });
+    expect(bob.state().notice).toMatch(/host/);
+    expect(bob.state().game).not.toBeNull();
+    expect(ann.state().room!.status).toBe("finished");
   });
 });
 
