@@ -1,7 +1,7 @@
 # Art
 
 Source art, 2250x1650 for cards, 1500x1500 for tokens. Renamed from the original Drive zips.
-Cards and backs are for Milestone B (real UI); Milestone A doesn't use them.
+These are the sources. The web client uses the small copies in `../web/`, made by `pnpm art:web` (`scripts/make-web-art.mjs`); do not import from here.
 
 - `cards/safe-risk/` — Safe and Risk deck faces (Boot, +1/+2/+3 fish, fines, big fish, Shark, Sinking Boat)
 - `cards/event/` — Event deck faces (Golden Fish per fishing spot and +1 Catch per zone, movement, Helicopter, Shark Repellent, Tsunami)
