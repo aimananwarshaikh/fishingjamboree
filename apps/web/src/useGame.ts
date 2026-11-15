@@ -99,6 +99,13 @@ function makeContext(content: Content): Context {
     cardName: (card) => content.cards.cards[card]?.name ?? card,
     rounds: content.rules.rounds,
     now: () => Date.now(),
+    reducedMotion: () => {
+      try {
+        return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      } catch {
+        return false;
+      }
+    },
     describe: (events, room) => {
       const name = (p: string) => room?.seats.find((s) => s.seat === p)?.name ?? p;
       return events

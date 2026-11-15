@@ -119,13 +119,36 @@ button:disabled {
 }
 .table > .board-wrap {
   grid-area: board;
+  position: relative;
+}
+/* B2a's plain caption for the step playing; B2b replaces it. Never blocks clicks. */
+.step-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(10, 25, 40, 0.85);
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+  animation: step-in 0.15s ease-out;
+}
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
 }
 .table > aside {
   grid-area: side;
 }
 @media (min-width: 800px) {
   .table {
-    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
     grid-template-areas: "board status" "board side";
     grid-template-rows: auto 1fr;
     align-items: start;
@@ -138,25 +161,31 @@ button:disabled {
   border-radius: 8px;
   background: #0b1f2d;
 }
-.board .tile-label {
-  font-size: 13px;
-  font-weight: 700;
-  fill: #fff;
-  pointer-events: none;
-}
-.board .tile-label.dim {
-  fill: #6b5a2d;
-}
+/* Sizes below are in board-art pixels (a tile is about 98). */
 .board .ship-label {
-  font-size: 12px;
+  font-size: 34px;
   font-weight: 700;
   fill: #000;
 }
 .board .target {
-  fill: rgba(255, 235, 59, 0.45);
+  fill: rgba(255, 235, 59, 0.4);
   stroke: #ffeb3b;
-  stroke-width: 2;
+  stroke-width: 6;
   cursor: pointer;
+  animation: target-pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes target-pulse {
+  from {
+    fill-opacity: 0.25;
+  }
+  to {
+    fill-opacity: 0.6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board .target {
+    animation: none;
+  }
 }
 .round .bar {
   position: relative;

@@ -10,6 +10,7 @@ import type {
   UpgradeId,
 } from "@fishingjamboree/engine";
 import type { SeatInfo } from "../../../packages/server/src/protocol";
+import type { AnimStep } from "./animation";
 
 export type NameOf = (player: PlayerId) => string;
 
@@ -189,4 +190,63 @@ export function seatStatus(
   if (!seat || seat.connected) return null;
   if (seat.away) return "away: their turns are missed until they come back";
   return secondsLeft === null ? "disconnected" : `disconnected: ${secondsLeft} s to come back`;
+}
+
+/**
+ * A caption for an animation step, for the plain overlay B2a shows over the
+ * board while the step plays (B2b replaces it with the dice, card, fish, fine
+ * and award components). `null` for steps the board itself shows (ships
+ * sailing, appearing, towed) and for round and event steps (the banner).
+ */
+export function stepCaption(step: AnimStep, content: Content, name: NameOf): string | null {
+  const card = (id: string) => content.cards.cards[id]?.name ?? id;
+  switch (step.kind) {
+    case "place":
+    case "move":
+    case "relocate":
+    case "round":
+    case "event":
+      return null;
+    case "dice": {
+      const r = step.roll;
+      const bonus = r.speedBonus + r.eventModifier;
+      return `${name(step.player)} rolls ${r.die}${bonus ? ` (${bonus > 0 ? "+" : "-"}${Math.abs(bonus)}) = ${r.steps}` : ""}`;
+    }
+    case "card":
+      return `${name(step.player)} draws ${card(step.card)}`;
+    case "fish":
+      return `${name(step.player)}: +${fishList(step.kept)}${step.lost.length ? `, ${fishList(step.lost)} lost (full)` : ""}`;
+    case "fishLost":
+      return `${name(step.player)} loses ${fishList(step.fish)}`;
+    case "repelled":
+      return `${name(step.player)} repels the shark`;
+    case "fine":
+      return `${name(step.player)} is fined ${money(step.amount)}`;
+    case "sale":
+      return `${name(step.player)} sells for ${money(step.total)}`;
+    case "tokensPaid":
+      return `${name(step.player)} pays off ${step.tokens} fine token(s)`;
+    case "upgrade":
+      return `${name(step.player)} buys the ${step.upgrade} upgrade`;
+    case "helicopter":
+      return `${name(step.player)} calls the helicopter`;
+    case "goldenFish":
+      switch (step.what) {
+        case "placed":
+          return `A Golden Fish (${money(step.fish.value)}) appears`;
+        case "taken":
+          return `${name(step.player ?? "")} catches the Golden Fish`;
+        case "lost":
+          return `The Golden Fish is lost`;
+        case "removed":
+          return `The Golden Fish is gone`;
+      }
+      return null;
+    case "removed":
+      return `${name(step.player)} leaves the game`;
+    case "award":
+      return describeEvent({ type: "awardGiven", ...step.award }, content, name);
+    case "gameEnd":
+      return "Game over";
+  }
 }

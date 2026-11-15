@@ -3,6 +3,8 @@
  * Pure functions, so the rules for `seq` and `rev` can be tested without a socket.
  */
 import type { GameEvent } from "@fishingjamboree/engine";
+import { emptyQueue, enqueueUpdate, resetQueue } from "./animation";
+import type { AnimQueue } from "./animation";
 import type {
   GameSnapshot,
   RoomInfo,
@@ -52,6 +54,12 @@ export interface ClientState {
   turnDeadline: number | null;
   /** When `room` arrived, on this tab's clock: its seats' `awayInMs` count from here. */
   roomAt: number;
+  /**
+   * What is still to animate (animation.ts). Filled from each update's events;
+   * emptied by anything that brings a view without its events (welcome, a
+   * snapshot), so the board then shows the view as it is.
+   */
+  anim: AnimQueue;
 }
 
 export const initialState: ClientState = {
@@ -67,6 +75,7 @@ export const initialState: ClientState = {
   banner: null,
   turnDeadline: null,
   roomAt: 0,
+  anim: emptyQueue,
 };
 
 export interface Context {
@@ -78,8 +87,10 @@ export interface Context {
   cardName?: (card: string) => string;
   /** Rounds in a game, for "Round 6 of 20". */
   rounds?: number;
-  /** This tab's clock in milliseconds, for the server's countdowns. Defaults to 0. */
+  /** This tab's clock in milliseconds, for the server's countdowns and animations. Defaults to 0. */
   now?: () => number;
+  /** The player asked for reduced motion: only the awards reveal plays. */
+  reducedMotion?: () => boolean;
 }
 
 /** A countdown from the server (milliseconds left when it was sent) as a time on this tab's clock. */
@@ -190,6 +201,7 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
         // A rejoin returns the current game; take it whole.
         game: msg.game,
         turnDeadline: deadline(msg.game?.turnTimeLeftMs, ctx),
+        anim: resetQueue(state.anim, msg.game?.seq ?? null),
         pending: null,
         needsSync: false,
         notice: null,
@@ -215,6 +227,15 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
         ...state,
         game: { seq: msg.seq, view: msg.view, turnTimeLeftMs: msg.turnTimeLeftMs },
         turnDeadline: deadline(msg.turnTimeLeftMs, ctx),
+        anim: enqueueUpdate(
+          state.anim,
+          { seq: msg.seq, events: msg.events, before: state.game?.view ?? null },
+          ctx.now?.() ?? 0,
+          {
+            reducedMotion: ctx.reducedMotion?.() ?? false,
+            myTurn: state.session !== null && msg.view.phase.actors.includes(state.session.seat),
+          },
+        ),
         log: addLog(state, texts, "event"),
         pending: null,
         notice: null,
@@ -229,6 +250,7 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
         ...takeRoom(state, state.room, msg.room, ctx),
         game: take ? msg.game : state.game,
         turnDeadline: take ? deadline(msg.game?.turnTimeLeftMs, ctx) : state.turnDeadline,
+        anim: take ? resetQueue(state.anim, msg.game?.seq ?? null) : state.anim,
         needsSync: false,
         pending: null,
       };

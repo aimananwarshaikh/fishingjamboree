@@ -367,3 +367,40 @@ All items were decided by the designer on 2026-11-11 and are logged in `docs/rul
 | 30  | Sinking Boat shop timing           | On arrival only.                                                                                                                                                     | Decided |
 
 Dropped from the kickoff seed list: "a fine when docked" (docking draws no card) and "fish on a docked ship during Helicopter" (docking already sold them).
+
+## 13. Web client (B2a)
+
+`apps/web/src`. React for drawing only; everything with rules in it is a pure module with tests.
+
+| Module                 | What it holds                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `connection.ts`        | The socket, rejoin backoff, saved seats (no React).                                                                               |
+| `store.ts`             | `ClientState` and `onServerMessage`: the `seq`/`rev` rules, countdowns, the log, banners, and the animation queue (`state.anim`). |
+| `animation.ts`         | The animation queue: events → steps → a timed queue → a frame for any time. Pure; the tab's clock is passed in.                   |
+| `boardArt.ts`          | Where `content/board.json`'s tiles sit on `assets/board/board.webp`, the view box, click targets, where ships are drawn.          |
+| `describe.ts`          | Text: log lines, button labels, and `stepCaption` (B2a's plain caption for the step playing).                                     |
+| `Board.tsx`, `App.tsx` | Drawing. `useFrame` (in `App.tsx`) redraws on `requestAnimationFrame` while the queue has steps, then stops.                      |
+
+### The board
+
+The art is drawn as an SVG `<image>` in its own pixel space (1378×1969; the 8×20 grid starts at x = 293, a tile is 98.45 px). The whole art is shown, edge to edge (decided 2026-11-15: an earlier crop of the round track cut the scenery on both sides and looked unfinished). The printed round track on the left stays visible as decoration until the designer's PNG without it arrives (question 7); then only the file and, if its size differs, the numbers in `ART` change. On desktop the board column is 560 px wide (a tile about 40 px); on a 390 px phone a tile is about 26 px, under the 44 px touch size, which is for B4 (zoom). Tiles are not drawn: only click targets (move destinations, starting docks), ships and the Golden Fish go on top. Ships at rest on one tile go in its corners.
+
+### The animation queue
+
+- Each `update`'s events become **steps** (`eventsToSteps`): `place`, `dice`, `move` (with the path), `relocate`, `card`, `fish`, `fishLost`, `repelled`, `fine`, `sale`, `tokensPaid`, `upgrade`, `helicopter`, `goldenFish` (placed/taken/lost/removed), `removed`, `round`, `event`, `award`, `gameEnd`. Log-only events (turn started, docked, reshuffled...) make none.
+- `enqueueUpdate` gives each step a start and end on the tab's clock, after what is still playing (`DURATION`, a `move` is per tile). `frameAt(queue, view, now)` returns the step playing and its progress, every ship's pose (on a tile, or part way between two) and the Golden Fish.
+- **The view is the truth.** The queue only holds ships and the Golden Fish back at their old places until their step plays; cash, fish counts, the turn text and the buttons always show the view. Anything that brings a view without its events (`welcome` after a refresh or rejoin, a `snapshot` after `sync`) resets the queue, and an update with a gap queues nothing. So a refresh, a rejoin or a sync never replays or loses anything: the board simply shows the view.
+- **Behind:** steps not yet started are shortened so everything has played within `MAX_LAG_MS` (4 s) of the newest update; when the update makes it this tab's player's decision, within `MY_TURN_LAG_MS` (1.5 s). More than `SKIP_LAG_MS` (15 s) behind, or a step under `MIN_SPEED` of its length, is skipped. A hidden tab gets no frames and needs none: steps are on the clock, so they are over when it comes back.
+- **The awards reveal is never shortened or skipped** (`award`, `gameEnd`). It only happens in the last update, when no turn timer runs.
+- `prefers-reduced-motion`: nothing plays but the awards reveal.
+
+### Turn timer and animations (review "For B2")
+
+The next player's 90 s start in the same update as the previous player's last action. B2a handles this in the client, with no server or protocol change: the update that hands a player the turn catches their animations up to 1.5 s, and the buttons and board targets are live at once (a player can act before an animation ends). So the most an animation costs a player is 1.5 s of 90 s, and the others see the same steps at a calmer pace (up to 4 s). The awards reveal, the one long sequence, comes after the last turn. If playtests (B7) show this is not enough, the server can add a fixed allowance to the timer after an update with long steps; that would be a protocol and rule change for the designer.
+
+### Where B2b plugs in
+
+- **Step components.** One component per step kind, chosen by `frame.current.step.kind`, drawn over the board in place of `StepOverlay` (`App.tsx`), with `frame.current.progress` (0–1) to drive it: dice face (`dice`: `roll.die`, bonuses), card face and back (`card`: `deck`, `card`; `event`: the event card), fish and fine tokens (`fish`, `fishLost`, `fine`, `tokensPaid`, `goldenFish`), money (`sale`, `upgrade`, `helicopter`). Keep `key={frame.current.id}` so each step mounts fresh. Steps the board shows (`move`, `place`, `relocate`, `removed`) need nothing.
+- **Round banner and "Round N/20" bar.** From the `round` and `event` steps (or keep `bannerFor` in `store.ts`, which already gives the round, event and game-over banners per update).
+- **Golden Hook Awards reveal.** The `award` steps, one per award, 3 s each, then `gameEnd`; each carries the whole `AwardResult` (`award`, `amount`, `value`, `qualified`, `winners`); names and text from `content.awards`. Show the result table only once `frame.current` is past the last `award` (or nothing is queued: a refresh after the end shows the result at once). Lengths are in `DURATION`; change them there, not in components.
+- **Art.** The sources are large (cards 2250×1650, tokens 1500×1500; 34 MB in all). Make web copies once, in `assets/web/` (checked in, built by a script, not by Vite): cards at 450×330 WebP (and 900×660 for 2×), tokens at 160×160 (320×320), money at 400 px wide; about 30–60 KB each. Import them from components so Vite fingerprints them.
