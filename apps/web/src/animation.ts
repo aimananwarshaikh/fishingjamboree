@@ -351,6 +351,12 @@ export interface Frame {
   goldenFish: GoldenFishState | null;
   /** Something is still to play: keep drawing frames. */
   busy: boolean;
+  /**
+   * An award or the game-over step is still to play or playing. `view.result`
+   * comes with the last update, before the reveal; the UI holds the result
+   * table (and the log lines that give the awards away) until this is false.
+   */
+  revealing: boolean;
 }
 
 const still = (tile: TileId): ShipPose => ({ tile, to: null, t: 0, opacity: 1 });
@@ -424,6 +430,7 @@ export function frameAt(queue: AnimQueue, view: PlayerView, now: number): Frame 
     ships,
     goldenFish,
     busy: open.length > 0,
+    revealing: open.some((s) => s.step.kind === "award" || s.step.kind === "gameEnd"),
   };
 }
 

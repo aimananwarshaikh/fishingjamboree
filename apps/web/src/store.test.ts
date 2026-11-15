@@ -17,6 +17,7 @@ import {
   intentSent,
   onServerMessage,
   turnSecondsLeft,
+  visibleLog,
 } from "./store";
 import type { ClientState, Context } from "./store";
 import { MY_TURN_LAG_MS } from "./animation";
@@ -220,8 +221,15 @@ describe("three tabs (stage 6b)", () => {
     const log = ann.state().log.map((l) => l.text);
     expect(log.some((t) => t.startsWith("Cy") && t.endsWith("(auto)"))).toBe(true);
     expect(log.some((t) => t.startsWith("Bob") && t.endsWith("(auto)"))).toBe(false);
-    // The last update showed the game-over banner.
-    expect(ann.state().banner?.title).toBe("Game over");
+    // The lines that give the end away wait for the reveal: held, and hidden while it plays.
+    const held = ann.state().log.filter((l) => l.hold);
+    expect(held.length).toBeGreaterThan(0);
+    expect(held.every((l) => /^(Golden Hook|Game over)/.test(l.text))).toBe(true);
+    expect(visibleLog(ann.state().log, true).some((l) => l.hold)).toBe(false);
+    expect(visibleLog(ann.state().log, true).length).toBe(ann.state().log.length - held.length);
+    expect(visibleLog(ann.state().log, false)).toEqual(ann.state().log);
+    // No game-over banner: the end of the game is the awards reveal.
+    expect(ann.state().banner?.title).not.toBe("Game over");
   });
 });
 
@@ -453,7 +461,7 @@ describe("animation queue in the store (B2a)", () => {
 });
 
 describe("banners", () => {
-  it("round start, event card and game over", () => {
+  it("round start and event card; no game-over banner (the reveal is the end)", () => {
     const round: GameEvent = { type: "roundStarted", round: 6 } as GameEvent;
     expect(bannerFor([round], ctx, 0)).toEqual({ id: 1, title: "Round 6 of 20", detail: null });
     const drawn = { type: "eventDrawn", afterRound: 5, card: "helicopter" } as unknown as GameEvent;
@@ -463,7 +471,7 @@ describe("banners", () => {
       detail: "Event: Helicopter",
     });
     const ended = { type: "gameEnded" } as unknown as GameEvent;
-    expect(bannerFor([ended], ctx, 1)?.title).toBe("Game over");
+    expect(bannerFor([ended], ctx, 1)).toBeNull();
     expect(bannerFor([{ type: "turnEnded" } as unknown as GameEvent], ctx, 1)).toBeNull();
   });
 });

@@ -22,6 +22,13 @@ export interface LogLine {
   id: number;
   text: string;
   kind: "event" | "info" | "error";
+  /** Gives the end of the game away (an award, the winner): shown only after the reveal has played. */
+  hold?: boolean;
+}
+
+/** The log lines to show: those that spoil the awards reveal wait until it is over. */
+export function visibleLog(log: LogLine[], revealing: boolean): LogLine[] {
+  return revealing ? log.filter((l) => !l.hold) : log;
 }
 
 export type Connection = "idle" | "connecting" | "open" | "closed";
@@ -115,7 +122,12 @@ export function awaySecondsLeft(state: ClientState, seat: SeatId, now: number): 
   return secondsUntil(state.roomAt + info.awayInMs, now);
 }
 
-/** The banner for an update's events, or `null` if none of them deserve one. */
+/**
+ * The banner for an update's events, or `null` if none of them deserve one.
+ * Only used when the player asked for reduced motion; otherwise the `round`
+ * and `event` steps draw the banner and the card on the animation clock.
+ * No game-over banner: the end of the game is the awards reveal.
+ */
 export function bannerFor(events: GameEvent[], ctx: Context, lastId: number): Banner | null {
   const cardName = ctx.cardName ?? ((c: string) => c);
   let title: string | null = null;
@@ -126,9 +138,6 @@ export function bannerFor(events: GameEvent[], ctx: Context, lastId: number): Ba
     } else if (e.type === "eventDrawn") {
       detail = `Event: ${cardName(e.card)}`;
       title ??= `After round ${e.afterRound}`;
-    } else if (e.type === "gameEnded") {
-      title = "Game over";
-      detail = null;
     }
   }
   return title === null ? null : { id: lastId + 1, title, detail };
@@ -136,10 +145,20 @@ export function bannerFor(events: GameEvent[], ctx: Context, lastId: number): Ba
 
 const MAX_LOG = 300;
 
-function addLog(state: ClientState, texts: string[], kind: LogLine["kind"]): LogLine[] {
+function addLog(
+  state: ClientState,
+  texts: string[],
+  kind: LogLine["kind"],
+  held: boolean[] = [],
+): LogLine[] {
   if (texts.length === 0) return state.log;
   const last = state.log[state.log.length - 1]?.id ?? 0;
-  const added = texts.map((text, i) => ({ id: last + i + 1, text, kind }));
+  const added = texts.map((text, i) => ({
+    id: last + i + 1,
+    text,
+    kind,
+    ...(held[i] ? { hold: true } : {}),
+  }));
   return [...state.log, ...added].slice(-MAX_LOG);
 }
 
@@ -218,11 +237,16 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       // What the server did for an away player is marked in the log. Only that
       // player's events: the same update can also hold a round start or another
       // player's forced move.
-      const texts = msg.events.flatMap((e) => {
+      const texts: string[] = [];
+      const held: boolean[] = [];
+      for (const e of msg.events) {
         const lines = ctx.describe([e], state.room);
         const theirs = msg.auto && "player" in e && e.player === msg.by;
-        return theirs ? lines.map((t) => `${t} (auto)`) : lines;
-      });
+        for (const t of lines) {
+          texts.push(theirs ? `${t} (auto)` : t);
+          held.push(e.type === "awardGiven" || e.type === "gameEnded");
+        }
+      }
       return {
         ...state,
         game: { seq: msg.seq, view: msg.view, turnTimeLeftMs: msg.turnTimeLeftMs },
@@ -236,7 +260,7 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
             myTurn: state.session !== null && msg.view.phase.actors.includes(state.session.seat),
           },
         ),
-        log: addLog(state, texts, "event"),
+        log: addLog(state, texts, "event", held),
         pending: null,
         notice: null,
         banner: bannerFor(msg.events, ctx, state.banner?.id ?? 0) ?? state.banner,

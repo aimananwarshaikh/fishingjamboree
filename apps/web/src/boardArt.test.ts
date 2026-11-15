@@ -85,6 +85,7 @@ describe("shipMarks", () => {
     ships: new Map(ships),
     goldenFish: null,
     busy: false,
+    revealing: false,
   });
 
   it("draws every ship in the frame, sharing a tile at rest", () => {

@@ -18,13 +18,15 @@
     "dev:server": "pnpm --filter @fishingjamboree/server dev",
     "start:server": "pnpm --filter @fishingjamboree/server start",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "board:render": "node scripts/render-board.mjs"
+    "board:render": "node scripts/render-board.mjs",
+    "art:web": "node scripts/make-web-art.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.3.0",
+    "sharp": "^0.35.5",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^3.0.0"

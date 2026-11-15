@@ -319,6 +319,47 @@ describe("enqueueUpdate: timing", () => {
     expect(q.steps.some((s) => s.step.kind === "move")).toBe(false);
   });
 
+  it("holds the result back until the last award and the game-over step are over", () => {
+    const last = games[0]![games[0]!.length - 1]!;
+    const q = enqueueUpdate(resetQueue(emptyQueue, 0), update(1, last.events, last.before), 0, {});
+    const reveal = q.steps.filter((s) => s.step.kind === "award" || s.step.kind === "gameEnd");
+    expect(reveal.length).toBeGreaterThan(1);
+    const end = Math.max(...reveal.map((s) => s.end));
+    // The view already has the result when the update arrives.
+    expect(last.view.result).not.toBeNull();
+    expect(frameAt(q, last.view, 0).revealing).toBe(true);
+    // During every award, and in the gap before the first one starts.
+    for (const s of reveal)
+      expect(frameAt(q, last.view, (s.start + s.end) / 2).revealing).toBe(true);
+    expect(frameAt(q, last.view, end - 1).revealing).toBe(true);
+    expect(frameAt(q, last.view, end).revealing).toBe(false);
+    expect(frameAt(q, last.view, end + 60_000).revealing).toBe(false);
+  });
+
+  it("does not hold anything back after a refresh or in an ordinary turn", () => {
+    const last = games[0]![games[0]!.length - 1]!;
+    // A refresh after the end: no queue, the result shows at once.
+    expect(frameAt(resetQueue(emptyQueue, last.seq), last.view, 0).revealing).toBe(false);
+    // An ordinary update: steps play, but there is nothing to reveal.
+    const u = games[0]![3]!;
+    const q = enqueueUpdate(
+      resetQueue(emptyQueue, u.seq - 1),
+      update(u.seq, u.events, u.before),
+      0,
+      {},
+    );
+    expect(frameAt(q, u.view, 0).revealing).toBe(false);
+  });
+
+  it("with reduced motion the reveal is still held until it has played", () => {
+    const last = games[0]![games[0]!.length - 1]!;
+    const q = enqueueUpdate(resetQueue(emptyQueue, 0), update(1, last.events, last.before), 0, {
+      reducedMotion: true,
+    });
+    expect(frameAt(q, last.view, 10).revealing).toBe(true);
+    expect(frameAt(q, last.view, queueEnd(q)!).revealing).toBe(false);
+  });
+
   it("plays only the awards with reduced motion", () => {
     const last = games[0]![games[0]!.length - 1]!;
     const q = enqueueUpdate(

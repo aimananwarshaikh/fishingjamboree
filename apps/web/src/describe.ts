@@ -1,5 +1,6 @@
 /** Plain-English text for events and actions. No React, so it can be tested. */
 import type {
+  AwardResult,
   Content,
   GameEvent,
   Money,
@@ -134,6 +135,28 @@ export function describeEvent(ev: GameEvent, content: Content, name: NameOf): st
   }
 }
 
+/**
+ * One award as the reveal and the result show it: who won and what it paid.
+ * `paid` is `false` when players qualified but nobody is paid (all of them were
+ * removed or missed their last turn), and when nobody qualified.
+ */
+export function awardOutcome(
+  award: AwardResult,
+  name: NameOf,
+): { who: string; amount: Money | null; note: string | null } {
+  if (award.winners.length > 0) {
+    return { who: award.winners.map(name).join(" and "), amount: award.amount, note: null };
+  }
+  if (award.qualified.length > 0) {
+    return {
+      who: award.qualified.map(name).join(" and "),
+      amount: null,
+      note: "not paid (not in the game at the end)",
+    };
+  }
+  return { who: "Nobody", amount: null, note: null };
+}
+
 /** Label for an action button. */
 export function describeAction(action: PlayerAction, content: Content): string {
   switch (action.type) {
@@ -215,7 +238,13 @@ export function stepCaption(step: AnimStep, content: Content, name: NameOf): str
     case "card":
       return `${name(step.player)} draws ${card(step.card)}`;
     case "fish":
-      return `${name(step.player)}: +${fishList(step.kept)}${step.lost.length ? `, ${fishList(step.lost)} lost (full)` : ""}`;
+      return [
+        step.kept.length > 0 ? `+${fishList(step.kept)}` : null,
+        step.lost.length > 0 ? `${fishList(step.lost)} lost (full)` : null,
+      ].reduce<string>(
+        (text, part) => (part ? `${text}${text.endsWith(":") ? " " : ", "}${part}` : text),
+        `${name(step.player)}:`,
+      );
     case "fishLost":
       return `${name(step.player)} loses ${fishList(step.fish)}`;
     case "repelled":
