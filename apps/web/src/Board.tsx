@@ -33,7 +33,7 @@ export function Board({ content, view, frame, legal, names, onAction }: Props) {
   const { board } = content;
   const targets = boardTargets(content, legal);
   const actor = view.phase.actors[0];
-  const box = viewBox(board.width);
+  const box = viewBox();
   const fish = frame.goldenFish;
   const fishTile = fish ? board.tiles[fish.tile] : null;
 

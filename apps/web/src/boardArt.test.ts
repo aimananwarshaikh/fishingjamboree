@@ -30,14 +30,10 @@ describe("board art geometry", () => {
     expect(ART.originX + board.width * ART.tile).toBeLessThanOrEqual(ART.width);
   });
 
-  it("crops the printed round track off and keeps the whole grid", () => {
-    const box = viewBox(board.width);
-    // The track's circles end near x = 110 on the art.
-    expect(box.x).toBeGreaterThan(110);
-    expect(box.x).toBeLessThanOrEqual(ART.originX);
-    expect(box.x + box.width).toBeGreaterThanOrEqual(ART.originX + board.width * ART.tile);
-    expect(box.x + box.width).toBeLessThanOrEqual(ART.width);
-    expect(box.height).toBe(ART.height);
+  it("shows the whole art, with the whole grid inside it", () => {
+    const box = viewBox();
+    expect(box).toEqual({ x: 0, y: 0, width: ART.width, height: ART.height });
+    expect(ART.originX + board.width * ART.tile).toBeLessThanOrEqual(box.width);
   });
 
   it("places tiles on the grid", () => {

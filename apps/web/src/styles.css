@@ -148,7 +148,7 @@ button:disabled {
 }
 @media (min-width: 800px) {
   .table {
-    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
     grid-template-areas: "board status" "board side";
     grid-template-rows: auto 1fr;
     align-items: start;

@@ -4,11 +4,10 @@
  * scripts/render-board.mjs, which draws the trace over the art to check it.
  *
  * The art is 1378x1969. The 8x20 grid starts at x = 293 and fills the height,
- * so a tile is 1969 / 20 = 98.45 px. The printed round track is the strip on
- * the left (its circles end near x = 110). The digital board hides it (decided
- * 2026-11-12): until the designer's PNG without that layer arrives (question 7
- * in docs/next-steps.md), the view box crops it off and keeps a margin of art
- * either side of the grid.
+ * so a tile is 1969 / 20 = 98.45 px. The whole art is shown, edge to edge
+ * (2026-11-15: a crop cut the scenery on both sides). The printed round track
+ * on the left stays visible until the designer's PNG without that layer arrives
+ * (question 7 in docs/next-steps.md); it is decoration only.
  */
 import type { Action, Content, PlayerId, TileId } from "@fishingjamboree/engine";
 import type { Frame, ShipPose } from "./animation";
@@ -21,19 +20,9 @@ export const ART = {
   tile: 1969 / 20,
 } as const;
 
-/** Art kept either side of the grid, in art pixels. */
-export const MARGIN_X = 50;
-
-/** The part of the art shown: the grid plus a margin, round track cropped off. */
-export function viewBox(boardWidth: number): {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-} {
-  const x = Math.max(0, ART.originX - MARGIN_X);
-  const right = Math.min(ART.width, ART.originX + boardWidth * ART.tile + MARGIN_X);
-  return { x, y: 0, width: right - x, height: ART.height };
+/** The part of the art shown: all of it. */
+export function viewBox(): { x: number; y: number; width: number; height: number } {
+  return { x: 0, y: 0, width: ART.width, height: ART.height };
 }
 
 /** Top-left corner of tile (x, y), in art pixels. */

@@ -377,13 +377,13 @@ Dropped from the kickoff seed list: "a fine when docked" (docking draws no card)
 | `connection.ts`        | The socket, rejoin backoff, saved seats (no React).                                                                               |
 | `store.ts`             | `ClientState` and `onServerMessage`: the `seq`/`rev` rules, countdowns, the log, banners, and the animation queue (`state.anim`). |
 | `animation.ts`         | The animation queue: events → steps → a timed queue → a frame for any time. Pure; the tab's clock is passed in.                   |
-| `boardArt.ts`          | Where `content/board.json`'s tiles sit on `assets/board/board.webp`, the crop, click targets, where ships are drawn.              |
+| `boardArt.ts`          | Where `content/board.json`'s tiles sit on `assets/board/board.webp`, the view box, click targets, where ships are drawn.          |
 | `describe.ts`          | Text: log lines, button labels, and `stepCaption` (B2a's plain caption for the step playing).                                     |
 | `Board.tsx`, `App.tsx` | Drawing. `useFrame` (in `App.tsx`) redraws on `requestAnimationFrame` while the queue has steps, then stops.                      |
 
 ### The board
 
-The art is drawn as an SVG `<image>` in its own pixel space (1378×1969; the 8×20 grid starts at x = 293, a tile is 98.45 px). The view box crops the printed round track off the left and keeps 50 px of art either side of the grid. When the designer's PNG without the track arrives (question 7), only the file and, if its size differs, the numbers in `ART` change; `boardArt.test.ts` checks the crop. Tiles are not drawn: only click targets (move destinations, starting docks), ships and the Golden Fish go on top. Ships at rest on one tile go in its corners.
+The art is drawn as an SVG `<image>` in its own pixel space (1378×1969; the 8×20 grid starts at x = 293, a tile is 98.45 px). The whole art is shown, edge to edge (decided 2026-11-15: an earlier crop of the round track cut the scenery on both sides and looked unfinished). The printed round track on the left stays visible as decoration until the designer's PNG without it arrives (question 7); then only the file and, if its size differs, the numbers in `ART` change. On desktop the board column is 560 px wide (a tile about 40 px); on a 390 px phone a tile is about 26 px, under the 44 px touch size, which is for B4 (zoom). Tiles are not drawn: only click targets (move destinations, starting docks), ships and the Golden Fish go on top. Ships at rest on one tile go in its corners.
 
 ### The animation queue
 
