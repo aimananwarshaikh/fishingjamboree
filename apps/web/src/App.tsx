@@ -3,6 +3,8 @@ import { getLegalActions } from "@fishingjamboree/engine";
 import type { Action, Content, PlayerView, UpgradeId } from "@fishingjamboree/engine";
 import type { RoomInfo, SeatInfo } from "../../../packages/server/src/protocol";
 import { Board, playerColor } from "./Board";
+import { useBoardZoom, ZoomTools } from "./BoardZoom";
+import { boardTargets, tileCentre } from "./boardArt";
 import { awardOutcome, describeAction, phaseTask, seatStatus, upgradeText } from "./describe";
 import { StepView } from "./StepViews";
 import { roundBar } from "./stepView";
@@ -380,6 +382,32 @@ function TurnStatus(props: {
   );
 }
 
+/** What the board zoom needs from the game: my ship, the tiles I can tap, and when to re-aim. */
+function zoomInput(view: PlayerView, me: string, legal: Action[]) {
+  const tile = view.players.find((p) => p.id === me)?.position ?? null;
+  const t = tile === null ? null : content.board.tiles[tile];
+  const centre = (x: number, y: number) => tileCentre(x, y);
+  const targets = [...boardTargets(content as Content, legal).keys()].flatMap((id) => {
+    const tt = content.board.tiles[id];
+    return tt ? [centre(tt.x, tt.y)] : [];
+  });
+  const myDecision = view.phase.kind !== "gameOver" && view.phase.actors[0] === me;
+  const sig = [
+    view.round,
+    view.phase.kind,
+    view.phase.actors[0] ?? "",
+    tile ?? "off",
+    targets.length,
+  ].join(":");
+  return {
+    ship: t ? centre(t.x, t.y) : null,
+    targets,
+    myDecision,
+    signature: sig,
+    reducedMotion: prefersReducedMotion(),
+  };
+}
+
 function Table(props: {
   state: ClientState;
   room: RoomInfo;
@@ -412,12 +440,15 @@ function Table(props: {
   const mine = view.players.find((p) => p.id === me);
   const shopping = view.phase.kind === "dockShop" && view.phase.actors[0] === me;
   const frame = useFrame(state.anim, view);
+  const zoom = useBoardZoom(zoomInput(view, me, legal));
 
   return (
     <div className="table" data-seq={state.game!.seq} data-me={me}>
       <RoundBar round={view.round} rounds={rounds} eventAfter={content.rules.eventAfterRounds} />
       <section className="board-wrap" data-animating={frame.busy ? "yes" : "no"}>
+        <ZoomTools zoom={zoom} />
         <Board
+          zoom={zoom}
           content={content}
           view={view}
           frame={frame}

@@ -15,6 +15,7 @@
  *   SEED         default "playtest" (picks among the offered choices)
  *   GRACE=1      also close a tab and wait out the reconnect grace (60 s by default)
  *   HEADED=1     show the browser
+ *   SHOT_DIR     folder for 390 px pictures of the shop, the Helicopter button and a move (layout review)
  *
  * Besides the game it also checks: a refresh mid-game keeps the seat, a double
  * click on a button is quiet, a 4th player can join a lobby, and a phone-width
@@ -114,9 +115,57 @@ async function waitAllSeq(pages, seq, timeout = 15000) {
 /** What this page offers: enabled action buttons and board targets. */
 async function offers(page) {
   const buttons = await page.locator(".actions button:not([disabled])").all();
-  const targets = await page.locator("svg.board .target").all();
+  let targets = await page.locator("svg.board .target").all();
+  if (targets.length > 0 && (await page.locator('svg.board[data-zoomed="yes"]').count()) > 0) {
+    // Zoomed (B4): a target outside the shown part cannot be tapped. If none is
+    // inside, go back to the whole board, as a player would.
+    let inside = await reachableTargets(page);
+    if (inside.length === 0) {
+      await page.locator('[data-zoom="fit"]').click();
+      await page.waitForTimeout(400);
+      inside = await reachableTargets(page);
+      zoomStats.fellBackToFit++;
+    }
+    targets = inside.map((i) => targets[i]).filter(Boolean);
+  }
   return { buttons, targets };
 }
+
+const zoomStats = { fellBackToFit: 0, followedTurns: 0, tileSizes: [], misses: [] };
+
+/** Indexes of the targets whose centre is inside the board's window on screen. */
+async function reachableTargets(page) {
+  return page.evaluate(() => {
+    const svg = document.querySelector("svg.board");
+    if (!svg) return [];
+    const box = svg.getBoundingClientRect();
+    const out = [];
+    document.querySelectorAll("svg.board .target").forEach((t, i) => {
+      const r = t.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      if (cx > box.left && cx < box.right && cy > box.top && cy < box.bottom) out.push(i);
+    });
+    return out;
+  });
+}
+
+/** Tile size on screen in CSS px, and whether the board is zoomed. */
+async function tileSize(page) {
+  return page.evaluate(() => {
+    const svg = document.querySelector("svg.board");
+    const vb = svg.viewBox.baseVal;
+    return {
+      zoomed: svg.getAttribute("data-zoomed") === "yes",
+      tile: (svg.getBoundingClientRect().width / vb.width) * (1969 / 20),
+      vb: { x: vb.x, y: vb.y, width: vb.width, height: vb.height },
+    };
+  });
+}
+
+/** The tab that plays the rest of the game at 390 px with "Follow my turn" on. */
+let phonePage = null;
+const shots = new Set();
 
 const stats = { actions: 0, byKind: {} };
 function count(kind) {
@@ -128,6 +177,30 @@ function count(kind) {
 async function step(pages, opts = {}) {
   const before = Math.max(...(await Promise.all(pages.map(seqOf))));
   for (const page of pages) {
+    if (page === phonePage && (await page.locator("svg.board .target").count()) > 0) {
+      // The phone tab follows its own turn (B4): let the view settle, then measure.
+      await page.waitForTimeout(350);
+      const t = await tileSize(page);
+      zoomStats.tileSizes.push(t.tile);
+      if (t.zoomed) zoomStats.followedTurns++;
+    }
+    if (process.env.SHOT_DIR) {
+      // Layout review: one full-page picture of the shop, of the Helicopter button and of a move at 390 px.
+      for (const [name, sel] of [
+        ["shop", ".shop"],
+        ["helicopter", "button.helicopter"],
+        ["move", "svg.board .target"],
+      ]) {
+        if (!shots.has(name) && (await page.locator(sel).count())) {
+          shots.add(name);
+          const size = page.viewportSize();
+          await page.setViewportSize({ width: 390, height: 844 });
+          await page.waitForTimeout(500);
+          await page.screenshot({ path: `${process.env.SHOT_DIR}/${name}.png`, fullPage: true });
+          if (size) await page.setViewportSize(size);
+        }
+      }
+    }
     const { buttons, targets } = await offers(page);
     if (buttons.length === 0 && targets.length === 0) continue;
     const labels = await Promise.all(buttons.map((b) => b.innerText()));
@@ -343,6 +416,102 @@ async function rejoinByLink(i) {
   pages[i] = page;
 }
 
+/** Pinch, drag, double tap and the buttons on a 390 px tab (B4). Chromium touch events through CDP. */
+async function phoneZoomChecks(p) {
+  const cdp = await p.context().newCDPSession(p);
+  const touch = (type, points) =>
+    cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: points.map((pt, i) => ({ x: pt.x, y: pt.y, id: i + 1 })),
+    });
+  const svg = p.locator("svg.board");
+  await svg.scrollIntoViewIfNeeded();
+  if (await p.locator('[data-zoom="fit"]:not([disabled])').count()) {
+    await p.locator('[data-zoom="fit"]').click();
+    await p.waitForTimeout(400);
+  }
+  let t = await tileSize(p);
+  check(
+    !t.zoomed && t.tile < 44,
+    `phone zoom: the whole board is shown first (tile ${t.tile.toFixed(0)} px)`,
+  );
+  check(
+    (await p.locator('input[type="checkbox"]').count()) === 1,
+    'phone zoom: the "Follow my turn" switch is there',
+  );
+
+  const box = await svg.boundingBox();
+  const mid = { x: box.x + box.width / 2, y: box.y + Math.min(box.height / 2, 300) };
+  // Pinch out with two fingers.
+  await touch("touchStart", [
+    { x: mid.x - 30, y: mid.y },
+    { x: mid.x + 30, y: mid.y },
+  ]);
+  for (let d = 40; d <= 140; d += 20) {
+    await touch("touchMove", [
+      { x: mid.x - d, y: mid.y },
+      { x: mid.x + d, y: mid.y },
+    ]);
+  }
+  await touch("touchEnd", []);
+  await p.waitForTimeout(150);
+  t = await tileSize(p);
+  check(t.zoomed && t.tile > 44, `phone zoom: a pinch zooms in (tile ${t.tile.toFixed(0)} px)`);
+  check(await noHorizontalScroll(p), "phone zoom: no horizontal scroll while zoomed");
+
+  // Drag with one finger: the shown part moves.
+  const before = t.vb;
+  await touch("touchStart", [{ x: mid.x, y: mid.y }]);
+  for (let d = 10; d <= 90; d += 20) await touch("touchMove", [{ x: mid.x - d, y: mid.y - d }]);
+  await touch("touchEnd", []);
+  await p.waitForTimeout(150);
+  t = await tileSize(p);
+  check(
+    Math.abs(t.vb.x - before.x) > 1 || Math.abs(t.vb.y - before.y) > 1,
+    "phone zoom: a one-finger drag pans the board",
+  );
+  check(Math.abs(t.vb.width - before.width) < 1e-6, "phone zoom: a drag does not change the zoom");
+  check(await noHorizontalScroll(p), "phone zoom: no horizontal scroll after a drag");
+
+  // Whole board, then My ship, then a double tap.
+  await p.locator('[data-zoom="fit"]').click();
+  await p.waitForTimeout(400);
+  t = await tileSize(p);
+  check(!t.zoomed, "phone zoom: the Whole board button goes back to the full view");
+  if (await p.locator('[data-zoom="ship"]:not([disabled])').count()) {
+    await p.locator('[data-zoom="ship"]').click();
+    await p.waitForTimeout(400);
+    t = await tileSize(p);
+    check(
+      t.zoomed && t.tile >= 44,
+      `phone zoom: My ship zooms in (tile ${t.tile.toFixed(0)} px ≥ 44)`,
+    );
+    await p.locator('[data-zoom="fit"]').click();
+    await p.waitForTimeout(400);
+  }
+  // Double tap on the art's left strip (no targets there).
+  const spot = { x: box.x + box.width * 0.08, y: box.y + box.height * 0.5 };
+  for (let k = 0; k < 2; k++) {
+    await touch("touchStart", [spot]);
+    await touch("touchEnd", []);
+    await p.waitForTimeout(60);
+  }
+  await p.waitForTimeout(400);
+  t = await tileSize(p);
+  check(
+    t.zoomed && t.tile >= 44,
+    `phone zoom: a double tap zooms in (tile ${t.tile.toFixed(0)} px ≥ 44)`,
+  );
+  await p.locator('[data-zoom="fit"]').click();
+  await p.waitForTimeout(400);
+  check(await noHorizontalScroll(p), "phone zoom: no horizontal scroll at the whole board");
+
+  // Follow my turn on for the rest of the game on this tab.
+  await p.locator('input[type="checkbox"]').check();
+  await p.waitForTimeout(400);
+  check(true, "phone zoom: Follow my turn is switched on; this tab plays on at 390 px");
+}
+
 // ---------------------------------------------------------------------------
 // Play. Mid-game checks happen at fixed action numbers.
 let refreshed = false;
@@ -387,7 +556,7 @@ while (stats.actions < MAX_ACTIONS) {
   // has one connection, so instead resize a tab for a moment.
   if (!phoneChecked && stats.actions >= 30) {
     phoneChecked = true;
-    const p = pages[2];
+    const p = pages[0]; // the host: never closed or replaced, so it can stay a phone
     await p.setViewportSize({ width: 390, height: 844 });
     await p.waitForTimeout(200);
     check(await noHorizontalScroll(p), "phone width: table has no horizontal scroll");
@@ -406,7 +575,9 @@ while (stats.actions < MAX_ACTIONS) {
     const cell = boardW / 8;
     check(cell >= 30, `phone width: board cells about ${cell.toFixed(0)} px wide (≥ 30)`);
     await p.screenshot({ path: process.env.SHOT ?? "/dev/null" }).catch(() => {});
-    await p.setViewportSize({ width: 1200, height: 900 });
+    // From here this tab plays on at 390 px with the zoom on (B4).
+    phonePage = p;
+    await phoneZoomChecks(p);
   }
 
   // Close a tab and let the reconnect grace run out.
@@ -487,6 +658,26 @@ while (stats.actions < MAX_ACTIONS) {
   const s = await seqOf(pages[0]);
   if (s > lastSeq && s % 50 === 0) console.log(`.... seq ${s}`);
   lastSeq = s;
+}
+
+// ---------------------------------------------------------------------------
+// Zoom (B4): what the phone tab saw on its own turns.
+if (phonePage) {
+  const sizes = zoomStats.tileSizes;
+  const zoomedSizes = sizes.filter((x) => x >= 43.9);
+  check(sizes.length >= 3, `phone zoom: the phone tab had ${sizes.length} decisions to measure`);
+  check(
+    zoomStats.followedTurns >= Math.ceil(sizes.length * 0.9),
+    `phone zoom: on its own turn the view followed the ship ${zoomStats.followedTurns}/${sizes.length}, tiles ≥ 44 px on ${zoomedSizes.length}`,
+  );
+  check(
+    zoomedSizes.length === zoomStats.followedTurns,
+    "phone zoom: every zoomed decision had tiles of at least 44 px",
+  );
+  check(
+    zoomStats.fellBackToFit <= Math.ceil(sizes.length * 0.5),
+    `phone zoom: no tappable target in view only ${zoomStats.fellBackToFit}/${sizes.length} times`,
+  );
 }
 
 // ---------------------------------------------------------------------------
