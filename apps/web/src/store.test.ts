@@ -19,6 +19,7 @@ import {
   turnSecondsLeft,
 } from "./store";
 import type { ClientState, Context } from "./store";
+import { MY_TURN_LAG_MS } from "./animation";
 
 const content = loadBundledContent();
 const ctx: Context = {
@@ -329,6 +330,125 @@ describe("rejoin from another tab or device (P1-1)", () => {
     expect(bob.state().game!.seq).toBe(seq + 5);
     expect(ann.state().game).toBeNull();
     expect(bob.state().room!.seats[0]).toMatchObject({ name: "Ann", connected: true });
+  });
+});
+
+describe("animation queue in the store (B2a)", () => {
+  it("each update queues its events; a rejoin and a snapshot show the view as it is", () => {
+    const { tab, tabNow } = table();
+    const ann = tab("a");
+    const bob = tab("b");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    // Before the game: nothing queued.
+    expect(ann.state().anim.seq).toBeNull();
+    ann.send({ type: "start" });
+    // The first update (seq 0) is queued.
+    expect(ann.state().anim.seq).toBe(0);
+
+    let sawMove = false;
+    for (let i = 0; i < 40; i++) {
+      const actor = ann.state().game!.view.phase.actors[0];
+      (actor === "p1" ? ann : bob).actFirst();
+      for (const t of [ann, bob]) expect(t.state().anim.seq).toBe(t.state().game!.seq);
+      sawMove ||= ann.state().anim.steps.some((s) => s.step.kind === "move");
+      // Every queued step starts no earlier than... it was queued at the tab's now (time is frozen).
+      for (const st of ann.state().anim.steps) expect(st.start).toBeGreaterThanOrEqual(tabNow());
+    }
+    expect(sawMove).toBe(true);
+
+    // A refresh (a new tab rejoining) gets no events: nothing to replay.
+    bob.drop();
+    const bob2 = tab("b2");
+    bob2.send({ type: "rejoin", v: V, code: "BCDF", seatToken: bob.state().session!.seatToken });
+    expect(bob2.state().anim.steps).toEqual([]);
+    expect(bob2.state().anim.seq).toBe(bob2.state().game!.seq);
+
+    // A sync after a gap: the snapshot empties the queue too.
+    const seq = ann.state().game!.seq;
+    const gapped = onServerMessage(
+      ann.state(),
+      {
+        type: "update",
+        seq: seq + 5,
+        by: "p1",
+        auto: false,
+        events: [
+          {
+            type: "rolled",
+            player: "p1",
+            roll: { die: 3, speedBonus: 0, eventModifier: 0, steps: 3 },
+          },
+        ],
+        view: ann.state().game!.view,
+        turnTimeLeftMs: null,
+      },
+      ctx,
+    );
+    expect(gapped.needsSync).toBe(true);
+    expect(gapped.anim).toBe(ann.state().anim); // a gap queues nothing
+    ann.send({ type: "sync" });
+    expect(ann.state().anim.steps).toEqual([]);
+    expect(ann.state().anim.seq).toBe(seq);
+  });
+
+  it("catches up harder on the update that hands this tab the turn", () => {
+    const { tab } = table();
+    const ann = tab("a");
+    const bob = tab("b");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    ann.send({ type: "start" });
+    // Play until an update hands the turn from one player to the other.
+    for (let i = 0; i < 200; i++) {
+      const before = ann.state().game!.view.phase.actors[0];
+      (before === "p1" ? ann : bob).actFirst();
+      const after = ann.state().game!.view.phase.actors[0];
+      if (after && after !== before) {
+        const mine = after === "p1" ? ann : bob;
+        const theirs = after === "p1" ? bob : ann;
+        const lag = (q: ClientState["anim"]) =>
+          q.steps.length ? q.steps[q.steps.length - 1]!.end - q.steps[0]!.start : 0;
+        expect(lag(mine.state().anim)).toBeLessThanOrEqual(lag(theirs.state().anim) + 1e-6);
+        expect(lag(mine.state().anim)).toBeLessThanOrEqual(MY_TURN_LAG_MS + 1e-6);
+        return;
+      }
+    }
+    throw new Error("the turn never passed");
+  });
+
+  it("plays nothing but the awards with reduced motion", () => {
+    const quiet: Context = { ...ctx, reducedMotion: () => true };
+    const s = onServerMessage(
+      {
+        ...initialState,
+        game: { seq: 0, view: { viewer: "p1", actionCount: 0 } as never, turnTimeLeftMs: null },
+        anim: { seq: 0, steps: [], nextId: 1 },
+      },
+      {
+        type: "update",
+        seq: 1,
+        by: "p1",
+        auto: false,
+        events: [
+          {
+            type: "rolled",
+            player: "p1",
+            roll: { die: 3, speedBonus: 0, eventModifier: 0, steps: 3 },
+          },
+        ],
+        view: {
+          viewer: "p1",
+          actionCount: 1,
+          phase: { kind: "roll", actors: ["p1"] },
+          players: [],
+        } as never,
+        turnTimeLeftMs: null,
+      },
+      quiet,
+    );
+    expect(s.anim.seq).toBe(1);
+    expect(s.anim.steps).toEqual([]);
   });
 });
 
