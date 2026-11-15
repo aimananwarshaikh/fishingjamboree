@@ -63,6 +63,7 @@ export function parseClientMessage(raw: unknown): ParseResult {
       };
     case "start":
     case "sync":
+    case "rematch":
     case "leave":
       return { ok: true, message: { type: raw.type } };
     case "kick":

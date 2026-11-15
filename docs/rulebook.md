@@ -209,6 +209,7 @@ These rules apply to the online game (decided with the designer, 2026-11-13).
 - **Disconnected players:** a player who loses their connection has up to 60 seconds to come back (2 minutes in all per game). After that they are **away**: their turns are missed straight away until they return, so the game keeps moving. A disconnected player's turn is never missed sooner than 10 seconds after they lost their connection, even with no time left, so a short network blip does not cost the turn. These missed turns do not count towards removal (below).
 - **Removed players:** run out of time on 3 turns in a row and you are removed from the game. Only a turn that ran the whole 90 seconds counts; a turn missed while you are away does not count, and does not break the run either. The host can remove a player at any time, away or not. A removed player's ship leaves the board; they get no more turns, cannot win, and cannot rejoin.
 - **Last player left:** if every other player has been removed, the game ends at once and the last player wins.
+- **Rematch:** after a game the host can play again in the same room. Everyone still connected stays and the room goes back to the lobby; players who were removed or have disconnected are dropped (they can join again by the room code if there is a free seat). The host then starts the new game as usual: new seed, new decks, new awards, empty hands and full reconnect time.
 
 ## Special cases
 

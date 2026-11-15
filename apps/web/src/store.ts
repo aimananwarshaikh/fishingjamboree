@@ -179,6 +179,20 @@ function takeRoom(
   return { room, roomAt: room === incoming ? (ctx.now?.() ?? 0) : state.roomAt };
 }
 
+/** The state of a tab whose room became a lobby again (rematch): nothing of the last game stays. */
+function backToLobby(state: ClientState): ClientState {
+  return {
+    ...state,
+    game: null,
+    turnDeadline: null,
+    anim: resetQueue(state.anim, null),
+    banner: null,
+    pending: null,
+    needsSync: false,
+    log: addLog({ ...state, log: [] }, [REMATCH_LINE], "info"),
+  };
+}
+
 export function connectionChanged(state: ClientState, connection: Connection): ClientState {
   return { ...state, connection, pending: connection === "open" ? state.pending : null };
 }
@@ -190,6 +204,9 @@ export function intentSent(state: ClientState, clientActionId: string): ClientSt
 export function dismissNotice(state: ClientState): ClientState {
   return { ...state, notice: null };
 }
+
+/** The log line a tab starts with after the host has started a rematch. */
+export const REMATCH_LINE = "Back in the lobby for a rematch.";
 
 /** What a tab shows when its seat was opened somewhere else (`replaced`). */
 export const REPLACED_NOTICE =
@@ -228,8 +245,16 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
         log: addLog(state, [`Joined room ${msg.room.code} as ${me}.`], "info"),
       };
     }
-    case "room":
-      return { ...state, ...takeRoom(state, state.room, msg.room, ctx) };
+    case "room": {
+      const taken = takeRoom(state, state.room, msg.room, ctx);
+      // A rematch: the room is a lobby again while this tab still holds the last
+      // game. Drop all of it (view, animation queue, log with its held lines) so
+      // nothing of the old game shows in the next one.
+      if (taken.room === msg.room && msg.room.status === "lobby" && state.game !== null) {
+        return { ...backToLobby(state), ...taken };
+      }
+      return { ...state, ...taken };
+    }
     case "update": {
       const have = state.game?.seq ?? -1;
       if (msg.seq <= have) return state; // old or repeated
@@ -267,6 +292,10 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
       };
     }
     case "snapshot": {
+      // A rematch this tab missed: the room is a lobby, the game is gone.
+      if (msg.game === null && msg.room.status === "lobby" && state.game !== null) {
+        return { ...backToLobby(state), ...takeRoom(state, state.room, msg.room, ctx) };
+      }
       const have = state.game?.seq ?? -1;
       const take = msg.game !== null && msg.game.seq >= have;
       return {

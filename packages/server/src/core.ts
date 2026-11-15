@@ -247,6 +247,9 @@ export class ServerCore {
       case "kick":
         this.onKick(out, conn, message);
         break;
+      case "rematch":
+        this.onRematch(out, conn);
+        break;
     }
   }
 
@@ -594,6 +597,36 @@ export class ServerCore {
     room.rev += 1;
     this.broadcastRoom(out, room);
     this.broadcastUpdate(out, room, null, false, created.events);
+  }
+
+  /**
+   * Host only, after a game: the room goes back to the lobby with the players
+   * who are still connected (docs/protocol.md §3). Removed seats and seats with
+   * no connection are dropped (their tokens stop working). The host then
+   * starts the next game as usual, which draws a new seed.
+   */
+  private onRematch(out: Outbound[], conn: ConnId) {
+    const bound = this.seated(out, conn);
+    if (!bound) return;
+    const { room, seat } = bound;
+    if (seat.id !== room.host) {
+      return this.error(out, conn, "not-host", "only the host can start a rematch");
+    }
+    if (room.status !== "finished") {
+      return this.error(out, conn, "game-not-finished", "the game is not over");
+    }
+    room.seats = room.seats.filter((s) => !s.removed && s.conn !== null);
+    for (const s of room.seats) {
+      s.left = false;
+      s.away = false;
+      s.disconnectedAt = null;
+      s.graceFrom = null;
+      s.graceLeftMs = room.timers.reconnectBudgetMs;
+    }
+    room.game = null;
+    room.status = "lobby";
+    room.rev += 1;
+    this.broadcastRoom(out, room);
   }
 
   // -------------------------------------------------------------------------

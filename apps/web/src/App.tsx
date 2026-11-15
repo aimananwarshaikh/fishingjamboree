@@ -63,6 +63,7 @@ export function App() {
           act={game.act}
           onLeave={game.leave}
           onKick={game.kick}
+          onRematch={game.rematch}
         />
       )}
     </main>
@@ -385,9 +386,11 @@ function Table(props: {
   act: (a: Action) => void;
   onLeave: () => void;
   onKick: (seat: string) => void;
+  onRematch: () => void;
 }) {
   const { state, room } = props;
   const isHost = state.session?.seat === room.host;
+  const dropped = room.seats.filter((s) => s.removed || !s.connected).map((s) => s.name);
   const view = state.game!.view;
   const me = state.session!.seat;
   const names = useMemo(
@@ -578,6 +581,16 @@ function Table(props: {
                   })}
                 </ul>
               </>
+            )}
+            {isHost ? (
+              <>
+                <button onClick={props.onRematch}>Play again</button>
+                {dropped.length > 0 && (
+                  <p>Not coming along (removed or disconnected): {dropped.join(", ")}.</p>
+                )}
+              </>
+            ) : (
+              <p>The host can start a rematch.</p>
             )}
             <button className="secondary" onClick={props.onLeave}>
               Leave room

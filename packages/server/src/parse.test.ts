@@ -10,6 +10,7 @@ describe("parseClientMessage", () => {
     [{ type: "sync" }],
     [{ type: "leave" }],
     [{ type: "kick", seat: "p2" }],
+    [{ type: "rematch" }],
     [{ type: "intent", clientActionId: "1", seq: 0, action: { type: "roll" } }],
     [{ type: "intent", clientActionId: "1", seq: 3, action: { type: "move", to: 12 } }],
     [
