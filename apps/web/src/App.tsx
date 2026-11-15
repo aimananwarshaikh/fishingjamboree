@@ -3,7 +3,9 @@ import { getLegalActions } from "@fishingjamboree/engine";
 import type { Action, Content, PlayerView, UpgradeId } from "@fishingjamboree/engine";
 import type { RoomInfo, SeatInfo } from "../../../packages/server/src/protocol";
 import { Board, playerColor } from "./Board";
-import { describeAction, phaseTask, seatStatus, upgradeText } from "./describe";
+import { describeAction, phaseTask, seatStatus, stepCaption, upgradeText } from "./describe";
+import { frameAt, queueEnd } from "./animation";
+import type { AnimQueue, Frame } from "./animation";
 import { loadBundledContent } from "./content";
 import { useGame } from "./useGame";
 import type { RejoinOffer } from "./useGame";
@@ -270,6 +272,45 @@ function useNow(): number {
   return now;
 }
 
+/**
+ * The animation frame to draw now. While something is queued it redraws on
+ * every animation frame until the queue's last step ends; then it stops.
+ * A hidden tab gets no frames, and needs none: steps are timed on the clock,
+ * so when it comes back they are over and the view is shown as it is.
+ */
+function useFrame(anim: AnimQueue, view: PlayerView): Frame {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const end = queueEnd(anim);
+    setNow(Date.now());
+    if (end === null || end <= Date.now()) return;
+    let id = window.requestAnimationFrame(function tick() {
+      const t = Date.now();
+      setNow(t);
+      if (t < end) id = window.requestAnimationFrame(tick);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [anim]);
+  return useMemo(() => frameAt(anim, view, now), [anim, view, now]);
+}
+
+/** A plain caption for the step playing now (B2b replaces it with the real components). */
+function StepOverlay(props: { frame: Frame; name: (p: string) => string }) {
+  const cur = props.frame.current;
+  const text = cur ? stepCaption(cur.step, content, props.name) : null;
+  if (!cur || text === null) return null;
+  return (
+    <div
+      key={cur.id}
+      className={`step-overlay step-${cur.step.kind}`}
+      data-step={cur.step.kind}
+      aria-hidden="true"
+    >
+      {text}
+    </div>
+  );
+}
+
 function TurnStatus(props: {
   state: ClientState;
   view: PlayerView;
@@ -339,11 +380,20 @@ function Table(props: {
   const fee = event?.effect.kind === "helicopter" ? event.effect.fee : null;
   const mine = view.players.find((p) => p.id === me);
   const shopping = view.phase.kind === "dockShop" && view.phase.actors[0] === me;
+  const frame = useFrame(state.anim, view);
 
   return (
     <div className="table" data-seq={state.game!.seq} data-me={me}>
-      <section className="board-wrap">
-        <Board content={content} view={view} legal={legal} names={names} onAction={props.act} />
+      <section className="board-wrap" data-animating={frame.busy ? "yes" : "no"}>
+        <Board
+          content={content}
+          view={view}
+          frame={frame}
+          legal={legal}
+          names={names}
+          onAction={props.act}
+        />
+        <StepOverlay frame={frame} name={name} />
       </section>
       <div className="card status">
         <div className="round">
