@@ -2,7 +2,11 @@
  * Which game server the client talks to (review P3: `?server=` could send the
  * seat token anywhere). Pure, so it can be tested.
  *
- * - Default: the page's own host on port 8787, `wss` on an `https` page.
+ * - Default: the server this build was made for, `VITE_SERVER_URL=wss://host`
+ *   (set when the page and the server are on different hosts, as on a static
+ *   host); without it, the page's own host on port 8787, `wss` on an `https`
+ *   page. A `VITE_SERVER_URL` that is not `ws:`/`wss:`, or is `ws:` on an
+ *   `https` page, is ignored with a warning and the page-host default is used.
  * - `?server=ws://host:port` overrides it only in a dev build (`pnpm dev:web`),
  *   or, in a production build, when the server's origin is on the allow-list
  *   set at build time: `VITE_ALLOWED_SERVERS=wss://a.example,wss://b.example`.
@@ -23,6 +27,8 @@ export interface ServerUrlOptions {
   dev: boolean;
   /** Origins (`wss://host[:port]`) a production build may be pointed at. */
   allowed: readonly string[];
+  /** The server this build was made for (`VITE_SERVER_URL`), if any. */
+  defaultServer?: string | undefined;
 }
 
 export interface ResolvedServer {
@@ -57,9 +63,19 @@ export function parseAllowList(raw: string | undefined): string[] {
 
 export function resolveServerUrl(page: PageLocation, options: ServerUrlOptions): ResolvedServer {
   const secure = page.protocol === "https:";
-  const fallback = `${secure ? "wss" : "ws"}://${page.hostname || "localhost"}:${DEFAULT_PORT}`;
+  const pageHost = `${secure ? "wss" : "ws"}://${page.hostname || "localhost"}:${DEFAULT_PORT}`;
+  const configured = options.defaultServer?.trim() || null;
+  const configuredOrigin = configured === null ? null : wsOrigin(configured);
+  let configuredProblem: string | null = null;
+  if (configured !== null && configuredOrigin === null) {
+    configuredProblem = `VITE_SERVER_URL=${configured} ignored: not a ws:// or wss:// address`;
+  } else if (configuredOrigin !== null && secure && configuredOrigin.startsWith("ws:")) {
+    configuredProblem = `VITE_SERVER_URL=${configured} ignored: an https page can only use wss://`;
+  }
+  const useConfigured = configured !== null && configuredProblem === null;
+  const fallback = useConfigured ? (configured as string) : pageHost;
   const asked = new URLSearchParams(page.search).get("server");
-  if (!asked) return { url: fallback, ignored: null };
+  if (!asked) return { url: fallback, ignored: configuredProblem };
   const ignore = (why: string) => ({
     url: fallback,
     ignored: `?server=${asked} ignored: ${why}; using ${fallback}`,
@@ -67,7 +83,8 @@ export function resolveServerUrl(page: PageLocation, options: ServerUrlOptions):
   const origin = wsOrigin(asked);
   if (origin === null) return ignore("not a ws:// or wss:// address");
   if (secure && origin.startsWith("ws:")) return ignore("an https page can only use wss://");
-  if (!options.dev && !options.allowed.includes(origin)) {
+  const trusted = useConfigured && origin === configuredOrigin;
+  if (!options.dev && !trusted && !options.allowed.includes(origin)) {
     return ignore("that server is not allowed in this build");
   }
   return { url: asked, ignored: null };
