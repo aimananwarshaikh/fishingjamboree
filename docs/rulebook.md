@@ -189,13 +189,11 @@ After round 20 each award is revealed in turn and paid:
 | Overstuffed   | Most fish lost to a full ship (the Golden Fish included)       | $200   |
 | Dock Regular  | Most times docked (not a Sinking Boat arrival or a Helicopter) | $200   |
 | Fine Print    | Most money fined (fine tokens included)                        | $200   |
-| Golden Touch  | Took a Golden Fish                                             | $200   |
 | Landlubber    | Drew no Risk cards                                             | $200   |
 | Homebody      | Fewest tiles sailed                                            | $100   |
 | Stripped Down | Bought no upgrades                                             | $300   |
 | One of Each?  | Bought exactly one upgrade                                     | $200   |
 | Fully Loaded  | Bought both upgrades                                           | $100   |
-| Clean Hands   | No fine tokens left at the end                                 | $100   |
 
 The amounts and the $800 budget were set with the balance simulator in Milestone B6 (`docs/balance/b6-report.md`). The awards live in `content/awards.json`.
 

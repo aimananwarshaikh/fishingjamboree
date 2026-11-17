@@ -73,15 +73,6 @@
       "amount": 200
     },
     {
-      "id": "golden-touch",
-      "name": "Golden Touch",
-      "text": "Took a Golden Fish",
-      "kind": "condition",
-      "stat": "goldenFishTaken",
-      "min": 1,
-      "amount": 200
-    },
-    {
       "id": "landlubber",
       "name": "Landlubber",
       "text": "Drew no Risk cards",
@@ -129,15 +120,6 @@
       "min": 2,
       "amount": 100,
       "conflicts": ["stripped-down"]
-    },
-    {
-      "id": "clean-hands",
-      "name": "Clean Hands",
-      "text": "No fine tokens left at the end",
-      "kind": "condition",
-      "stat": "fineTokens",
-      "max": 0,
-      "amount": 100
     }
   ]
 }
