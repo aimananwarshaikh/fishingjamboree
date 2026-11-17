@@ -170,7 +170,7 @@ The game ends after round 20. Each player counts their cash and subtracts $100 f
 
 ### Golden Hook Awards
 
-At setup, without telling anyone, the game draws secret awards: **3** with 3 or 4 players, **2** with 2 players. Nobody knows which awards are in play, or how many, until the end. Two opposite awards (such as Daredevil and Landlubber) are never in the same game, and the awards in one game are worth $900 at most together.
+At setup, without telling anyone, the game draws secret awards: **3** with 3 or 4 players, **2** with 2 players. Nobody knows which awards are in play, or how many, until the end. Two opposite awards (such as Daredevil and Landlubber) are never in the same game, and the awards in one game are worth $800 at most together.
 
 After round 20 each award is revealed in turn and paid:
 
@@ -183,21 +183,21 @@ After round 20 each award is revealed in turn and paid:
 | ------------- | -------------------------------------------------------------- | ------ |
 | Big Haul      | Most fish caught (each fish token that went onto the ship)     | $300   |
 | Sea Legs      | Most tiles sailed                                              | $200   |
-| Daredevil     | Most Risk cards drawn                                          | $500   |
+| Daredevil     | Most Risk cards drawn                                          | $300   |
 | Shark Bait    | Most Sharks drawn (Shark Repellent or not)                     | $200   |
 | Boot Lord     | Most Boots drawn, from either deck                             | $100   |
 | Overstuffed   | Most fish lost to a full ship (the Golden Fish included)       | $200   |
 | Dock Regular  | Most times docked (not a Sinking Boat arrival or a Helicopter) | $200   |
 | Fine Print    | Most money fined (fine tokens included)                        | $200   |
 | Golden Touch  | Took a Golden Fish                                             | $200   |
-| Landlubber    | Fewest Risk cards drawn                                        | $300   |
+| Landlubber    | Fewest Risk cards drawn                                        | $200   |
 | Homebody      | Fewest tiles sailed                                            | $100   |
-| Stripped Down | Bought no upgrades                                             | $500   |
-| One of Each?  | Bought exactly one upgrade                                     | $300   |
-| Fully Loaded  | Bought both upgrades                                           | $200   |
-| Clean Hands   | No fine tokens left at the end                                 | $200   |
+| Stripped Down | Bought no upgrades                                             | $300   |
+| One of Each?  | Bought exactly one upgrade                                     | $200   |
+| Fully Loaded  | Bought both upgrades                                           | $100   |
+| Clean Hands   | No fine tokens left at the end                                 | $100   |
 
-The amounts are placeholders until the balance simulation (Milestone B6). The awards live in `content/awards.json`.
+The amounts and the $800 budget were set with the balance simulator in Milestone B6 (`docs/balance/b6-report.md`). The awards live in `content/awards.json`.
 
 ## Online play
 

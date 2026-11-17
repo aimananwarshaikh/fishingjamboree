@@ -17,7 +17,7 @@ import { compileContent } from "./content";
 import { getLegalActions } from "./legal";
 import { replay } from "./replay";
 import { createGame } from "./setup";
-import { compiledContent, rawContent } from "./testContent";
+import { compiledContent, rawContent, ruleRawContent } from "./testContent";
 import {
   act,
   clone,
@@ -63,7 +63,7 @@ const changed = (before: GameState, after: GameState, index = 0) => {
 };
 
 function contentWith(edit: (raw: RawContent) => void): Content {
-  const raw = rawContent();
+  const raw = ruleRawContent();
   edit(raw);
   return compiledContent(raw);
 }
@@ -577,9 +577,14 @@ describe("content/awards.json is checked", () => {
 
   it("the real pool compiles, with a valid draw for every player count", () => {
     expect(issues(() => {})).toEqual([]);
-    for (let n = content.rules.minPlayers; n <= content.rules.maxPlayers; n += 1) {
-      expect(validAwardSets(content, content.awards.perGame[String(n)]!).length).toBeGreaterThan(0);
+    const real = compiledContent();
+    for (let n = real.rules.minPlayers; n <= real.rules.maxPlayers; n += 1) {
+      expect(validAwardSets(real, real.awards.perGame[String(n)]!).length).toBeGreaterThan(0);
     }
+  });
+
+  it("the rule tests' pinned pool still compiles", () => {
+    expect(compileContent(ruleRawContent()).ok).toBe(true);
   });
 
   it.each([

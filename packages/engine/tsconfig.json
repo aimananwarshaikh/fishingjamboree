@@ -6,5 +6,5 @@
     "types": [],
     "resolveJsonModule": true
   },
-  "include": ["src", "../../content/*.json"]
+  "include": ["src", "src/*.json", "../../content/*.json"]
 }

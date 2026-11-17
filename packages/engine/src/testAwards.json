@@ -1,0 +1,138 @@
+{
+  "perGame": { "2": 2, "3": 3, "4": 3 },
+  "budget": 900,
+  "awards": [
+    {
+      "id": "big-haul",
+      "name": "Big Haul",
+      "text": "Most fish caught",
+      "kind": "most",
+      "stat": "fishCaught",
+      "amount": 300
+    },
+    {
+      "id": "sea-legs",
+      "name": "Sea Legs",
+      "text": "Most tiles sailed",
+      "kind": "most",
+      "stat": "tilesMoved",
+      "amount": 200,
+      "conflicts": ["homebody"]
+    },
+    {
+      "id": "daredevil",
+      "name": "Daredevil",
+      "text": "Most Risk cards drawn",
+      "kind": "most",
+      "stat": "riskDraws",
+      "amount": 500,
+      "conflicts": ["landlubber"]
+    },
+    {
+      "id": "shark-bait",
+      "name": "Shark Bait",
+      "text": "Most Sharks drawn",
+      "kind": "most",
+      "stat": "sharkDraws",
+      "amount": 200
+    },
+    {
+      "id": "boot-lord",
+      "name": "Boot Lord",
+      "text": "Most Boots drawn",
+      "kind": "most",
+      "stat": "bootDraws",
+      "amount": 100
+    },
+    {
+      "id": "overstuffed",
+      "name": "Overstuffed",
+      "text": "Most fish lost to a full ship",
+      "kind": "most",
+      "stat": "fishLostToCapacity",
+      "amount": 200
+    },
+    {
+      "id": "dock-regular",
+      "name": "Dock Regular",
+      "text": "Most times docked",
+      "kind": "most",
+      "stat": "dockVisits",
+      "amount": 200
+    },
+    {
+      "id": "fine-print",
+      "name": "Fine Print",
+      "text": "Most money paid in fines",
+      "kind": "most",
+      "stat": "finesPaid",
+      "amount": 200
+    },
+    {
+      "id": "golden-touch",
+      "name": "Golden Touch",
+      "text": "Took a Golden Fish",
+      "kind": "condition",
+      "stat": "goldenFishTaken",
+      "min": 1,
+      "amount": 200
+    },
+    {
+      "id": "landlubber",
+      "name": "Landlubber",
+      "text": "Fewest Risk cards drawn",
+      "kind": "least",
+      "stat": "riskDraws",
+      "amount": 300,
+      "conflicts": ["daredevil"]
+    },
+    {
+      "id": "homebody",
+      "name": "Homebody",
+      "text": "Fewest tiles sailed",
+      "kind": "least",
+      "stat": "tilesMoved",
+      "amount": 100,
+      "conflicts": ["sea-legs"]
+    },
+    {
+      "id": "stripped-down",
+      "name": "Stripped Down",
+      "text": "Bought no upgrades",
+      "kind": "condition",
+      "stat": "upgradesBought",
+      "max": 0,
+      "amount": 500,
+      "conflicts": ["fully-loaded"]
+    },
+    {
+      "id": "one-of-each",
+      "name": "One of Each?",
+      "text": "Bought exactly one upgrade",
+      "kind": "condition",
+      "stat": "upgradesBought",
+      "min": 1,
+      "max": 1,
+      "amount": 300
+    },
+    {
+      "id": "fully-loaded",
+      "name": "Fully Loaded",
+      "text": "Bought both upgrades",
+      "kind": "condition",
+      "stat": "upgradesBought",
+      "min": 2,
+      "amount": 200,
+      "conflicts": ["stripped-down"]
+    },
+    {
+      "id": "clean-hands",
+      "name": "Clean Hands",
+      "text": "No fine tokens left at the end",
+      "kind": "condition",
+      "stat": "fineTokens",
+      "max": 0,
+      "amount": 200
+    }
+  ]
+}

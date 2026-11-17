@@ -3,6 +3,8 @@ import type { AwardsContent, PlayerStats } from "@fishingjamboree/engine";
 import { evaluateAwards, validSets } from "./awardsEval";
 import type { GameRecord, PlayerRecord } from "./play";
 import { runSpecs, makeSpecs } from "./batch";
+import { fileURLToPath } from "node:url";
+import { readRawContent } from "./content";
 import { content, raw } from "./testContent";
 
 // Each test award looks at its own stat, so a test can say who wins it.
@@ -80,9 +82,29 @@ const awards = (amounts: Record<string, number>, budget: number, perGame = 2): A
 });
 
 describe("validSets", () => {
-  it("matches the engine's count for the real content (review P2-4: 364 sets of 3, 101 pairs)", () => {
-    expect(validSets(raw.awards, 3)).toHaveLength(364);
-    expect(validSets(raw.awards, 2)).toHaveLength(101);
+  it("matches the engine's count for the pre-B6 pool (review P2-4: 364 sets of 3, 101 pairs)", () => {
+    const original = readRawContent(
+      fileURLToPath(new URL("../../../docs/balance/original-content", import.meta.url)),
+    );
+    expect(validSets(original.awards, 3)).toHaveLength(364);
+    expect(validSets(original.awards, 2)).toHaveLength(101);
+  });
+
+  it("every set the engine draws for the real content is one of them", () => {
+    const sets = new Set(
+      validSets(raw.awards, 3).map((s) =>
+        s
+          .map((a) => a.id)
+          .sort()
+          .join(),
+      ),
+    );
+    for (const r of runSpecs(
+      content,
+      makeSpecs({ seed: "drawn", players: [3], games: 40, bots: ["random"] }),
+    )) {
+      expect(sets.has([...r.drawn].sort().join())).toBe(true);
+    }
   });
 
   it("respects the budget and the conflicts", () => {
