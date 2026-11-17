@@ -16,12 +16,17 @@
  *   MAX_CONNECTIONS_PER_IP  sockets per address (default 12)
  *   MAX_ROOMS               rooms at once (default 500)
  *   MAX_BUFFERED_BYTES      drop a socket with more than this queued (1 MiB)
+ *   WEB_DIR                 the built web client to serve on the same port
+ *                           (default: apps/web/dist when it exists); with it,
+ *                           one address serves the page and the game
  * Every variable is described in docs/deploy.md.
  */
+import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { readServerSettings } from "./config";
 import { fileURLToPath } from "node:url";
 import { loadContent } from "./content";
+import { createHttpHandler } from "./httpHandler";
 import { cryptoIds } from "./ids";
 import { fileRoomStore } from "./roomStore";
 import { createGameServer } from "./transport";
@@ -48,12 +53,17 @@ log(
     : "ALLOWED_ORIGINS not set: any website may connect",
 );
 
+const defaultWebDir = fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
+const webDir = read.settings.webDir ?? (existsSync(defaultWebDir) ? defaultWebDir : undefined);
+log(webDir ? `serving the web client from ${webDir}` : "no web client served (WEB_DIR not set)");
+
+const handle = createHttpHandler({ webDir });
 const http = createServer((req, res) => {
-  if (req.method === "GET" && req.url === "/health") {
-    res.writeHead(200, { "content-type": "text/plain" }).end("ok");
-    return;
-  }
-  res.writeHead(426, { "content-type": "text/plain" }).end("connect with a WebSocket");
+  handle(req, res).catch((error) => {
+    log(`http error: ${String(error)}`);
+    if (!res.headersSent) res.writeHead(500, { "content-type": "text/plain" });
+    res.end("server error");
+  });
 });
 
 const server = await createGameServer({

@@ -88,6 +88,7 @@ describe("readServerSettings", () => {
       HOST: "0.0.0.0",
       CONTENT_DIR: "/c",
       ROOMS_DIR: "/data/rooms",
+      WEB_DIR: "/srv/web",
       ALLOWED_ORIGINS: "https://play.example.com",
       TRUST_PROXY: "1",
       MAX_CONNECTIONS: "50",
@@ -102,6 +103,7 @@ describe("readServerSettings", () => {
       host: "0.0.0.0",
       contentDir: "/c",
       roomsDir: "/data/rooms",
+      webDir: "/srv/web",
     });
     expect(r.settings.transport).toEqual({
       allowedOrigins: ["https://play.example.com"],

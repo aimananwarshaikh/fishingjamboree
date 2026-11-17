@@ -12,6 +12,39 @@ Target: 3 to 4 friends playing over the internet. Free, one server process.
 Keep the GitHub repo private. Nothing here needs a secret, and nothing secret goes into the repo
 (`deploy/.env` is ignored by git). Free-tier terms change: check them before you sign up.
 
+## 0. Quick test from your own computer (a tunnel)
+
+The server also serves the built web client, so one address is the whole game. No account, no domain,
+no Docker. It works while your computer is on and these commands run:
+
+```bash
+pnpm install
+pnpm --filter @fishingjamboree/web build     # once, and again after code changes
+pnpm start:server                            # the page and the game on http://localhost:8787
+```
+
+In a second terminal, with [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) installed (a quick tunnel needs no account):
+
+```bash
+cloudflared tunnel --url http://localhost:8787
+```
+
+It prints an `https://<words>.trycloudflare.com` link. Open it yourself (or `http://localhost:8787`), create a
+room, and send your friends the link and the four-letter code. Every player needs their own tab or device.
+The link changes each time the tunnel starts. Any other tunnel that forwards to port 8787 works the same way
+(ngrok, `tailscale funnel`). Notes:
+
+- A production build connects back to the address it was loaded from (`wss` on `https`), so the page needs no
+  settings. `VITE_SERVER_URL` still overrides that (sections 1 and 2).
+- Games are lost if the server stops. To keep them across a restart, start it with `ROOMS_DIR=./rooms-data`
+  (the files hold seat tokens: do not commit or share the folder).
+- Through a tunnel every player arrives from your own machine, so `MAX_CONNECTIONS_PER_IP` (12) is shared by all.
+  That is enough for four players with a spare tab each.
+- Not tested from the build sandbox (no tunnel there): the first run with a friend is the test. The server and
+  the built page were played end to end as one address with `scripts/playtest-three-tabs.mjs`
+  (`WEB_URL=http://localhost:8787`).
+- `WEB_DIR` sets another folder to serve; by default it is `apps/web/dist` if that exists.
+
 ## 1. The server (a free VM)
 
 Any always-on Linux VM with Docker works (Oracle Cloud Always Free, or the Google Cloud e2-micro
@@ -59,18 +92,19 @@ Any static host works the same way (set the two variables).
 
 Server (environment of the `server` container; `deploy/compose.yaml` sets the first two):
 
-| Variable                 | Default                     | Meaning                                                                                                                                           |
-| ------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ALLOWED_ORIGINS`        | unset: any website may      | Browser origins that may connect, comma-separated, `https://host[:port]`, no path. A client with no `Origin` header is let in.                    |
-| `TRUST_PROXY`            | `0`                         | `1` behind Caddy: a client's address is the last `X-Forwarded-For` entry. Only set it when the server cannot be reached except through the proxy. |
-| `PORT`                   | `8787`                      | HTTP and WebSocket port.                                                                                                                          |
-| `HOST`                   | all interfaces              | Address to listen on.                                                                                                                             |
-| `CONTENT_DIR`            | the repository's `content/` | Folder with the content JSON (the image sets `/app/content`).                                                                                     |
-| `ROOMS_DIR`              | unset: memory only          | Folder for saved rooms (the image sets `/data/rooms`). Unset: a restart ends every game.                                                          |
-| `MAX_CONNECTIONS`        | `200`                       | Sockets in all; the next upgrade gets HTTP 503.                                                                                                   |
-| `MAX_CONNECTIONS_PER_IP` | `12`                        | Sockets from one address; the next gets HTTP 429. Friends on one network share an address: keep it above their tabs.                              |
-| `MAX_ROOMS`              | `500`                       | Rooms at once; `create` answers `server-busy`.                                                                                                    |
-| `MAX_BUFFERED_BYTES`     | `1048576`                   | A socket with more than this queued (it is not reading) is dropped.                                                                               |
+| Variable                 | Default                      | Meaning                                                                                                                                           |
+| ------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ALLOWED_ORIGINS`        | unset: any website may       | Browser origins that may connect, comma-separated, `https://host[:port]`, no path. A client with no `Origin` header is let in.                    |
+| `TRUST_PROXY`            | `0`                          | `1` behind Caddy: a client's address is the last `X-Forwarded-For` entry. Only set it when the server cannot be reached except through the proxy. |
+| `PORT`                   | `8787`                       | HTTP and WebSocket port.                                                                                                                          |
+| `HOST`                   | all interfaces               | Address to listen on.                                                                                                                             |
+| `CONTENT_DIR`            | the repository's `content/`  | Folder with the content JSON (the image sets `/app/content`).                                                                                     |
+| `WEB_DIR`                | `apps/web/dist` if it exists | Built web client to serve on the same port. Unset and no `dist`: only `/health` and the WebSocket.                                                |
+| `ROOMS_DIR`              | unset: memory only           | Folder for saved rooms (the image sets `/data/rooms`). Unset: a restart ends every game.                                                          |
+| `MAX_CONNECTIONS`        | `200`                        | Sockets in all; the next upgrade gets HTTP 503.                                                                                                   |
+| `MAX_CONNECTIONS_PER_IP` | `12`                         | Sockets from one address; the next gets HTTP 429. Friends on one network share an address: keep it above their tabs.                              |
+| `MAX_ROOMS`              | `500`                        | Rooms at once; `create` answers `server-busy`.                                                                                                    |
+| `MAX_BUFFERED_BYTES`     | `1048576`                    | A socket with more than this queued (it is not reading) is dropped.                                                                               |
 
 A bad value stops the server at start with every problem listed. Fixed limits (not variables): frames over
 4 KiB close the socket (1009); 30 messages burst and 10 per second per socket (1008); ping every 15 s.

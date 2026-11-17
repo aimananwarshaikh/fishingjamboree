@@ -89,6 +89,7 @@ export function serverUrl(): string {
     dev: import.meta.env.DEV,
     allowed: parseAllowList(import.meta.env.VITE_ALLOWED_SERVERS as string | undefined),
     defaultServer: import.meta.env.VITE_SERVER_URL as string | undefined,
+    sameOrigin: !import.meta.env.DEV,
   });
   if (resolved.ignored) console.warn(resolved.ignored);
   return resolved.url;

@@ -141,3 +141,47 @@ describe("VITE_SERVER_URL (B5: the page and the server on different hosts)", () 
     );
   });
 });
+
+describe("sameOrigin (the page is served by the game server)", () => {
+  const options = { dev: false, allowed: [], sameOrigin: true };
+  const at = (search: string, protocol: string, hostname: string, host: string) => ({
+    search,
+    protocol,
+    hostname,
+    host,
+  });
+
+  it("connects back to the page's own address, with its port, wss on https", () => {
+    expect(
+      resolveServerUrl(at("", "https:", "x.trycloudflare.com", "x.trycloudflare.com"), options).url,
+    ).toBe("wss://x.trycloudflare.com");
+    expect(resolveServerUrl(at("", "http:", "localhost", "localhost:8787"), options).url).toBe(
+      "ws://localhost:8787",
+    );
+    expect(resolveServerUrl(at("", "http:", "192.168.1.5", "192.168.1.5:8787"), options).url).toBe(
+      "ws://192.168.1.5:8787",
+    );
+  });
+
+  it("VITE_SERVER_URL still wins, and ?server= is still refused for an unlisted server", () => {
+    expect(
+      resolveServerUrl(at("", "https:", "a.example", "a.example"), {
+        ...options,
+        defaultServer: "wss://b.example",
+      }).url,
+    ).toBe("wss://b.example");
+    const r = resolveServerUrl(
+      at("?server=wss://evil.example", "https:", "a.example", "a.example"),
+      options,
+    );
+    expect(r.url).toBe("wss://a.example");
+    expect(r.ignored).toMatch(/not allowed/);
+  });
+
+  it("without it (dev) the default is still the page host on port 8787", () => {
+    expect(
+      resolveServerUrl(at("", "http:", "localhost", "localhost:5173"), { dev: true, allowed: [] })
+        .url,
+    ).toBe("ws://localhost:8787");
+  });
+});

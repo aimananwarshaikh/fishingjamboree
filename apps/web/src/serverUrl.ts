@@ -2,7 +2,10 @@
  * Which game server the client talks to (review P3: `?server=` could send the
  * seat token anywhere). Pure, so it can be tested.
  *
- * - Default: the server this build was made for, `VITE_SERVER_URL=wss://host`
+ * - Default in a production build served by the game server itself (the
+ *   normal case, `pnpm start:server` with the built client): the address the
+ *   page was loaded from, `wss` on `https`. One address, one tunnel.
+ * - Otherwise the server this build was made for, `VITE_SERVER_URL=wss://host`
  *   (set when the page and the server are on different hosts, as on a static
  *   host); without it, the page's own host on port 8787, `wss` on an `https`
  *   page. A `VITE_SERVER_URL` that is not `ws:`/`wss:`, or is `ws:` on an
@@ -20,6 +23,8 @@ export interface PageLocation {
   search: string;
   protocol: string;
   hostname: string;
+  /** `hostname` with the port, when there is one (`location.host`). Falls back to `hostname`. */
+  host?: string;
 }
 
 export interface ServerUrlOptions {
@@ -27,6 +32,8 @@ export interface ServerUrlOptions {
   dev: boolean;
   /** Origins (`wss://host[:port]`) a production build may be pointed at. */
   allowed: readonly string[];
+  /** The page comes from the game server: connect back to its own address (production builds). */
+  sameOrigin?: boolean;
   /** The server this build was made for (`VITE_SERVER_URL`), if any. */
   defaultServer?: string | undefined;
 }
@@ -73,7 +80,12 @@ export function resolveServerUrl(page: PageLocation, options: ServerUrlOptions):
     configuredProblem = `VITE_SERVER_URL=${configured} ignored: an https page can only use wss://`;
   }
   const useConfigured = configured !== null && configuredProblem === null;
-  const fallback = useConfigured ? (configured as string) : pageHost;
+  const ownAddress = `${secure ? "wss" : "ws"}://${page.host || page.hostname || "localhost"}`;
+  const fallback = useConfigured
+    ? (configured as string)
+    : options.sameOrigin
+      ? ownAddress
+      : pageHost;
   const asked = new URLSearchParams(page.search).get("server");
   if (!asked) return { url: fallback, ignored: configuredProblem };
   const ignore = (why: string) => ({
