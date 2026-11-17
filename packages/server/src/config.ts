@@ -82,6 +82,7 @@ export interface ServerSettings {
   host: string | undefined;
   contentDir: string | undefined;
   roomsDir: string | undefined;
+  webDir: string | undefined;
   transport: Partial<TransportConfig>;
 }
 
@@ -130,6 +131,7 @@ export function readServerSettings(
       host: blank(env.HOST),
       contentDir: blank(env.CONTENT_DIR),
       roomsDir: blank(env.ROOMS_DIR),
+      webDir: blank(env.WEB_DIR),
       transport,
     },
   };

@@ -45,6 +45,18 @@ curl localhost:8787/health   # → ok
 A client connects by WebSocket to `ws://localhost:8787` (the same port, any path). Messages are
 JSON text frames. The messages, rules and limits are in [`docs/protocol.md`](docs/protocol.md).
 
+### Play with a friend over the internet (quick)
+
+Build the web client, start the server (it serves the page on the same port) and open a free tunnel:
+
+```bash
+pnpm --filter @fishingjamboree/web build
+pnpm start:server
+cloudflared tunnel --url http://localhost:8787   # second terminal; prints the public link
+```
+
+Send the link and the room code. Details and notes: [`docs/deploy.md`](docs/deploy.md) section 0.
+
 ### Smoke test
 
 With the server running, connect with a WebSocket client and create a room:
