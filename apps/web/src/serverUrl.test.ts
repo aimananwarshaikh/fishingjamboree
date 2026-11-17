@@ -90,3 +90,54 @@ describe("parseAllowList", () => {
     expect(parseAllowList(undefined)).toEqual([]);
   });
 });
+
+describe("VITE_SERVER_URL (B5: the page and the server on different hosts)", () => {
+  const options = { dev: false, allowed: [], defaultServer: "wss://jam.example" };
+
+  it("is the default server instead of the page's host", () => {
+    expect(resolveServerUrl(page("", "https:"), options)).toEqual({
+      url: "wss://jam.example",
+      ignored: null,
+    });
+    expect(
+      resolveServerUrl(page("", "http:"), { ...options, defaultServer: "ws://10.0.0.2:9000" }).url,
+    ).toBe("ws://10.0.0.2:9000");
+  });
+
+  it("is also allowed as ?server= in a production build, but no other server is", () => {
+    expect(
+      resolveServerUrl(page("?server=wss://jam.example", "https:"), options).ignored,
+    ).toBeNull();
+    const other = resolveServerUrl(page("?server=wss://evil.example", "https:"), options);
+    expect(other.url).toBe("wss://jam.example");
+    expect(other.ignored).toMatch(/not allowed/);
+  });
+
+  it("is ignored with a warning when it is not ws/wss, or ws on an https page", () => {
+    const junk = resolveServerUrl(page("", "https:"), {
+      ...options,
+      defaultServer: "https://jam.example",
+    });
+    expect(junk.url).toBe("wss://game.example:8787");
+    expect(junk.ignored).toMatch(/VITE_SERVER_URL.*not a ws/);
+    const insecure = resolveServerUrl(page("", "https:"), {
+      ...options,
+      defaultServer: "ws://jam.example",
+    });
+    expect(insecure.url).toBe("wss://game.example:8787");
+    expect(insecure.ignored).toMatch(/https page can only use wss/);
+    // An ignored default is not trusted for ?server= either.
+    expect(
+      resolveServerUrl(page("?server=ws://jam.example", "http:"), {
+        ...options,
+        defaultServer: "https://jam.example",
+      }).ignored,
+    ).toMatch(/not allowed/);
+  });
+
+  it("blank counts as unset", () => {
+    expect(resolveServerUrl(page(), { ...options, defaultServer: "  " }).url).toBe(
+      "ws://game.example:8787",
+    );
+  });
+});

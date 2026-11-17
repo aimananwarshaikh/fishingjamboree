@@ -18,3 +18,47 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+
+  playtest:
+    name: three-tab playtest (built web, server as deployed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Playwright is only for this script, so it is installed outside the lockfile.
+      - run: npm install -g playwright && playwright install --with-deps chromium
+      - name: Build the web client for a local server
+        run: pnpm --filter @fishingjamboree/web build
+        env:
+          VITE_SERVER_URL: ws://localhost:8787
+      - name: Start the server (the Origin check on, rooms saved) and the built client
+        run: |
+          mkdir -p "$RUNNER_TEMP/rooms"
+          ALLOWED_ORIGINS=http://localhost:4173 ROOMS_DIR="$RUNNER_TEMP/rooms" \
+            pnpm start:server > "$RUNNER_TEMP/server.log" 2>&1 &
+          pnpm --filter @fishingjamboree/web exec vite preview --port 4173 --strictPort \
+            > "$RUNNER_TEMP/web.log" 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf localhost:8787/health && curl -sf -o /dev/null localhost:4173 && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/server.log" "$RUNNER_TEMP/web.log"; exit 1
+      - name: Playtest
+        run: NODE_PATH="$(npm root -g)" node scripts/playtest-three-tabs.mjs
+        env:
+          WEB_URL: http://localhost:4173
+      - name: Playtest with a closed tab (GRACE=1)
+        run: NODE_PATH="$(npm root -g)" node scripts/playtest-three-tabs.mjs
+        env:
+          WEB_URL: http://localhost:4173
+          GRACE: "1"
+          SEED: a
+      - name: Server log
+        if: always()
+        run: cat "$RUNNER_TEMP/server.log"

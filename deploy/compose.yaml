@@ -1,0 +1,42 @@
+# One server process and Caddy for TLS (wss). Run from this folder:
+#   cp .env.example .env   (then fill it in; .env is never committed)
+#   docker compose up -d --build
+# Only Caddy publishes ports. The server is reachable only through it, which is
+# what makes TRUST_PROXY=1 safe (nobody can send the server a forged X-Forwarded-For).
+name: fishingjamboree
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      ALLOWED_ORIGINS: ${WEB_ORIGIN:?set WEB_ORIGIN in .env, e.g. https://jamboree.pages.dev}
+      TRUST_PROXY: "1"
+      # Optional limits (defaults are in docs/deploy.md):
+      # MAX_CONNECTIONS: "200"
+      # MAX_CONNECTIONS_PER_IP: "12"
+    volumes:
+      - rooms:/data/rooms
+    stop_grace_period: 15s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [server]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SERVER_DOMAIN: ${SERVER_DOMAIN:?set SERVER_DOMAIN in .env, e.g. jamboree.duckdns.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  rooms:
+  caddy_data:
+  caddy_config:

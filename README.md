@@ -30,6 +30,10 @@ Settings (environment variables):
 
 With `ROOMS_DIR` set, every room is saved there (one JSON file per room, after each change) and restored when the server starts, so a restart does not end games: players come back with their saved seat or rejoin link. The files hold seat tokens and game seeds; keep the folder private. A file that cannot be restored is logged and renamed to `….json.bad`. Without it, a restart ends every game.
 
+More variables (`ALLOWED_ORIGINS`, `TRUST_PROXY`, `MAX_CONNECTIONS`, `MAX_CONNECTIONS_PER_IP`, `MAX_ROOMS`,
+`MAX_BUFFERED_BYTES`) and the web build's `VITE_SERVER_URL` are listed in [`docs/deploy.md`](docs/deploy.md),
+which also says how to put the game on the internet (Docker Compose with Caddy for `wss`, Cloudflare Pages for the web).
+
 For example: `PORT=9000 HOST=127.0.0.1 pnpm start:server`.
 
 Health check:

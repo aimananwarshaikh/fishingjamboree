@@ -497,6 +497,7 @@ export class ServerCore {
     this.rooms.set(code, room);
     this.touch(code);
     const seat = this.addSeat(room, name, conn);
+    this.log(`room ${code} created (${this.rooms.size} rooms)`);
     this.welcome(out, room, seat);
   }
 
@@ -590,6 +591,7 @@ export class ServerCore {
       turnStartedAt: this.now(),
     };
     room.status = "playing";
+    this.log(`room ${room.code} started with ${room.seats.length} players`);
     for (const s of room.seats) {
       s.graceFrom = null;
       s.graceLeftMs = room.timers.reconnectBudgetMs;
@@ -738,6 +740,7 @@ export class ServerCore {
     }
     if (state.phase.kind === "gameOver") {
       room.status = "finished";
+      this.log(`room ${room.code} finished`);
       // Nobody is away once the game is over: there are no more turns to miss.
       for (const s of room.seats) {
         s.away = false;

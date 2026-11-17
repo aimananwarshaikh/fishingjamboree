@@ -10,8 +10,12 @@
  *   - Heartbeats (ping/pong) notice dead sockets; frames over
  *     `maxMessageBytes` close the socket (1009); a token bucket per socket
  *     closes floods (1008); `maxRooms` caps the number of rooms.
+ *   - B5: the upgrade is refused (HTTP 403/429/503, logged) for an `Origin`
+ *     not on the allow-list, and over `maxConnections` in all or
+ *     `maxConnectionsPerIp` for one address; a socket whose send buffer grows
+ *     past `maxBufferedBytes` (a client that does not read) is dropped.
  */
-import type { Server as HttpServer } from "node:http";
+import type { IncomingMessage, Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import type { RawData } from "ws";
 import { ServerCore } from "./core";
@@ -32,6 +36,21 @@ export interface TransportConfig {
   maxRooms: number;
   /** After an error thrown by `core.tick`, wait at least this long before the next tick. */
   tickRetryMs: number;
+  /**
+   * Origins (`https://host[:port]`, lower case) a browser page may connect
+   * from. `null`: any. A client that sends no `Origin` header (not a browser)
+   * is let through: the check only stops other websites from using a
+   * player's browser.
+   */
+  allowedOrigins: readonly string[] | null;
+  /** Sockets open at once, in all; the next upgrade is answered 503. */
+  maxConnections: number;
+  /** Sockets open at once from one address; the next upgrade is answered 429. */
+  maxConnectionsPerIp: number;
+  /** Behind a reverse proxy: the address is the last `X-Forwarded-For` entry, not the socket's. */
+  trustProxy: boolean;
+  /** A socket with more than this queued to send (it is not reading) is dropped. */
+  maxBufferedBytes: number;
 }
 
 export const DEFAULT_TRANSPORT_CONFIG: TransportConfig = {
@@ -41,6 +60,11 @@ export const DEFAULT_TRANSPORT_CONFIG: TransportConfig = {
   ratePerSecond: 10,
   maxRooms: 500,
   tickRetryMs: 1_000,
+  allowedOrigins: null,
+  maxConnections: 200,
+  maxConnectionsPerIp: 12,
+  trustProxy: false,
+  maxBufferedBytes: 1024 * 1024,
 };
 
 /** WebSocket close codes this server uses. */
@@ -90,8 +114,26 @@ interface Conn {
   closing: boolean;
   tokens: number;
   refilledAt: number;
+  ip: string;
   closed: Promise<void>;
 }
+
+/** The client's address: the socket's, or behind a trusted proxy the last `X-Forwarded-For` entry. */
+export function clientIp(req: IncomingMessage, trustProxy: boolean): string {
+  if (trustProxy) {
+    const header = req.headers["x-forwarded-for"];
+    const last = (Array.isArray(header) ? header.join(",") : (header ?? ""))
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part !== "")
+      .pop();
+    if (last) return last;
+  }
+  return req.socket.remoteAddress ?? "unknown";
+}
+
+/** Why an upgrade is refused: the HTTP status and a short reason, or `null` to accept. */
+type Refusal = { code: number; reason: string; log: string };
 
 export async function createGameServer(options: GameServerOptions): Promise<GameServer> {
   const config: TransportConfig = { ...DEFAULT_TRANSPORT_CONFIG, ...options.transport };
@@ -101,7 +143,68 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
   const core = new ServerCore({ log, trackChanges: store !== undefined, ...options.core, now });
   if (store) restoreRooms(core, store, log);
 
-  const wsOptions = { maxPayload: config.maxMessageBytes };
+  const conns = new Map<ConnId, Conn>();
+  const perIp = new Map<string, number>();
+  let nextConn = 1;
+  let shuttingDown = false;
+  let tickTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // --- Who may connect (Origin, connection limits) ---------------------------
+
+  const allowedOrigins = config.allowedOrigins?.map((o) => o.toLowerCase()) ?? null;
+
+  const refusalFor = (req: IncomingMessage): Refusal | null => {
+    const ip = clientIp(req, config.trustProxy);
+    const origin = req.headers.origin;
+    if (shuttingDown) return { code: 503, reason: "shutting down", log: "shutting down" };
+    if (allowedOrigins && origin !== undefined && !allowedOrigins.includes(origin.toLowerCase())) {
+      return {
+        code: 403,
+        reason: "origin not allowed",
+        log: `origin not allowed (${origin.slice(0, 100)})`,
+      };
+    }
+    if (conns.size >= config.maxConnections) {
+      return { code: 503, reason: "server full", log: `server full (${conns.size} connections)` };
+    }
+    if ((perIp.get(ip) ?? 0) >= config.maxConnectionsPerIp) {
+      return { code: 429, reason: "too many connections", log: "too many connections from it" };
+    }
+    return null;
+  };
+
+  // One log line per refused connection, but a flood of them cannot flood the log.
+  let refusalWindowStart = 0;
+  let refusalLines = 0;
+  let refusalsSuppressed = 0;
+  const logRefusal = (ip: string, text: string) => {
+    const t = now();
+    if (t - refusalWindowStart >= 10_000) {
+      if (refusalsSuppressed > 0) log(`${refusalsSuppressed} more refused connections not logged`);
+      refusalWindowStart = t;
+      refusalLines = 0;
+      refusalsSuppressed = 0;
+    }
+    if (refusalLines >= 10) {
+      refusalsSuppressed += 1;
+      return;
+    }
+    refusalLines += 1;
+    log(`refused connection from ${ip}: ${text}`);
+  };
+
+  const wsOptions = {
+    maxPayload: config.maxMessageBytes,
+    verifyClient: (
+      info: { req: IncomingMessage },
+      done: (ok: boolean, code?: number, message?: string) => void,
+    ) => {
+      const refusal = refusalFor(info.req);
+      if (refusal === null) return done(true);
+      logRefusal(clientIp(info.req, config.trustProxy), refusal.log);
+      done(false, refusal.code, refusal.reason);
+    },
+  };
   const wss = options.server
     ? new WebSocketServer({ ...wsOptions, server: options.server })
     : new WebSocketServer({
@@ -116,15 +219,18 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
     });
   }
 
-  const conns = new Map<ConnId, Conn>();
-  let nextConn = 1;
-  let shuttingDown = false;
-  let tickTimer: ReturnType<typeof setTimeout> | null = null;
-
   // --- Carrying out what the core asks for -------------------------------
 
   const send = (conn: Conn, message: ServerMessage) => {
-    if (conn.ws.readyState === WebSocket.OPEN) conn.ws.send(JSON.stringify(message));
+    if (conn.ws.readyState !== WebSocket.OPEN) return;
+    // A client that does not read would make the server hold its messages in memory.
+    if (conn.ws.bufferedAmount > config.maxBufferedBytes) {
+      log(`${conn.id}: not reading (${conn.ws.bufferedAmount} bytes queued), dropping`);
+      conn.closing = true;
+      conn.ws.terminate();
+      return;
+    }
+    conn.ws.send(JSON.stringify(message));
   };
 
   const closeConn = (conn: Conn, code: number, reason: string) => {
@@ -274,12 +380,15 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
     );
   };
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, req) => {
     const id: ConnId = `ws-${nextConn++}`;
+    const ip = clientIp(req, config.trustProxy);
+    perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
     let markClosed = () => {};
     const conn: Conn = {
       id,
       ws,
+      ip,
       alive: true,
       closing: false,
       tokens: config.rateBurst,
@@ -292,6 +401,9 @@ export async function createGameServer(options: GameServerOptions): Promise<Game
     ws.on("error", (error) => log(`${id}: socket error: ${error.message}`));
     // `close` fires once per socket, whoever closed it and however.
     ws.on("close", () => {
+      const left = (perIp.get(ip) ?? 1) - 1;
+      if (left > 0) perIp.set(ip, left);
+      else perIp.delete(ip);
       if (conns.get(id) === conn) {
         conns.delete(id);
         run("disconnect", () => core.disconnect(id));
