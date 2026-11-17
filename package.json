@@ -19,7 +19,8 @@
     "start:server": "pnpm --filter @fishingjamboree/server start",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "board:render": "node scripts/render-board.mjs",
-    "art:web": "node scripts/make-web-art.mjs"
+    "art:web": "node scripts/make-web-art.mjs",
+    "sim": "pnpm --silent --filter @fishingjamboree/sim sim --"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

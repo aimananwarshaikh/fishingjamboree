@@ -9,6 +9,10 @@
     "@fishingjamboree/engine": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.23.15"
+  },
+  "scripts": {
+    "sim": "tsx src/cli.ts"
   }
 }
