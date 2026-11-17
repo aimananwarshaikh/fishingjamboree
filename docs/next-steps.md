@@ -124,7 +124,7 @@ Phases are in `docs/build-plan.md` section 5.
   - Free-tier terms (Oracle, Google, Cloudflare, DuckDNS) were not looked up: check them when signing up.
 - **B6 (bots, balancing):** `packages/sim` is empty. Also tune the Golden Hook Award amounts, the combined budget and the pool (targets in `docs/bonus-awards.md`). Card counts, the upgrade price ($200 default, $300 in simulation) and the design questions 1–2 feed into it.
   - From the end-of-B1 review P2-4 (designer, 2026-11-14: no change until the simulator): Landlubber almost never pays (0 never wins, and the cautious player it is meant for has 0 Risk draws); a removed player still counts in "fewest" awards (Homebody, Landlubber); Golden Touch paid in about 2% of games it was drawn in (no Golden Fish event in 34% of games); the budget rule draws Daredevil and Stripped Down about half as often as the others; Daredevil and Shark Bait pay nobody with cautious players; the placeholder amounts are large (mean $535–$605 paid per game). Numbers in `docs/review-2026-11-14.md`.
-- **B7 (playtests):** nothing yet.
+- **B7 (playtests):** first remote test done 2026-11-17 (designer plus one friend, through a `cloudflared` tunnel to one local server, B5 follow-up): the game works end to end and the log showed every event. Found: **on a phone the drawn card was not visible** to the friend (the log recorded it). Not investigated; it is a UX/UI item for the final UX/UI build (check the card flip in `StepViews.tsx` and its overlay on a narrow screen, and whether it is hidden behind or below the board, or too short-lived).
 
 ## Recommended order
 
