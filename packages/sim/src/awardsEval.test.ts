@@ -5,34 +5,67 @@ import type { GameRecord, PlayerRecord } from "./play";
 import { runSpecs, makeSpecs } from "./batch";
 import { content, raw } from "./testContent";
 
-const stats = {} as PlayerStats;
-const player = (seat: string, base: number): PlayerRecord => ({
-  seat,
-  bot: "greedy",
-  turnIndex: Number(seat.slice(1)) - 1,
-  cash: base,
-  fineTokens: 0,
-  base,
-  awards: 0,
-  total: base,
-  speed: false,
-  capacity: false,
-  helicopterUses: 0,
-  sinkingBoats: 0,
-  stats,
+// Each test award looks at its own stat, so a test can say who wins it.
+const STAT_OF: Record<string, keyof PlayerStats> = {
+  a: "fishCaught",
+  b: "tilesMoved",
+  c: "bootDraws",
+};
+const noStats = (): PlayerStats => ({
+  fishCaught: 0,
+  fishLostToCapacity: 0,
+  fishLostToShark: 0,
+  tilesMoved: 0,
+  riskDraws: 0,
+  sharkDraws: 0,
+  bootDraws: 0,
+  dockVisits: 0,
+  finesPaid: 0,
+  goldenFishTaken: 0,
+  turnsBlocked: 0,
 });
-const record = (bases: number[], awardWinners: Record<string, string[]>): GameRecord => ({
-  seed: "x",
-  players: bases.length,
-  actions: 0,
-  scores: bases.map((b, i) => player(`p${i + 1}`, b)),
-  winners: [],
-  baseWinners: [],
-  drawn: [],
-  awardWinners,
-  goldenFish: { placed: 0, taken: 0, lost: 0, expired: 0 },
-  events: {},
-});
+const player = (seat: string, base: number, winning: string[]): PlayerRecord => {
+  const stats = noStats();
+  for (const id of winning) stats[STAT_OF[id]!] = 1;
+  return {
+    seat,
+    bot: "greedy",
+    turnIndex: Number(seat.slice(1)) - 1,
+    cash: base,
+    fineTokens: 0,
+    base,
+    awards: 0,
+    total: base,
+    speed: false,
+    capacity: false,
+    helicopterUses: 0,
+    sinkingBoats: 0,
+    removed: false,
+    missedLastTurn: false,
+    stats,
+  };
+};
+/** `winners`: award id to the seats that win it (a stat of 1; everyone else 0). */
+const record = (bases: number[], winners: Record<string, string[]>): GameRecord => {
+  const seats = bases.map((_, i) => `p${i + 1}`);
+  return {
+    seed: "x",
+    players: bases.length,
+    actions: 0,
+    scores: seats.map((seat, i) =>
+      player(
+        seat,
+        bases[i]!,
+        Object.keys(winners).filter((id) => winners[id]!.includes(seat)),
+      ),
+    ),
+    winners: [],
+    baseWinners: [],
+    drawn: [],
+    goldenFish: { placed: 0, taken: 0, lost: 0, expired: 0 },
+    events: {},
+  };
+};
 const awards = (amounts: Record<string, number>, budget: number, perGame = 2): AwardsContent => ({
   perGame: { "2": perGame, "3": perGame },
   budget,
@@ -41,7 +74,7 @@ const awards = (amounts: Record<string, number>, budget: number, perGame = 2): A
     name: id,
     text: id,
     kind: "most",
-    stat: "fishCaught",
+    stat: STAT_OF[id]!,
     amount,
   })),
 });
@@ -94,6 +127,22 @@ describe("evaluateAwards", () => {
       games: 1,
       flips: 2 / 3,
     });
+  });
+
+  it("re-resolves a changed definition from the recorded stats", () => {
+    // p1 has the stat at 1, p2 at 0: "most" pays p1; "least" pays nobody (0 never wins); a condition max 0 pays p2.
+    const r = record([0, 0], { a: ["p1"], b: [] });
+    const base = awards({ a: 100, b: 100 }, 1000, 1);
+    const def = base.awards[0]!;
+    const pays = (d: typeof def) =>
+      evaluateAwards([r], { ...base, awards: [d] }).lines[0]!.paidRate;
+    expect(pays(def)).toBe(1);
+    expect(pays({ ...def, kind: "least" })).toBe(0);
+    expect(pays({ ...def, kind: "condition", max: 0 })).toBe(1);
+    expect(
+      evaluateAwards([r], { ...base, awards: [{ ...def, kind: "condition", max: 0 }] }).lines[0]!
+        .meanPayoutWhenPaid,
+    ).toBe(100);
   });
 
   it("a tied award pays each winner", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyAction } from "./apply";
 import { getLegalActions } from "./legal";
-import { compiledContent, rawContent } from "./testContent";
+import { compiledContent, ruleRawContent } from "./testContent";
 import {
   act,
   actor,
@@ -172,7 +172,7 @@ describe("the shop", () => {
 
   it("rejects buying outside the shop, by another player, or what is not affordable", () => {
     expect(code(withPlayer(base, 0, { cash: 900 }), buy("speed"))).toBe("wrong-phase");
-    const raw = rawContent();
+    const raw = ruleRawContent();
     raw.rules.upgrades.speed.price = 300;
     const dear = compiledContent(raw);
     const { state } = dock({ cash: 200 }, dear);

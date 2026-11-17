@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { replay } from "@fishingjamboree/engine";
+import { awardWinners } from "./awardsEval";
 import { playGame } from "./play";
 import { content } from "./testContent";
 
@@ -23,17 +24,17 @@ describe("playGame", () => {
     expect(record.scores.find((s) => s.seat === "p3")!.bot).toBe("risk-taker");
   });
 
-  it("resolves every award the same way the engine does for the drawn ones", () => {
+  it("awardWinners on a record gives the engine's winners for the drawn awards", () => {
     for (let g = 0; g < 20; g += 1) {
       const { state, record } = playGame(content, {
         seed: `aw-${g}`,
         bots: ["greedy", "risk-taker", "cautious"],
       });
       expect(record.drawn).toHaveLength(3);
-      expect(Object.keys(record.awardWinners).sort()).toEqual(
-        content.awards.awards.map((a) => a.id).sort(),
-      );
-      for (const a of state.result!.awards) expect(record.awardWinners[a.award]).toEqual(a.winners);
+      for (const a of state.result!.awards) {
+        const def = content.awards.awards.find((d) => d.id === a.award)!;
+        expect(awardWinners(record, def)).toEqual(a.winners);
+      }
       const paid = record.scores.reduce((sum, s) => sum + s.awards, 0);
       const expected = state.result!.awards.reduce(
         (sum, a) => sum + a.amount * a.winners.length,

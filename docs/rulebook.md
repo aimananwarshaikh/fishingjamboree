@@ -106,7 +106,7 @@ On your next turn, sail out as normal. You can't stay docked turn after turn; if
 
 ### Upgrades
 
-Buy upgrades while docked. Each costs $200 (may change to $300 after simulation; it is a config value). You can own one of each; they don't stack.
+Buy upgrades while docked. Each costs $300 (set by the balance simulation in Milestone B6; it is a config value, `rules.upgrades` in `content/rules.json`). You can own one of each; they don't stack.
 
 | Upgrade  | Effect                    |
 | -------- | ------------------------- |

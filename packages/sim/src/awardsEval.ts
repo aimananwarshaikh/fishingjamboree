@@ -2,12 +2,38 @@
  * Golden Hook Awards, evaluated on recorded games for any amounts and budget.
  *
  * Play never depends on the awards (secret, own RNG stream; bots cannot see
- * them), and each record holds who would be paid by every award. So for a
- * candidate `AwardsContent` this takes, per game, the exact average over every
- * valid set the engine could draw (it draws one uniformly), with no replay.
+ * them), and each record keeps every player's counted stats, upgrades and
+ * fine tokens. So any candidate `AwardsContent` (other amounts, budget, or
+ * award definitions) is resolved on the recorded games with the engine's own
+ * `resolveAward`, and each game counts as the exact average over every valid
+ * set the engine could draw (it draws one uniformly). No replay is needed.
  */
-import type { AwardDef, AwardId, AwardsContent, PlayerId } from "@fishingjamboree/engine";
+import {
+  resolveAward,
+  type AwardDef,
+  type AwardId,
+  type AwardsContent,
+  type PlayerId,
+  type PlayerState,
+} from "@fishingjamboree/engine";
 import type { GameRecord } from "./play";
+
+/** The seats `def` would pay in this recorded game (the engine's rule, from the recorded stats). */
+export function awardWinners(record: GameRecord, def: AwardDef): PlayerId[] {
+  const players: PlayerState[] = record.scores.map((s) => ({
+    id: s.seat,
+    cash: s.cash,
+    fish: [],
+    fineTokens: s.fineTokens,
+    upgrades: { speed: s.speed, capacity: s.capacity },
+    position: null,
+    missedTurns: 0,
+    missedLastTurn: s.missedLastTurn,
+    removed: s.removed,
+  }));
+  const stats = Object.fromEntries(record.scores.map((s) => [s.seat, s.stats]));
+  return resolveAward(def, players, stats).winners;
+}
 
 const conflicting = (a: AwardDef, b: AwardDef): boolean =>
   (a.conflicts ?? []).includes(b.id) || (b.conflicts ?? []).includes(a.id);
@@ -108,7 +134,8 @@ export function evaluateAwards(
       setsByCount.set(count, sets);
       validCounts[r.players] = sets.length;
     }
-    const winnersOf = (id: AwardId) => r.awardWinners[id] ?? [];
+    const winners = new Map(awards.awards.map((a) => [a.id, awardWinners(r, a)]));
+    const winnersOf = (id: AwardId) => winners.get(id) ?? [];
     for (const a of awards.awards) {
       const w = winnersOf(a.id);
       if (w.length > 0) {

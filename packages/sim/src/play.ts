@@ -9,7 +9,6 @@ import {
   createGame,
   getLegalActions,
   redactForClient,
-  resolveAward,
   type AwardId,
   type Content,
   type GameEvent,
@@ -41,6 +40,8 @@ export interface PlayerRecord {
   capacity: boolean;
   helicopterUses: number;
   sinkingBoats: number;
+  removed: boolean;
+  missedLastTurn: boolean;
   stats: PlayerStats;
 }
 
@@ -56,13 +57,6 @@ export interface GameRecord {
   baseWinners: PlayerId[];
   /** Award ids drawn for this game, in draw order. */
   drawn: AwardId[];
-  /**
-   * Every award in the content, resolved on this game as if it had been drawn:
-   * the seats that would be paid. Play does not depend on the awards (they
-   * are secret and use their own RNG stream), so this lets the report try
-   * other amounts and budgets without replaying.
-   */
-  awardWinners: Record<AwardId, PlayerId[]>;
   goldenFish: { placed: number; taken: number; lost: number; expired: number };
   events: Partial<Record<GameEvent["type"], number>>;
 }
@@ -146,14 +140,12 @@ function recordGame(
       sinkingBoats: events.filter(
         (e) => e.type === "fishLost" && e.player === p.id && e.reason === "sinking-boat",
       ).length,
+      removed: p.removed,
+      missedLastTurn: p.missedLastTurn,
       stats: result.stats[p.id] as PlayerStats,
     };
   });
   const bestBase = Math.max(...scores.map((s) => s.base));
-  const awardWinners: Record<AwardId, PlayerId[]> = {};
-  for (const def of content.awards.awards) {
-    awardWinners[def.id] = resolveAward(def, state.players, result.stats).winners;
-  }
   return {
     seed: spec.seed,
     players: spec.bots.length,
@@ -162,7 +154,6 @@ function recordGame(
     winners: result.winners,
     baseWinners: scores.filter((s) => s.base === bestBase).map((s) => s.seat),
     drawn: result.awards.map((a) => a.award),
-    awardWinners,
     goldenFish: {
       placed: counts.goldenFishPlaced ?? 0,
       taken: counts.goldenFishTaken ?? 0,

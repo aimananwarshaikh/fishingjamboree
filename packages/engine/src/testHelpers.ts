@@ -8,7 +8,7 @@ import { expandDeckList } from "./decks";
 import { getLegalActions } from "./legal";
 import { rollDie, seedRng } from "./rng";
 import { createGame } from "./setup";
-import { compiledContent } from "./testContent";
+import { compiledContent, ruleRawContent } from "./testContent";
 import type {
   Action,
   CardId,
@@ -23,7 +23,8 @@ import type {
   TileId,
 } from "./types";
 
-export const content = compiledContent();
+/** The real content with the upgrade price pinned (see `ruleRawContent`). */
+export const content = compiledContent(ruleRawContent());
 export const { board } = content;
 
 export const tile = (x: number, y: number): TileId => y * board.width + x;

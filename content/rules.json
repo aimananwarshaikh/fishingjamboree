@@ -11,11 +11,11 @@
   "setupShips": 2,
   "upgrades": {
     "speed": {
-      "price": 200,
+      "price": 300,
       "rollBonus": 2
     },
     "capacity": {
-      "price": 200,
+      "price": 300,
       "capacity": 8
     }
   }
