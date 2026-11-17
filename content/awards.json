@@ -84,9 +84,10 @@
     {
       "id": "landlubber",
       "name": "Landlubber",
-      "text": "Fewest Risk cards drawn",
-      "kind": "least",
+      "text": "Drew no Risk cards",
+      "kind": "condition",
       "stat": "riskDraws",
+      "max": 0,
       "amount": 200,
       "conflicts": ["daredevil"]
     },

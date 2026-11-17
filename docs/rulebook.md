@@ -174,7 +174,7 @@ At setup, without telling anyone, the game draws secret awards: **3** with 3 or 
 
 After round 20 each award is revealed in turn and paid:
 
-- **"Most" and "fewest" awards** go to the player with the highest (or lowest) count. Every tied player gets the full amount. A count of 0 never wins: nobody is the Boot Lord with no Boots, and nobody wins Landlubber with no Risk cards drawn.
+- **"Most" and "fewest" awards** go to the player with the highest (or lowest) count. Every tied player gets the full amount. A count of 0 never wins: nobody is the Boot Lord with no Boots, and nobody is the Homebody without sailing.
 - **Condition awards** go to every player who meets the condition.
 - A player removed from the game, or one who missed their last turn (online play: away at the end; a turn that only ran out of time after the move is not missed), cannot be paid. If they had the winning count, that award goes unpaid: there is no second place.
 - Award money is added to the final total. It does not pay off fine tokens.
@@ -190,7 +190,7 @@ After round 20 each award is revealed in turn and paid:
 | Dock Regular  | Most times docked (not a Sinking Boat arrival or a Helicopter) | $200   |
 | Fine Print    | Most money fined (fine tokens included)                        | $200   |
 | Golden Touch  | Took a Golden Fish                                             | $200   |
-| Landlubber    | Fewest Risk cards drawn                                        | $200   |
+| Landlubber    | Drew no Risk cards                                             | $200   |
 | Homebody      | Fewest tiles sailed                                            | $100   |
 | Stripped Down | Bought no upgrades                                             | $300   |
 | One of Each?  | Bought exactly one upgrade                                     | $200   |
