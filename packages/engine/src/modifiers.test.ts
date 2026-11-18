@@ -9,7 +9,7 @@ import {
   movementModifier,
   sharkRepelledAt,
 } from "./modifiers";
-import { compiledContent, rawContent } from "./testContent";
+import { compiledContent, ruleRawContent } from "./testContent";
 import { board, clone, content, started, tile, withEvent, withPlayer } from "./testHelpers";
 import type { GameState, Tile } from "./types";
 
@@ -77,7 +77,7 @@ describe("shark repellent", () => {
   });
 
   it("follows the area named in the content", () => {
-    const raw = rawContent();
+    const raw = ruleRawContent();
     raw.cards.cards["shark-repellent"]!.effect = {
       kind: "sharkRepellent",
       area: "davy-jones-locker",
@@ -149,7 +149,7 @@ describe("capacity and upgrades", () => {
   });
 
   it("uses each upgrade's own price", () => {
-    const raw = rawContent();
+    const raw = ruleRawContent();
     raw.rules.upgrades.speed.price = 300;
     const dear = compiledContent(raw);
     expect(affordableUpgrades(dear, player({ cash: 200 }))).toEqual(["capacity"]);

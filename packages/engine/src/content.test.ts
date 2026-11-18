@@ -127,8 +127,8 @@ describe("compileContent: the real content", () => {
     expect(cards["boot"]!.effect).toEqual({ kind: "fish", count: 0, value: 100 });
     expect(cards["shark"]!.effect).toEqual({ kind: "shark", count: 3 });
     expect(cards["movement-1"]!.effect).toEqual({ kind: "movement", delta: -1 });
-    expect(content.rules.upgrades.speed).toEqual({ price: 200, rollBonus: 2 });
-    expect(content.rules.upgrades.capacity).toEqual({ price: 200, capacity: 8 });
+    expect(content.rules.upgrades.speed).toEqual({ price: 300, rollBonus: 2 });
+    expect(content.rules.upgrades.capacity).toEqual({ price: 300, capacity: 8 });
   });
 
   it("hashes the raw content, independent of key order", () => {
@@ -142,7 +142,7 @@ describe("compileContent: the real content", () => {
       board: raw.board,
     } as RawContent;
     expect(compiledContent(reordered).hash).toBe(content.hash);
-    raw.rules.upgrades.speed.price = 300;
+    raw.rules.upgrades.speed.price += 100;
     expect(compiledContent(raw).hash).not.toBe(content.hash);
   });
 

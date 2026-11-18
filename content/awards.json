@@ -1,6 +1,10 @@
 {
-  "perGame": { "2": 2, "3": 3, "4": 3 },
-  "budget": 900,
+  "perGame": {
+    "2": 2,
+    "3": 3,
+    "4": 3
+  },
+  "budget": 800,
   "awards": [
     {
       "id": "big-haul",
@@ -25,7 +29,7 @@
       "text": "Most Risk cards drawn",
       "kind": "most",
       "stat": "riskDraws",
-      "amount": 500,
+      "amount": 300,
       "conflicts": ["landlubber"]
     },
     {
@@ -69,21 +73,13 @@
       "amount": 200
     },
     {
-      "id": "golden-touch",
-      "name": "Golden Touch",
-      "text": "Took a Golden Fish",
-      "kind": "condition",
-      "stat": "goldenFishTaken",
-      "min": 1,
-      "amount": 200
-    },
-    {
       "id": "landlubber",
       "name": "Landlubber",
-      "text": "Fewest Risk cards drawn",
-      "kind": "least",
+      "text": "Drew no Risk cards",
+      "kind": "condition",
       "stat": "riskDraws",
-      "amount": 300,
+      "max": 0,
+      "amount": 200,
       "conflicts": ["daredevil"]
     },
     {
@@ -102,7 +98,7 @@
       "kind": "condition",
       "stat": "upgradesBought",
       "max": 0,
-      "amount": 500,
+      "amount": 300,
       "conflicts": ["fully-loaded"]
     },
     {
@@ -113,7 +109,7 @@
       "stat": "upgradesBought",
       "min": 1,
       "max": 1,
-      "amount": 300
+      "amount": 200
     },
     {
       "id": "fully-loaded",
@@ -122,17 +118,8 @@
       "kind": "condition",
       "stat": "upgradesBought",
       "min": 2,
-      "amount": 200,
+      "amount": 100,
       "conflicts": ["stripped-down"]
-    },
-    {
-      "id": "clean-hands",
-      "name": "Clean Hands",
-      "text": "No fine tokens left at the end",
-      "kind": "condition",
-      "stat": "fineTokens",
-      "max": 0,
-      "amount": 200
     }
   ]
 }

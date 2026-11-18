@@ -7,3 +7,4 @@ dist/
 coverage/
 .vite/
 assets/board/board-overlay.svg
+runs/

@@ -6,6 +6,7 @@ import board from "../../../content/board.json";
 import cards from "../../../content/cards.json";
 import rules from "../../../content/rules.json";
 import awards from "../../../content/awards.json";
+import testAwards from "./testAwards.json";
 import { compileContent } from "./content";
 import type { Content, RawContent } from "./types";
 
@@ -20,4 +21,23 @@ export function compiledContent(raw: RawContent = rawContent()): Content {
     throw new Error(`content failed to compile: ${JSON.stringify(result.issues, null, 2)}`);
   }
   return result.content;
+}
+
+/**
+ * The upgrade price the rule tests are written around. Balancing (B6) tunes
+ * the real price in content/rules.json and the awards in content/awards.json;
+ * the rule tests run on the real board and cards with this price and the
+ * awards in `testAwards.json` (the pool as it was before B6) pinned, so a
+ * retune does not rewrite them. `content.test.ts`, the "content/awards.json
+ * is checked" tests and the simulator check the real values.
+ */
+export const RULE_TEST_UPGRADE_PRICE = 200;
+
+/** The real content with the upgrade prices and the awards pinned for the rule tests. */
+export function ruleRawContent(): RawContent {
+  const raw = rawContent();
+  raw.awards = JSON.parse(JSON.stringify(testAwards)) as RawContent["awards"];
+  raw.rules.upgrades.speed.price = RULE_TEST_UPGRADE_PRICE;
+  raw.rules.upgrades.capacity.price = RULE_TEST_UPGRADE_PRICE;
+  return raw;
 }

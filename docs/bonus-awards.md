@@ -1,6 +1,6 @@
 # Golden Hook Awards (design, decided 2026-11-14)
 
-Status: **design decided by the designer on 2026-11-14; built in B1b (engine and server; amounts are placeholders until B6; the reveal UI is B2).** See "Decisions" below and "Built (B1b)" at the end. `docs/rulebook.md` "End of the game" has the rules as built. Until then "bonus awards" and "bonuses" in this doc mean the same thing as Golden Hook Awards.
+Status: **design decided by the designer on 2026-11-14; built in B1b (engine and server; amounts, budget and pool tuned in B6; the reveal UI is B2).** See "Decisions" below, "Built (B1b)" and "Tuned (B6)" at the end. `docs/rulebook.md` "End of the game" has the rules as built. Until then "bonus awards" and "bonuses" in this doc mean the same thing as Golden Hook Awards.
 
 ## The idea
 
@@ -162,9 +162,17 @@ What the build decided where this doc left room (all in `docs/rulebook-engine-no
 - **Budget:** $900 for 2 and 3 awards alike. **Conflicts:** Daredevil/Landlubber, Sea Legs/Homebody, Stripped Down/Fully Loaded.
 - **The last player left** (everyone else removed) is still paid the awards they qualify for; they win anyway.
 
+## Tuned (B6, 2026-11-17)
+
+Set with the balance simulator (`packages/sim`, `pnpm sim`); numbers and the open points in `docs/balance/b6-report.md`, one commit per change:
+
+- **Amounts** $100 to $300: Big Haul, Daredevil, Stripped Down $300; Sea Legs, Shark Bait, Overstuffed, Dock Regular, Fine Print, Landlubber, One of Each? $200; Boot Lord, Homebody, Fully Loaded $100. The median winning total before awards is about $1,800 with 3 or 4 players, so 10% to 15% is $180 to $270.
+- **Budget** $800. With no award above $300 it only rules out a set of three $300 awards, so every award is now drawn about equally often (21% to 25% of 3–4 player games; the old budget drew Daredevil and Stripped Down half as often).
+- **Landlubber** is "Drew no Risk cards" (a condition), so the careful player it is meant for can win it. It pays in 84% to 99% of games.
+- **Pool** 13: Golden Touch (pays in under half the games: often no Golden Fish is drawn) and Clean Hands (paid nearly everyone) were dropped.
+- **Results (mixed bots, 3/4 players):** the awards change the winner in 17% to 19% of games: about 39% when the gap is $100 to $200, 13% to 15% at $300 to $400, 1% to 2% at $500 to $900, and never at $1,000 or more. One player takes every drawn award in about 10% to 12% of games. With 2 players the flip rate is only 11% (see the report's open points).
+
 ## Still open (small, for the build)
 
-- Exact pool size and final amounts: set in B6.
-- The combined budget for the 3 drawn awards (suggested $800 to $900): set in B6.
 - Reveal order and wording in the UI (B2).
 - Whether a replay or the sim tool should be able to show the awards early (a debug flag, never for a normal client).
