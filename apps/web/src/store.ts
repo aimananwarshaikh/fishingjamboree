@@ -67,6 +67,44 @@ export interface ClientState {
    * snapshot), so the board then shows the view as it is.
    */
   anim: AnimQueue;
+  /**
+   * The last card drawn in this game, kept after its animation so a player who
+   * missed the flip (B7: phones) can still see it next to the turn. `null`
+   * until a card is drawn, and after a rejoin, a snapshot or a rematch.
+   */
+  lastCard: LastCard | null;
+}
+
+export interface LastCard {
+  player: string;
+  card: string;
+  /** The update it came with. */
+  seq: number;
+}
+
+/**
+ * The last card to show next to the turn: only once its flip has played (or
+ * was skipped), so the line never gives the card away before the animation.
+ */
+export function lastCardToShow(
+  lastCard: LastCard | null,
+  anim: AnimQueue,
+  now: number,
+): LastCard | null {
+  if (!lastCard) return null;
+  const playing = anim.steps.some(
+    (s) => s.seq >= lastCard.seq && s.step.kind === "card" && s.end > now,
+  );
+  return playing ? null : lastCard;
+}
+
+/** The last `cardDrawn` of an update's events, or `null` when there is none. */
+export function lastCardOf(events: GameEvent[], seq: number): LastCard | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]!;
+    if (e.type === "cardDrawn") return { player: e.player, card: e.card, seq };
+  }
+  return null;
 }
 
 export const initialState: ClientState = {
@@ -83,6 +121,7 @@ export const initialState: ClientState = {
   turnDeadline: null,
   roomAt: 0,
   anim: emptyQueue,
+  lastCard: null,
 };
 
 export interface Context {
@@ -186,6 +225,7 @@ function backToLobby(state: ClientState): ClientState {
     game: null,
     turnDeadline: null,
     anim: resetQueue(state.anim, null),
+    lastCard: null,
     banner: null,
     pending: null,
     needsSync: false,
@@ -238,6 +278,7 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
         game: msg.game,
         turnDeadline: deadline(msg.game?.turnTimeLeftMs, ctx),
         anim: resetQueue(state.anim, msg.game?.seq ?? null),
+        lastCard: null,
         pending: null,
         needsSync: false,
         notice: null,
@@ -286,6 +327,7 @@ export function onServerMessage(state: ClientState, msg: ServerMessage, ctx: Con
           },
         ),
         log: addLog(state, texts, "event", held),
+        lastCard: lastCardOf(msg.events, msg.seq) ?? state.lastCard,
         pending: null,
         notice: null,
         banner: bannerFor(msg.events, ctx, state.banner?.id ?? 0) ?? state.banner,

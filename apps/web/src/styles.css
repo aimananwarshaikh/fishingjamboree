@@ -151,7 +151,8 @@ button:disabled {
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
 }
 .card-stage {
-  width: min(260px, 64%);
+  /* B7: bigger on a phone (the board is about 360 px wide there). */
+  width: min(280px, 80%);
   aspect-ratio: 450 / 330;
   perspective: 900px;
   filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
@@ -440,6 +441,20 @@ button:disabled {
 }
 .event {
   font-size: 0.95rem;
+}
+/* B7: the last card drawn stays next to the turn after its flip. */
+.last-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  font-size: 0.95rem;
+}
+.last-card img {
+  width: 72px;
+  height: auto;
+  border-radius: 4px;
+  flex: none;
 }
 .actions button small {
   display: block;
