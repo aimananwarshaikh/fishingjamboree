@@ -132,6 +132,8 @@ Every variant meets the targets, and the shifts are within noise (about ±1.7 po
 
 ## Left for the designer (not changed)
 
+Designer's answers (2026-11-19, B7): 1 kept as is (3 awards with 3–4 players, 2 with 2); 2 Stripped Down kept, to be watched in the playtests; 3 Shark Bait kept at 2 players.
+
 1. **2-player games: the awards change the winner in only 11%** (target 15–30%), and one player takes both awards in 40% of games. Drawing 3 awards with 2 players as well (`awards.perGame.2: 3`, content only) gives 12.5%, with one player taking all of them in 17% (money per game $528). The rulebook decision is 2 awards with 2 players, so this was not changed. Bigger amounts would raise the flip rate but go past the 10–15% rule.
 2. **Stripped Down pays in 9–26% of games.** The bots almost always buy Capacity. People may not; playtests will show. Options: keep it ($300, a real trade-off), make it "Bought no Speed upgrade", or drop it.
 3. **Shark Bait pays in 60% of 2-player games** (85–90% with 3–4). Two players draw fewer Risk cards between them. Keep it, or leave it out of 2-player draws (that needs per-count pools: an engine change).

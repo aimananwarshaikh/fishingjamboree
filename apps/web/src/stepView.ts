@@ -228,7 +228,8 @@ export interface CardFlip {
 export function cardFlip(progress: number, flip = true): CardFlip {
   const p = clamp01(progress);
   const opacity = envelope(p, 0.15, 0.85);
-  const angle = !flip ? 180 : p <= 0.3 ? 0 : p >= 0.5 ? 180 : ((p - 0.3) / 0.2) * 180;
+  // The back shows briefly, then the face holds from 0.3 to the fade-out (B7: about 1.2 s of a 2.2 s card).
+  const angle = !flip ? 180 : p <= 0.12 ? 0 : p >= 0.3 ? 180 : ((p - 0.12) / 0.18) * 180;
   return { angle, opacity, scale: popScale(opacity) };
 }
 

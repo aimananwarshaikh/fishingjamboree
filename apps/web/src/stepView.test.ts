@@ -146,14 +146,23 @@ describe("progress to look", () => {
 
   it("a card shows its back, turns over in the middle, and ends on its face", () => {
     expect(cardFlip(0.1).angle).toBe(0);
-    expect(cardFlip(0.4).angle).toBeGreaterThan(0);
-    expect(cardFlip(0.4).angle).toBeLessThan(180);
-    expect(cardFlip(0.6).angle).toBe(180);
+    expect(cardFlip(0.2).angle).toBeGreaterThan(0);
+    expect(cardFlip(0.2).angle).toBeLessThan(180);
+    expect(cardFlip(0.3).angle).toBe(180);
     expect(cardFlip(0.5).opacity).toBe(1);
     expect(cardFlip(0).opacity).toBe(0);
     expect(cardFlip(1).opacity).toBe(0);
     // No back to turn: the face from the start.
     expect(cardFlip(0.1, false).angle).toBe(180);
+  });
+
+  it("holds the face, fully shown, for at least half of the card step (B7: phones missed it)", () => {
+    let shown = 0;
+    for (let i = 0; i <= 100; i++) {
+      const f = cardFlip(i / 100);
+      if (f.angle === 180 && f.opacity === 1) shown++;
+    }
+    expect(shown).toBeGreaterThanOrEqual(50);
   });
 
   it("stagger starts items one after another and ends them together", () => {
