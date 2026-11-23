@@ -20,7 +20,8 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "board:render": "node scripts/render-board.mjs",
     "art:web": "node scripts/make-web-art.mjs",
-    "sim": "pnpm --silent --filter @fishingjamboree/sim sim --"
+    "sim": "pnpm --silent --filter @fishingjamboree/sim sim --",
+    "robot": "pnpm --silent --filter @fishingjamboree/sim exec tsx ../../scripts/robot-playtest.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
