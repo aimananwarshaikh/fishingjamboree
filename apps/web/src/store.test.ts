@@ -16,12 +16,14 @@ import {
   bannerFor,
   initialState,
   intentSent,
+  lastCardOf,
+  lastCardToShow,
   onServerMessage,
   turnSecondsLeft,
   visibleLog,
 } from "./store";
 import type { ClientState, Context } from "./store";
-import { MY_TURN_LAG_MS } from "./animation";
+import { MY_TURN_LAG_MS, holdsPace } from "./animation";
 
 const content = loadBundledContent();
 const ctx: Context = {
@@ -414,6 +416,60 @@ describe("rejoin from another tab or device (P1-1)", () => {
   });
 });
 
+describe("last card drawn (B7)", () => {
+  it("keeps the last card of the game, shown only once its flip has played", () => {
+    const { tab, tabNow } = table();
+    const ann = tab("a");
+    const bob = tab("b");
+    ann.send({ type: "create", v: V, name: "Ann" });
+    bob.send({ type: "join", v: V, code: "BCDF", name: "Bob" });
+    ann.send({ type: "start" });
+    expect(ann.state().lastCard).toBeNull();
+
+    let drawn = 0;
+    for (let i = 0; i < 200 && drawn < 3; i++) {
+      const before = ann.state().game!.seq;
+      const actor = ann.state().game!.view.phase.actors[0];
+      (actor === "p1" ? ann : bob).actFirst();
+      const seq = ann.state().game!.seq;
+      if (seq === before) continue;
+      const last = ann.state().lastCard;
+      const step = ann.state().anim.steps.find((s) => s.seq === seq && s.step.kind === "card");
+      if (!step) continue;
+      drawn++;
+      // Both tabs hold the same card, from this update.
+      expect(last).toMatchObject({ seq });
+      expect(bob.state().lastCard).toEqual(last);
+      expect(last!.card).toBe((step.step as { card: string }).card);
+      // Hidden while the flip is still to play or playing, shown after it.
+      expect(lastCardToShow(last, ann.state().anim, tabNow())).toBeNull();
+      expect(lastCardToShow(last, ann.state().anim, step.end)).toEqual(last);
+    }
+    expect(drawn).toBe(3);
+
+    // An update with no card keeps the last one; a rejoin forgets it.
+    const kept = ann.state().lastCard;
+    expect(kept).not.toBeNull();
+    const token = ann.state().session!.seatToken;
+    ann.drop();
+    const again = tab("a2");
+    again.send({ type: "rejoin", v: V, code: "BCDF", seatToken: token });
+    expect(again.state().game).not.toBeNull();
+    expect(again.state().lastCard).toBeNull();
+  });
+
+  it("takes the last card of an update's events", () => {
+    const e = (card: string): GameEvent => ({
+      type: "cardDrawn",
+      player: "p1",
+      deck: "risk",
+      card,
+    });
+    expect(lastCardOf([], 3)).toBeNull();
+    expect(lastCardOf([e("boot"), e("shark")], 3)).toEqual({ player: "p1", card: "shark", seq: 3 });
+  });
+});
+
 describe("animation queue in the store (B2a)", () => {
   it("each update queues its events; a rejoin and a snapshot show the view as it is", () => {
     const { tab, tabNow } = table();
@@ -490,8 +546,13 @@ describe("animation queue in the store (B2a)", () => {
         const theirs = after === "p1" ? bob : ann;
         const lag = (q: ClientState["anim"]) =>
           q.steps.length ? q.steps[q.steps.length - 1]!.end - q.steps[0]!.start : 0;
+        // Drawn cards are never shortened (B7); they come on top of the limit.
+        const cards = (q: ClientState["anim"]) =>
+          q.steps.filter((s) => holdsPace(s.step)).reduce((t, s) => t + s.end - s.start, 0);
         expect(lag(mine.state().anim)).toBeLessThanOrEqual(lag(theirs.state().anim) + 1e-6);
-        expect(lag(mine.state().anim)).toBeLessThanOrEqual(MY_TURN_LAG_MS + 1e-6);
+        expect(lag(mine.state().anim) - cards(mine.state().anim)).toBeLessThanOrEqual(
+          MY_TURN_LAG_MS + 1e-6,
+        );
         return;
       }
     }

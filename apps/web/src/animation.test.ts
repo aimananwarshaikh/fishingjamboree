@@ -17,6 +17,7 @@ import {
   enqueueUpdate,
   eventsToSteps,
   frameAt,
+  holdsPace,
   queueEnd,
   resetQueue,
   stepDuration,
@@ -93,6 +94,12 @@ const ev = {
     from: path[0]!,
     to: path[path.length - 1]!,
     path,
+  }),
+  drew: (player: string, card = "boot"): GameEvent => ({
+    type: "cardDrawn",
+    player,
+    deck: "risk",
+    card,
   }),
   rolled: (player: string, die: number): GameEvent => ({
     type: "rolled",
@@ -280,6 +287,46 @@ describe("enqueueUpdate: timing", () => {
     expect(queueEnd(short)).toBe(DURATION.move);
   });
 
+  it("never shortens a drawn card, even when the update hands this tab the turn (B7)", () => {
+    // The other player's whole turn arrives with the decision for this tab: on a
+    // phone the card used to flash by in a few hundred ms, or not show at all.
+    const events = [ev.rolled("p2", 6), ev.moved("p2", [1, 2, 3, 4, 5, 6, 7]), ev.drew("p2")];
+    let q: AnimQueue = resetQueue(emptyQueue, 0);
+    q = enqueueUpdate(q, update(1, [ev.rolled("p1", 4), ev.moved("p1", [1, 2, 3, 4, 5])]), 0);
+    q = enqueueUpdate(q, update(2, events), 500, { myTurn: true });
+    const card = q.steps.find((s) => s.step.kind === "card")!;
+    expect(card.end - card.start).toBe(DURATION.card);
+    // The other steps still give way: the board is behind by the card and the catch-up limit at most.
+    expect(queueEnd(q)!).toBeLessThanOrEqual(500 + MY_TURN_LAG_MS + DURATION.card + 1e-6);
+    // Over the whole first test game, every card drawn is shown at full length.
+    for (const g of games) {
+      let gq: AnimQueue = emptyQueue;
+      let now = 0;
+      for (const u of g) {
+        gq = enqueueUpdate(gq, u, now, { myTurn: true });
+        const drawn = u.events.filter((e) => e.type === "cardDrawn").length;
+        const shown = gq.steps.filter((s) => s.seq === u.seq && s.step.kind === "card");
+        expect(shown).toHaveLength(drawn);
+        for (const s of shown) expect(s.end - s.start).toBeCloseTo(DURATION.card, 5);
+        now = Math.max(now + 300, queueEnd(gq) ?? now);
+      }
+    }
+  });
+
+  it("still drops a drawn card on a skip and with reduced motion", () => {
+    const lots = Array.from({ length: 40 }, () => ev.moved("p1", [1, 2, 3, 4, 5, 6, 7]));
+    const skipped = enqueueUpdate(
+      resetQueue(emptyQueue, 0),
+      update(1, [...lots, ev.drew("p1")]),
+      0,
+    );
+    expect(skipped.steps).toEqual([]);
+    const reduced = enqueueUpdate(resetQueue(emptyQueue, 0), update(1, [ev.drew("p1")]), 0, {
+      reducedMotion: true,
+    });
+    expect(reduced.steps).toEqual([]);
+  });
+
   it("does not shorten the step already playing", () => {
     let q = enqueueUpdate(resetQueue(emptyQueue, 0), update(1, [ev.rolled("p1", 3)]), 0);
     q = enqueueUpdate(q, update(2, [ev.moved("p1", [1, 2, 3, 4, 5, 6, 7])]), 100, { myTurn: true });
@@ -376,6 +423,20 @@ describe("enqueueUpdate: timing", () => {
 
 describe("frameAt", () => {
   const q0 = resetQueue(emptyQueue, 0);
+
+  it("gives the playing step's scheduled length (B7: the playtest checks cards with it)", () => {
+    const q = enqueueUpdate(
+      resetQueue(emptyQueue, 0),
+      { seq: 1, events: [ev.drew("p1")], before: null },
+      0,
+      {
+        myTurn: true,
+      },
+    );
+    const f = frameAt(q, games[1]![5]!.view, 100);
+    expect(f.current?.step.kind).toBe("card");
+    expect(f.current?.ms).toBeCloseTo(DURATION.card, 5);
+  });
 
   it("is the view when nothing is queued", () => {
     const view = viewWith({ p1: 10, p2: 20, p3: null }, { spot: 1, tile: 33, value: 500 });
@@ -540,7 +601,7 @@ describe("whole games", () => {
     }
   });
 
-  it("is never more than MAX_LAG_MS (or the awards) behind", () => {
+  it("is never more than MAX_LAG_MS (plus the awards and the cards still to show) behind", () => {
     for (const g of games) {
       let q: AnimQueue = emptyQueue;
       let now = 0;
@@ -549,7 +610,11 @@ describe("whole games", () => {
         const reveal = q.steps
           .filter((s) => s.step.kind === "award" || s.step.kind === "gameEnd")
           .reduce((t, s) => t + (s.end - s.start), 0);
-        expect((queueEnd(q) ?? now) - now - reveal).toBeLessThanOrEqual(MAX_LAG_MS + 1e-6);
+        const cards = q.steps
+          .filter((s) => holdsPace(s.step) && s.end > now)
+          .reduce((t, s) => t + (s.end - Math.max(s.start, now)), 0);
+        expect((queueEnd(q) ?? now) - now - reveal - cards).toBeLessThanOrEqual(MAX_LAG_MS + 1e-6);
+        expect((queueEnd(q) ?? now) - now - reveal).toBeLessThanOrEqual(SKIP_LAG_MS + 1e-6);
         now += 300;
       }
     }

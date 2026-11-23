@@ -15,7 +15,7 @@
  *   SEED         default "playtest" (picks among the offered choices)
  *   GRACE=1      also close a tab and wait out the reconnect grace (60 s by default)
  *   HEADED=1     show the browser
- *   SHOT_DIR     folder for 390 px pictures of the shop, the Helicopter button and a move (layout review)
+ *   SHOT_DIR     folder for 390 px pictures of the shop, the Helicopter button, a move and a drawn card (layout review)
  *
  * Besides the game it also checks: a refresh mid-game keeps the seat, a double
  * click on a button is quiet, a 4th player can join a lobby, and a phone-width
@@ -30,7 +30,7 @@
  *
  * Exits 1 on any failed check or any console/page error.
  */
-/* global setTimeout, URL, document, window -- document and window are used inside page.evaluate */
+/* global setTimeout, URL, document, window, performance -- document, window and performance are used inside page.evaluate */
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -173,6 +173,42 @@ function count(kind) {
   stats.byKind[kind] = (stats.byKind[kind] ?? 0) + 1;
 }
 
+/**
+ * Runs in the phone tab (B7: a player on a phone did not see the drawn card).
+ * For each card flip: the length the client scheduled for it (`data-ms`, the
+ * fix under test), whether it was inside the viewport, and how long it was
+ * seen on screen (information only: a busy browser can hold back frames). A
+ * flip already playing when the watch starts is left out. Also whether the
+ * "Last card" line showed.
+ */
+function watchCards() {
+  const seen = (window.__cards = { flips: [], outside: 0, lastLine: 0 });
+  const skip = document.querySelector(".step-card")?.dataset.id ?? null;
+  let cur = null;
+  const tick = () => {
+    const stage = document.querySelector(".step-card");
+    const now = performance.now();
+    if (cur && (!stage || stage.dataset.id !== cur.id)) {
+      cur.seen = Math.round(now - cur.t0);
+      seen.flips.push(cur);
+      cur = null;
+    }
+    if (stage && !cur && stage.dataset.id !== skip) {
+      cur = {
+        id: stage.dataset.id,
+        ms: Number(stage.dataset.ms),
+        t0: now,
+        y: Math.round(window.scrollY),
+      };
+      const r = stage.querySelector(".card-stage")?.getBoundingClientRect();
+      if (r && (r.top < 0 || r.bottom > window.innerHeight)) seen.outside++;
+    }
+    if (document.querySelector(".last-card")) seen.lastLine++;
+    window.requestAnimationFrame(tick);
+  };
+  window.requestAnimationFrame(tick);
+}
+
 /** Makes one choice on whichever tab has something to do. Returns false if nobody does. */
 async function step(pages, opts = {}) {
   const before = Math.max(...(await Promise.all(pages.map(seqOf))));
@@ -190,6 +226,7 @@ async function step(pages, opts = {}) {
         ["shop", ".shop"],
         ["helicopter", "button.helicopter"],
         ["move", "svg.board .target"],
+        ["card", ".step-card"],
       ]) {
         if (!shots.has(name) && (await page.locator(sel).count())) {
           shots.add(name);
@@ -223,6 +260,11 @@ async function step(pages, opts = {}) {
         .trim();
     }
     count(clicked);
+    if (phonePage && page !== phonePage && !phonePage.isClosed()) {
+      // While others play, the phone player has scrolled down to the table and
+      // the log: a drawn card must still show on their screen (B7).
+      await phonePage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    }
     const ok = await waitAllSeq(pages, before + 1);
     if (!ok) {
       const notice = await page
@@ -578,6 +620,7 @@ while (stats.actions < MAX_ACTIONS) {
     // From here this tab plays on at 390 px with the zoom on (B4).
     phonePage = p;
     await phoneZoomChecks(p);
+    await p.evaluate(watchCards);
   }
 
   // Close a tab and let the reconnect grace run out.
@@ -650,7 +693,14 @@ while (stats.actions < MAX_ACTIONS) {
   if (!did) {
     // Nobody can act right now (the server may be acting for an away seat).
     if (!(await waitForAnyOffer(pages, 15000))) {
-      if (await pages[0].locator(".result").count()) break;
+      // The game may be over with the awards reveal still playing (after the
+      // cards this fast script queued, B7): give the result screen time.
+      const over = await pages[0]
+        .locator(".result")
+        .waitFor({ timeout: 20000 })
+        .then(() => true)
+        .catch(() => false);
+      if (over) break;
       problems.push(`stuck at seq ${await seqOf(pages[0])}: nobody is offered anything`);
       break;
     }
@@ -678,6 +728,22 @@ if (phonePage) {
     zoomStats.fellBackToFit <= Math.ceil(sizes.length * 0.5),
     `phone zoom: no tappable target in view only ${zoomStats.fellBackToFit}/${sizes.length} times`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Drawn cards (B7): what the phone tab showed while others played.
+if (phonePage) {
+  const cards = await phonePage.evaluate(() => window.__cards);
+  const shortest = Math.min(...cards.flips.map((f) => f.ms));
+  check(cards.flips.length >= 3, `phone cards: ${cards.flips.length} card flips seen at 390 px`);
+  check(
+    shortest >= 2000,
+    `phone cards: each flip was given at least 2 s (shortest ${shortest} ms; on screen ${cards.flips
+      .map((f) => f.seen)
+      .join(", ")} ms; scrolled ${cards.flips.map((f) => f.y).join(", ")} px)`,
+  );
+  check(cards.outside === 0, `phone cards: the card was inside the screen (${cards.outside} not)`);
+  check(cards.lastLine > 0, "phone cards: the Last card line showed after a flip");
 }
 
 // ---------------------------------------------------------------------------

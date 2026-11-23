@@ -77,10 +77,10 @@ export const DURATION: Record<AnimKind, number> = {
   dice: 900,
   move: 180,
   relocate: 700,
-  card: 1300,
+  card: 2200,
   fish: 700,
   fishLost: 700,
-  repelled: 900,
+  repelled: 1600,
   fine: 800,
   sale: 900,
   tokensPaid: 600,
@@ -89,7 +89,7 @@ export const DURATION: Record<AnimKind, number> = {
   goldenFish: 700,
   removed: 500,
   round: 900,
-  event: 1600,
+  event: 2400,
   award: 3000,
   gameEnd: 800,
 };
@@ -282,6 +282,16 @@ export function resetQueue(queue: AnimQueue, seq: number | null): AnimQueue {
 const keepsPace = (s: AnimStep) => s.kind === "award" || s.kind === "gameEnd";
 
 /**
+ * A drawn card is never shortened by the catch-up (B7: on a phone the card
+ * flashed by in a few hundred ms, or was dropped, when the update also handed
+ * this tab the turn). It is still dropped with everything else on a skip or
+ * with reduced motion. It comes on top of the catch-up limit (the other steps
+ * still give way as before), and counts towards the skip limit.
+ */
+export const holdsPace = (s: AnimStep) =>
+  s.kind === "card" || s.kind === "event" || s.kind === "repelled";
+
+/**
  * Adds one update's steps after what is still playing. An update that does
  * not follow the last one queued (a gap) resets the queue instead: the view
  * is the truth and is shown as it is.
@@ -306,12 +316,15 @@ export function enqueueUpdate(
 
   // What is still to play, and how far behind that puts the board.
   const tail = playing.reduce((t, s) => Math.max(t, s.end), now);
-  const flexible = todo.filter((t) => !keepsPace(t.step));
-  const flexMs = flexible.reduce((sum, t) => sum + stepDuration(t.step), 0);
+  const sum = (list: typeof todo) => list.reduce((ms, t) => ms + stepDuration(t.step), 0);
+  const flexMs = sum(todo.filter((t) => !keepsPace(t.step) && !holdsPace(t.step)));
+  const heldMs = sum(todo.filter((t) => holdsPace(t.step)));
+  // The cards come on top of the catch-up limit, so the ships still sail.
   const lag = tail - now + flexMs;
 
-  let speed = 1; // share of normal length
-  if (options.reducedMotion || lag > SKIP_LAG_MS) speed = 0;
+  const skip = options.reducedMotion === true || lag + heldMs > SKIP_LAG_MS;
+  let speed = 1; // share of normal length, for the steps that give way
+  if (skip) speed = 0;
   else {
     const limit = options.myTurn ? MY_TURN_LAG_MS : MAX_LAG_MS;
     if (lag > limit && flexMs > 0) speed = Math.max(0, (limit - (tail - now)) / flexMs);
@@ -322,7 +335,13 @@ export function enqueueUpdate(
   let nextId = queue.nextId;
   const scheduled: ScheduledStep[] = [...playing];
   for (const { seq, step } of todo) {
-    const length = keepsPace(step) ? stepDuration(step) : stepDuration(step) * speed;
+    const length = keepsPace(step)
+      ? stepDuration(step)
+      : holdsPace(step)
+        ? skip
+          ? 0
+          : stepDuration(step)
+        : stepDuration(step) * speed;
     if (length <= 0) continue; // skipped: the view already shows the outcome
     scheduled.push({ id: nextId++, seq, step, start: t, end: t + length });
     t += length;
@@ -345,7 +364,7 @@ export interface ShipPose {
 
 export interface Frame {
   /** The step playing now and how far it has got (0–1), or `null`. */
-  current: { id: number; step: AnimStep; progress: number } | null;
+  current: { id: number; step: AnimStep; progress: number; ms: number } | null;
   /** Every ship to draw, by player. A player with no entry has no ship on the board. */
   ships: Map<PlayerId, ShipPose>;
   goldenFish: GoldenFishState | null;
@@ -426,7 +445,9 @@ export function frameAt(queue: AnimQueue, view: PlayerView, now: number): Frame 
   }
 
   return {
-    current: cur ? { id: cur.id, step: cur.step, progress: progressOf(cur) } : null,
+    current: cur
+      ? { id: cur.id, step: cur.step, progress: progressOf(cur), ms: cur.end - cur.start }
+      : null,
     ships,
     goldenFish,
     busy: open.length > 0,

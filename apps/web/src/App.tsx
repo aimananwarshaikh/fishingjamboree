@@ -7,14 +7,15 @@ import { useBoardZoom, ZoomTools } from "./BoardZoom";
 import { boardTargets, tileCentre } from "./boardArt";
 import { awardOutcome, describeAction, phaseTask, seatStatus, upgradeText } from "./describe";
 import { StepView } from "./StepViews";
-import { roundBar } from "./stepView";
+import { cardArt, roundBar } from "./stepView";
+import { artSrc } from "./artUrls";
 import { frameAt, queueEnd } from "./animation";
 import type { AnimQueue, Frame } from "./animation";
 import { loadBundledContent } from "./content";
 import { useGame } from "./useGame";
 import type { RejoinOffer } from "./useGame";
 import { rejoinLink } from "./savedSeats";
-import { awaySecondsLeft, turnSecondsLeft, visibleLog } from "./store";
+import { awaySecondsLeft, lastCardToShow, turnSecondsLeft, visibleLog } from "./store";
 import type { Banner, ClientState } from "./store";
 
 const content = loadBundledContent();
@@ -382,6 +383,32 @@ function TurnStatus(props: {
   );
 }
 
+/**
+ * The last card drawn, after its flip has played (B7: on a phone the flip
+ * could be missed, and the log is far down the page).
+ */
+function LastCardLine(props: {
+  last: ClientState["lastCard"];
+  content: Content;
+  me: string;
+  name: (p: string) => string;
+}) {
+  const { last, content } = props;
+  if (!last) return null;
+  const def = content.cards.cards[last.card];
+  const path = cardArt(last.card);
+  const art = path ? artSrc(path) : null;
+  const who = last.player === props.me ? "You" : props.name(last.player);
+  return (
+    <p className="last-card" data-card={last.card}>
+      {art && <img src={art.src} srcSet={art.srcSet} alt="" draggable={false} />}
+      <span>
+        Last card: {who} drew <b>{def?.name ?? last.card}</b>
+      </span>
+    </p>
+  );
+}
+
 /** What the board zoom needs from the game: my ship, the tiles I can tap, and when to re-aim. */
 function zoomInput(view: PlayerView, me: string, legal: Action[]) {
   const tile = view.players.find((p) => p.id === me)?.position ?? null;
@@ -468,6 +495,12 @@ function Table(props: {
       </section>
       <div className="card status">
         <TurnStatus state={state} view={view} me={me} name={name} seats={room.seats} />
+        <LastCardLine
+          last={lastCardToShow(state.lastCard, state.anim, Date.now())}
+          content={content as Content}
+          me={me}
+          name={name}
+        />
         {event && (
           <p className="event">
             Event: <b>{event.name}</b>
