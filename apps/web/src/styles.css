@@ -135,6 +135,21 @@ button:disabled {
   pointer-events: none;
   overflow: hidden;
 }
+/* B7: on a phone the page scrolls past the board (player table, log). A drawn
+   card is shown over the visible part of the screen, wherever the board is. */
+@media (max-width: 799px) {
+  .step-stage.step-card,
+  .step-stage.step-event,
+  .step-stage.step-repelled {
+    position: fixed;
+    z-index: 50;
+  }
+  .step-stage.step-card .card-stage,
+  .step-stage.step-event .card-stage,
+  .step-stage.step-repelled .card-stage {
+    width: min(300px, 80vw);
+  }
+}
 .step-caption {
   margin: 0;
   max-width: calc(100% - 16px);

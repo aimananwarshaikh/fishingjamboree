@@ -194,7 +194,12 @@ function watchCards() {
       cur = null;
     }
     if (stage && !cur && stage.dataset.id !== skip) {
-      cur = { id: stage.dataset.id, ms: Number(stage.dataset.ms), t0: now };
+      cur = {
+        id: stage.dataset.id,
+        ms: Number(stage.dataset.ms),
+        t0: now,
+        y: Math.round(window.scrollY),
+      };
       const r = stage.querySelector(".card-stage")?.getBoundingClientRect();
       if (r && (r.top < 0 || r.bottom > window.innerHeight)) seen.outside++;
     }
@@ -255,6 +260,11 @@ async function step(pages, opts = {}) {
         .trim();
     }
     count(clicked);
+    if (phonePage && page !== phonePage && !phonePage.isClosed()) {
+      // While others play, the phone player has scrolled down to the table and
+      // the log: a drawn card must still show on their screen (B7).
+      await phonePage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    }
     const ok = await waitAllSeq(pages, before + 1);
     if (!ok) {
       const notice = await page
@@ -730,7 +740,7 @@ if (phonePage) {
     shortest >= 2000,
     `phone cards: each flip was given at least 2 s (shortest ${shortest} ms; on screen ${cards.flips
       .map((f) => f.seen)
-      .join(", ")} ms)`,
+      .join(", ")} ms; scrolled ${cards.flips.map((f) => f.y).join(", ")} px)`,
   );
   check(cards.outside === 0, `phone cards: the card was inside the screen (${cards.outside} not)`);
   check(cards.lastLine > 0, "phone cards: the Last card line showed after a flip");
