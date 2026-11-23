@@ -416,6 +416,8 @@ export function StepView(props: Props) {
     <div
       className={`step-stage step-${step.kind}`}
       data-step={step.kind}
+      data-id={current.id}
+      data-ms={Math.round(current.ms)}
       aria-hidden={step.kind === "award" ? undefined : true}
     >
       {body}

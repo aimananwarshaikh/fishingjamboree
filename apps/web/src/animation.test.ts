@@ -424,6 +424,20 @@ describe("enqueueUpdate: timing", () => {
 describe("frameAt", () => {
   const q0 = resetQueue(emptyQueue, 0);
 
+  it("gives the playing step's scheduled length (B7: the playtest checks cards with it)", () => {
+    const q = enqueueUpdate(
+      resetQueue(emptyQueue, 0),
+      { seq: 1, events: [ev.drew("p1")], before: null },
+      0,
+      {
+        myTurn: true,
+      },
+    );
+    const f = frameAt(q, games[1]![5]!.view, 100);
+    expect(f.current?.step.kind).toBe("card");
+    expect(f.current?.ms).toBeCloseTo(DURATION.card, 5);
+  });
+
   it("is the view when nothing is queued", () => {
     const view = viewWith({ p1: 10, p2: 20, p3: null }, { spot: 1, tile: 33, value: 500 });
     const f = frameAt(q0, view, 0);

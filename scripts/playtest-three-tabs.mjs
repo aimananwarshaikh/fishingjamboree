@@ -175,22 +175,28 @@ function count(kind) {
 
 /**
  * Runs in the phone tab (B7: a player on a phone did not see the drawn card).
- * Records each stretch a card flip is on screen: how long, and whether the
- * card was inside the viewport; and whether the "Last card" line showed.
+ * For each card flip: the length the client scheduled for it (`data-ms`, the
+ * fix under test), whether it was inside the viewport, and how long it was
+ * seen on screen (information only: a busy browser can hold back frames). A
+ * flip already playing when the watch starts is left out. Also whether the
+ * "Last card" line showed.
  */
 function watchCards() {
-  const seen = (window.__cards = { runs: [], outside: 0, lastLine: 0 });
-  let start = null;
+  const seen = (window.__cards = { flips: [], outside: 0, lastLine: 0 });
+  const skip = document.querySelector(".step-card")?.dataset.id ?? null;
+  let cur = null;
   const tick = () => {
-    const card = document.querySelector(".step-card .card-stage");
+    const stage = document.querySelector(".step-card");
     const now = performance.now();
-    if (card && start === null) {
-      start = now;
-      const r = card.getBoundingClientRect();
-      if (r.top < 0 || r.bottom > window.innerHeight) seen.outside++;
-    } else if (!card && start !== null) {
-      seen.runs.push(Math.round(now - start));
-      start = null;
+    if (cur && (!stage || stage.dataset.id !== cur.id)) {
+      cur.seen = Math.round(now - cur.t0);
+      seen.flips.push(cur);
+      cur = null;
+    }
+    if (stage && !cur && stage.dataset.id !== skip) {
+      cur = { id: stage.dataset.id, ms: Number(stage.dataset.ms), t0: now };
+      const r = stage.querySelector(".card-stage")?.getBoundingClientRect();
+      if (r && (r.top < 0 || r.bottom > window.innerHeight)) seen.outside++;
     }
     if (document.querySelector(".last-card")) seen.lastLine++;
     window.requestAnimationFrame(tick);
@@ -718,11 +724,13 @@ if (phonePage) {
 // Drawn cards (B7): what the phone tab showed while others played.
 if (phonePage) {
   const cards = await phonePage.evaluate(() => window.__cards);
-  const shortest = Math.min(...cards.runs);
-  check(cards.runs.length >= 3, `phone cards: ${cards.runs.length} card flips seen at 390 px`);
+  const shortest = Math.min(...cards.flips.map((f) => f.ms));
+  check(cards.flips.length >= 3, `phone cards: ${cards.flips.length} card flips seen at 390 px`);
   check(
     shortest >= 2000,
-    `phone cards: each flip was on screen at least 2 s (shortest ${shortest} ms)`,
+    `phone cards: each flip was given at least 2 s (shortest ${shortest} ms; on screen ${cards.flips
+      .map((f) => f.seen)
+      .join(", ")} ms)`,
   );
   check(cards.outside === 0, `phone cards: the card was inside the screen (${cards.outside} not)`);
   check(cards.lastLine > 0, "phone cards: the Last card line showed after a flip");

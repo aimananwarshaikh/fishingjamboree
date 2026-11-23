@@ -364,7 +364,7 @@ export interface ShipPose {
 
 export interface Frame {
   /** The step playing now and how far it has got (0–1), or `null`. */
-  current: { id: number; step: AnimStep; progress: number } | null;
+  current: { id: number; step: AnimStep; progress: number; ms: number } | null;
   /** Every ship to draw, by player. A player with no entry has no ship on the board. */
   ships: Map<PlayerId, ShipPose>;
   goldenFish: GoldenFishState | null;
@@ -445,7 +445,9 @@ export function frameAt(queue: AnimQueue, view: PlayerView, now: number): Frame 
   }
 
   return {
-    current: cur ? { id: cur.id, step: cur.step, progress: progressOf(cur) } : null,
+    current: cur
+      ? { id: cur.id, step: cur.step, progress: progressOf(cur), ms: cur.end - cur.start }
+      : null,
     ships,
     goldenFish,
     busy: open.length > 0,
