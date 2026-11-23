@@ -115,6 +115,29 @@ describe("readServerSettings", () => {
     });
   });
 
+  it("reads the testing timers only when set (B7)", () => {
+    const none = readServerSettings({});
+    expect(none.ok && none.settings.core).toEqual({});
+    expect(none.ok && "heartbeatIntervalMs" in none.settings.transport).toBe(false);
+    const r = readServerSettings({
+      TURN_TIMEOUT_MS: "20000",
+      RECONNECT_GRACE_MS: "8000",
+      RECONNECT_BUDGET_MS: "16000",
+      HEARTBEAT_MS: "3000",
+    });
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    expect(r.settings.core).toEqual({
+      turnTimeoutMs: 20000,
+      reconnectGraceMs: 8000,
+      reconnectBudgetMs: 16000,
+    });
+    expect(r.settings.transport.heartbeatIntervalMs).toBe(3000);
+    const bad = readServerSettings({ TURN_TIMEOUT_MS: "0", HEARTBEAT_MS: "soon" });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.problems).toHaveLength(2);
+  });
+
   it("reports every problem at once, and starts nothing on any of them", () => {
     const r = readServerSettings({
       PORT: "x",

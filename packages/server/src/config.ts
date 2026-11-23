@@ -1,4 +1,5 @@
 /** Reading the server's environment (main.ts). Pure, so it can be tested. */
+import type { CoreConfig } from "./core";
 import { DEFAULT_TRANSPORT_CONFIG } from "./transport";
 import type { TransportConfig } from "./transport";
 
@@ -84,7 +85,19 @@ export interface ServerSettings {
   roomsDir: string | undefined;
   webDir: string | undefined;
   transport: Partial<TransportConfig>;
+  /** Timer overrides for testing (B7 robot playtests); only the variables that are set. */
+  core: Partial<CoreConfig>;
 }
+
+/**
+ * Testing only (B7): the timers of the online rules can be shortened so robot
+ * playtests run in minutes. Unset: the rulebook's values (core defaults).
+ */
+const TIMER_VARS = [
+  ["TURN_TIMEOUT_MS", "turnTimeoutMs"],
+  ["RECONNECT_GRACE_MS", "reconnectGraceMs"],
+  ["RECONNECT_BUDGET_MS", "reconnectBudgetMs"],
+] as const;
 
 /** Everything `main.ts` reads from the environment; either all of it, or every problem found. */
 export function readServerSettings(
@@ -122,6 +135,17 @@ export function readServerSettings(
     trustProxy: take(parseFlag("TRUST_PROXY", env.TRUST_PROXY, defaults.trustProxy), false),
     allowedOrigins: origins.ok ? origins.origins : null,
   };
+  if (blankOrUnset(env.HEARTBEAT_MS) === false) {
+    transport.heartbeatIntervalMs = take(
+      parseCount("HEARTBEAT_MS", env.HEARTBEAT_MS, defaults.heartbeatIntervalMs),
+      defaults.heartbeatIntervalMs,
+    );
+  }
+  const core: Partial<CoreConfig> = {};
+  for (const [name, key] of TIMER_VARS) {
+    if (blankOrUnset(env[name])) continue;
+    core[key] = take(parseCount(name, env[name], 1), 1);
+  }
   if (problems.length > 0 || !port.ok) return { ok: false, problems };
   const blank = (v: string | undefined) => (v === undefined || v.trim() === "" ? undefined : v);
   return {
@@ -133,6 +157,11 @@ export function readServerSettings(
       roomsDir: blank(env.ROOMS_DIR),
       webDir: blank(env.WEB_DIR),
       transport,
+      core,
     },
   };
+}
+
+function blankOrUnset(raw: string | undefined): boolean {
+  return raw === undefined || raw.trim() === "";
 }

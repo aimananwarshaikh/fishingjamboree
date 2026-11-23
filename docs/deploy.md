@@ -106,6 +106,10 @@ Server (environment of the `server` container; `deploy/compose.yaml` sets the fi
 | `MAX_ROOMS`              | `500`                        | Rooms at once; `create` answers `server-busy`.                                                                                                    |
 | `MAX_BUFFERED_BYTES`     | `1048576`                    | A socket with more than this queued (it is not reading) is dropped.                                                                               |
 
+Testing only (the B7 robot playtests, `docs/playtest-b7.md`): `TURN_TIMEOUT_MS` (rulebook: 90000),
+`RECONNECT_GRACE_MS` (60000), `RECONNECT_BUDGET_MS` (120000) and `HEARTBEAT_MS` (15000) shorten the online
+timers. Unset, the rulebook's values apply; never set them for real players. The server logs them at start.
+
 A bad value stops the server at start with every problem listed. Fixed limits (not variables): frames over
 4 KiB close the socket (1009); 30 messages burst and 10 per second per socket (1008); ping every 15 s.
 

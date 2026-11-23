@@ -19,6 +19,8 @@
  *   WEB_DIR                 the built web client to serve on the same port
  *                           (default: apps/web/dist when it exists); with it,
  *                           one address serves the page and the game
+ *   TURN_TIMEOUT_MS, RECONNECT_GRACE_MS, RECONNECT_BUDGET_MS, HEARTBEAT_MS
+ *                           testing only (robot playtests): shorter timers
  * Every variable is described in docs/deploy.md.
  */
 import { existsSync } from "node:fs";
@@ -36,7 +38,7 @@ if (!read.ok) {
   for (const problem of read.problems) console.error(problem);
   process.exit(1);
 }
-const { port, host, transport } = read.settings;
+const { port, host, transport, core: timers } = read.settings;
 const contentDir =
   read.settings.contentDir ?? fileURLToPath(new URL("../../../content", import.meta.url));
 
@@ -66,8 +68,14 @@ const http = createServer((req, res) => {
   });
 });
 
+if (Object.keys(timers).length > 0 || transport.heartbeatIntervalMs !== undefined) {
+  log(
+    `testing timers: ${JSON.stringify({ ...timers, heartbeatIntervalMs: transport.heartbeatIntervalMs })}`,
+  );
+}
+
 const server = await createGameServer({
-  core: { content, ids: cryptoIds() },
+  core: { content, ids: cryptoIds(), config: timers },
   server: http,
   transport,
   log,
