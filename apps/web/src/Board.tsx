@@ -110,6 +110,7 @@ export function Board({ content, view, frame, legal, names, onAction, zoom }: Pr
             width={T - 8}
             height={T - 8}
             rx={10}
+            data-action={JSON.stringify(action)}
             onClick={() => onAction(action)}
           >
             <title>{action.type === "move" ? "Sail here" : "Start here"}</title>

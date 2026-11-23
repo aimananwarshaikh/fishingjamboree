@@ -17,12 +17,14 @@ import type { RejoinOffer } from "./useGame";
 import { rejoinLink } from "./savedSeats";
 import { awaySecondsLeft, lastCardToShow, turnSecondsLeft, visibleLog } from "./store";
 import type { Banner, ClientState } from "./store";
+import { actionAttr, useRobotHook } from "./robotHook";
 
 const content = loadBundledContent();
 
 export function App() {
   const game = useGame(content);
   const { state } = game;
+  useRobotHook(state);
   return (
     <main>
       <header>
@@ -509,7 +511,12 @@ function Table(props: {
         )}
         <div className="actions">
           {dockChoices.map((a, i) => (
-            <button key={`d${i}`} disabled={disabled} onClick={() => props.act(a)}>
+            <button
+              key={`d${i}`}
+              disabled={disabled}
+              data-action={actionAttr(a)}
+              onClick={() => props.act(a)}
+            >
               {describeAction(a, content)}
             </button>
           ))}
@@ -521,7 +528,12 @@ function Table(props: {
                 {upgrades.length === 0 && " There is no upgrade you can buy right now."}
               </p>
               {upgrades.map((a) => (
-                <button key={a.upgrade} disabled={disabled} onClick={() => props.act(a)}>
+                <button
+                  key={a.upgrade}
+                  disabled={disabled}
+                  data-action={actionAttr(a)}
+                  onClick={() => props.act(a)}
+                >
                   {describeAction(a, content)}
                   <small>{upgradeText(content, a.upgrade)}</small>
                 </button>
@@ -532,6 +544,7 @@ function Table(props: {
             <button
               className="helicopter"
               disabled={disabled}
+              data-action={actionAttr(helicopter)}
               onClick={() => props.act(helicopter)}
             >
               {describeAction(helicopter, content)}
@@ -546,6 +559,7 @@ function Table(props: {
               key={a.type}
               className={a.type === "endTurn" && shopping ? "secondary" : undefined}
               disabled={disabled}
+              data-action={actionAttr(a)}
               onClick={() => props.act(a)}
             >
               {a.type === "endTurn" && shopping ? "Done: end turn" : describeAction(a, content)}
