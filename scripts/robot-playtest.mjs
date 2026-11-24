@@ -268,6 +268,14 @@ class Robot {
         const url = link.includes("robot=1") ? link : link.replace("#", "?robot=1#");
         this.page = await this.openPage(this.context, url);
         this.pageSwaps++;
+        // A rejoin link offers the seat and waits for a click (P1-1).
+        const offer = this.page.getByRole("button", { name: `Rejoin room ${this.game.code}` });
+        const offered = await offer
+          .first()
+          .click({ timeout: 10000 })
+          .then(() => true)
+          .catch(() => false);
+        if (!offered) this.game.problem(`${this.name}: the rejoin link offered no seat`);
         await this.waitBack(Date.now(), "rejoin link on another device");
         const told = await old
           .getByText("Your seat was opened in another tab or on another device")
@@ -336,7 +344,7 @@ class Robot {
 
   /** Plays until the game ends for this player. */
   async loop() {
-    while (!this.game.over) {
+    while (!this.game.over && !this.game.ended) {
       if (this.status !== "playing") return;
       if (this.busy) {
         await sleep(200);
@@ -582,6 +590,7 @@ class Game {
   async playOnce(withFaults) {
     if (!withFaults) for (const r of this.robots) r.spec = { ...r.spec, faults: [] };
     this.over = false;
+    this.ended = false;
     const loops = this.live().map((r) => r.loop());
     const monitor = this.monitor(withFaults);
     await Promise.all(loops);
@@ -608,6 +617,8 @@ class Game {
       const seq = Math.max(-1, ...snaps.map((s) => s.seq ?? -1));
       const round = Math.max(0, ...snaps.map((s) => s.view?.round ?? 0));
       if (snaps.some((s) => s.view?.result)) {
+        // The game is over: every loop stops (a tab left on the start screen too).
+        this.ended = true;
         lastChange = Date.now();
         continue;
       }
